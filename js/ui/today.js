@@ -9,6 +9,7 @@ import { addDays, daysBetween } from '../engine/dates.js';
 import { MISSIONS } from '../data/missions.js';
 import { getDef } from '../data/exercises.js';
 import { exportFile } from '../store.js';
+import { isDue, latestTest } from '../engine/mobility.js';
 
 const Q = {
   yesterdayMT: ['Gestern Muay Thai?', [['none', 'Nein'], ['light', 'Locker-Technik'], ['hard', 'Hartes Sparring']]],
@@ -52,11 +53,11 @@ function planPreview(plan) {
   if (plan.format === 'intervals') return `<p class="muted">${plan.rounds} × ${plan.work / 60} min ${esc(nameOf(plan.exId))}, ${plan.rest / 60} min Pause.</p>`;
   const head = plan.format === 'circuit' ? `<p class="muted">${plan.rounds} Runden, ${plan.restBetween / 60} min Pause zwischen den Runden${plan.light ? ', ruhiges Tempo' : ''}.</p>`
     : plan.format === 'amrap' ? '<p class="muted">So viele Runden wie möglich in 15 Minuten.</p>'
-      : `<p class="muted">${plan.items.length} Positionen × ${plan.work} s, ${plan.rounds} Runden. Weich bewegen, nicht erzwingen.</p>`;
+      : `<p class="muted">${plan.items.length} Positionen × ${plan.work} s, ${plan.rounds} Runden. Weich bewegen, nicht erzwingen.${plan.personalized ? ' Die ersten drei sind deine Fokus-Stretches aus dem Mobility-Check.' : ''}</p>`;
   return `${head}<ol class="ex-list">${plan.items.map((it) => {
     const def = getDef(it.exId);
     const v = plan.format === 'flow' ? '' : `${it.value} ${def.unit || (def.mode === 'time' ? 's' : '')}${def.perSide ? ' je Seite' : ''}`;
-    return `<li><span>${esc(def.name)}</span><span class="muted">${v}</span></li>`;
+    return `<li><span>${esc(def.name)}${it.focus ? ' <em class="focus">Fokus</em>' : ''}</span><span class="muted">${v}</span></li>`;
   }).join('')}</ol>`;
 }
 
@@ -72,9 +73,13 @@ function modifierNote(plan) {
 function checkinForm(c) {
   const today = c.today();
   const f = c.ui.ci || (c.ui.ci = { yesterdayMT: arenaOn(c.data.sessions, addDays(today, -1)) });
-  const ready = f.feeling && f.tonightMT && f.where;
-  return sys('Tages-Check-in', `${Object.entries(Q).map(([k, [label, opts]]) =>
-    `<div class="q"><div class="q-label">${label}</div>${chips(k, opts, f[k])}</div>`).join('')}
+  const askWhere = f.tonightMT !== 'yes' || f.morning;
+  const ready = f.feeling && f.tonightMT && (!askWhere || f.where);
+  const q = (k) => `<div class="q"><div class="q-label">${Q[k][0]}</div>${chips(k, Q[k][1], f[k])}</div>`;
+  const morning = f.tonightMT === 'yes'
+    ? `<div class="q"><div class="q-label">Zusätzlich Morgeneinheit?</div>${chips('morning', [['no', 'Nein, Arena reicht'], ['yes', 'Ja, ich hab Bock']], f.morning ? 'yes' : 'no')}</div>`
+    : '';
+  return sys('Tages-Check-in', `${q('yesterdayMT')}${q('feeling')}${q('tonightMT')}${morning}${askWhere ? q('where') : ''}
     <button class="btn primary wide" data-act="submit-ci" ${ready ? '' : 'disabled'}>Mission anfordern</button>`);
 }
 
@@ -116,6 +121,9 @@ export default {
       out += sys('Tagesziel erreicht', `<p class="reason">Mission erfüllt.${ci.tonightMT === 'yes' ? ' Heute Abend wartet die Arena.' : ' Der Rest des Tages gehört der Erholung.'}</p>
         <p class="muted">Stärke entsteht in der Pause. Ein Fluss am Abend hält dich geschmeidig.</p>
         <div class="row gap"><button class="btn ghost" data-act="swap">Weitere Einheit</button></div>`, { tone: 'calm' });
+    } else if (rec.kind === 'arenaday') {
+      out += sys('Arena-Tag', `<p class="reason">${esc(rec.reason)}</p><p class="muted">Ein kurzer Fluss am Morgen macht die Hüfte frei für die Kicks am Abend.</p>
+        <div class="row gap"><button class="btn primary grow" data-act="start" data-id="FLOW">Fluss starten</button><button class="btn" data-act="morning-yes">Doch Morgeneinheit</button></div>`, { tone: 'calm' });
     } else if (rec.kind === 'rest') {
       out += sys('Ruhetag', `<p class="reason">${esc(rec.reason)}</p><p class="muted">Erholung ist Teil des Trainings. Ein lockerer Fluss hält dich beweglich.</p>
         <div class="row gap"><button class="btn primary grow" data-act="start" data-id="FLOW">Fluss starten</button><button class="btn" data-act="override-rest">Trotzdem trainieren</button></div>`, { tone: 'calm' });
@@ -131,12 +139,16 @@ export default {
       out += `<div class="row gap center"><button class="btn ghost" data-act="swap">Andere Einheit</button><button class="btn ghost" data-act="redo-ci">Check-in ändern</button></div>`;
     }
 
+    if (isDue(data.mobility, today) && !doneToday.some((s) => s.kind === 'check')) {
+      const first = !latestTest(data.mobility);
+      out += `<section class="card flow-card"><div><b>Mobility-Check${first ? '' : ' fällig'}</b><small>${first ? '10 min · macht deinen Fluss persönlich' : '4 Wochen um · Fortschritt messen'}</small></div><button class="btn" data-act="go" data-to="check">Starten</button></section>`;
+    }
     if (rec.missionId !== 'FLOW' && !doneToday.some((s) => s.kind === 'flow')) {
       out += `<section class="card flow-card"><div><b>Fluss</b><small>Täglich 10 min Mobility</small></div><button class="btn" data-act="start" data-id="FLOW">Starten</button></section>`;
     }
     if (doneToday.length) {
       out += `<section class="card"><div class="label">Heute erledigt</div>${doneToday.map((s) =>
-        `<div class="done-row">✓ ${esc(s.kind === 'arena' ? `Arena · ${s.intensity === 'hard' ? 'Sparring' : 'Technik'}` : MISSIONS[s.missionId]?.name || s.missionId)} <span class="muted">+${s.xp} XP</span></div>`).join('')}</section>`;
+        `<div class="done-row">✓ ${esc(s.kind === 'arena' ? `Arena · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'}` : s.kind === 'check' ? 'Mobility-Check' : MISSIONS[s.missionId]?.name || s.missionId)} <span class="muted">+${s.xp} XP</span></div>`).join('')}</section>`;
     }
     const left = DELOAD_AFTER - data.engine.fullSinceDeload;
     out += `<p class="foot muted">Rotation: ${data.engine.queue.map((id) => MISSIONS[id].name).join(' → ')} · Deload in ${left} Missionen</p>`;
@@ -145,7 +157,7 @@ export default {
 
   actions: {
     pick: (c, d) => {
-      c.ui.ci = { ...c.ui.ci, [d.name]: d.value };
+      c.ui.ci = { ...c.ui.ci, [d.name]: d.name === 'morning' ? d.value === 'yes' : d.value };
       c.render();
     },
     'submit-ci': (c) => {
@@ -161,9 +173,19 @@ export default {
       });
       c.ui.ci = null;
     },
+    'morning-yes': (c) => {
+      const today = c.today();
+      const { day, choice, overrideRest, extra, ...answers } = c.data.checkins[today] || {};
+      c.ui.ci = { ...answers, morning: true };
+      c.update((data) => {
+        const checkins = { ...data.checkins };
+        delete checkins[today];
+        return { ...data, checkins };
+      });
+    },
     'redo-ci': (c) => {
       const today = c.today();
-      const { day, choice, overrideRest, ...answers } = c.data.checkins[today] || {};
+      const { day, choice, overrideRest, extra, ...answers } = c.data.checkins[today] || {};
       c.ui.ci = answers;
       c.update((data) => {
         const checkins = { ...data.checkins };

@@ -82,6 +82,9 @@ export const MISSIONS = {
       'roundhouse_stretch', 'hip_flexor_stretch', 'lateral_gorilla'],
     pool: ['atg_split_squat', 'resting_squat', 'horse_stance', 'cossack_flow', 'overhead_squat',
       'wrist_stretch', 'neck_stretch', 'ninety_ninety'],
+    // nur als personalisierte Fokus-Stretches (Mobility-Check)
+    focusPool: ['frog_stretch', 'pigeon', 'thread_needle', 'open_book', 'ankle_rock', 'neck_cars', 'pancake',
+      'pike_fold', 'wall_slide'],
   },
 };
 

@@ -9,8 +9,9 @@ import arena from './ui/arena.js';
 import kodex from './ui/kodex.js';
 import profile from './ui/profile.js';
 import onboarding from './ui/onboarding.js';
+import check from './ui/check.js';
 
-const SCREENS = { heute: today, training, arena, kodex, profil: profile, onboarding };
+const SCREENS = { heute: today, training, arena, kodex, profil: profile, onboarding, check };
 const TABS = [['heute', 'Heute'], ['arena', 'Arena'], ['kodex', 'Kodex'], ['profil', 'Profil']];
 
 const app = {
@@ -65,7 +66,7 @@ function render() {
   let route = app.route;
   if (!app.data.settings.onboarded) route = 'onboarding';
   const screen = SCREENS[route];
-  const showTabs = route !== 'onboarding' && route !== 'training';
+  const showTabs = !['onboarding', 'training', 'check'].includes(route);
   root.innerHTML = `<main class="screen screen-${route}">${screen.render(ctx)}</main>${showTabs ? tabbar(route) : ''}`;
   screen.mount?.(ctx, root);
 }

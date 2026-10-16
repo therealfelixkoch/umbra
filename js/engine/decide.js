@@ -3,7 +3,7 @@
 
 /**
  * @param {object} p
- * @param {{yesterdayMT:'none'|'light'|'hard', feeling:'frisch'|'normal'|'platt', tonightMT:'yes'|'no'|'maybe', where:'room'|'gym'|'express'|'mobility'}} p.checkin
+ * @param {{yesterdayMT:'none'|'light'|'hard', feeling:'frisch'|'normal'|'platt', tonightMT:'yes'|'no'|'maybe', morning?:boolean, where?:'room'|'gym'|'express'|'mobility'}} p.checkin
  * @param {number} p.hardStreak  harte Tage am Stück bis gestern
  * @param {string[]} p.queue     Rotations-Queue, z. B. ['B','C','D','A']
  * @param {boolean} [p.overrideRest] Ruhetag wurde bewusst überstimmt
@@ -15,6 +15,11 @@ export function decide({ checkin, hardStreak, queue, overrideRest = false }) {
   const platt = feeling === 'platt';
   const sparred = yesterdayMT === 'hard';
 
+  // Arena heute Abend reicht in der Regel: morgens frei, außer du willst bewusst eine Morgeneinheit.
+  if (tonightMT === 'yes' && !checkin.morning) {
+    return { rule: 0, kind: 'arenaday', missionId: 'FLOW', profile,
+      reason: 'Heute Abend Arena. Das reicht, heute früh nur Fluss, damit du abends frisch bist.' };
+  }
   if (where === 'mobility') {
     return { rule: 1, kind: 'flow', missionId: 'FLOW', profile, walk: true,
       reason: 'Nur Mobility gewählt: Fluss und danach ein Spaziergang.' };

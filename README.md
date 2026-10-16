@@ -14,12 +14,14 @@ Persönliche Trainings-App fürs iPhone. Du öffnest sie, beantwortest vier Frag
 | --- | --- |
 | **Heute** | Check-in mit 4 Fragen → Empfehlung mit Begründung in einem Satz, „Andere Einheit“, Ruhetag mit Überstimmen und einmaliger Warnung, Fluss-Erinnerung, Deload-Vorschlag, wöchentliche Backup-Erinnerung |
 | **Training** | Übung für Übung: letztes Mal → heute, Steigerungs-Badge, Satz-Logging mit großen ± Tasten, Pausen-Timer mit Ton, Glyph-Chips, Info zum Kodex. Zirkel-Modus (D), Kurzeinsatz mit 15-min-Uhr, Sack-Intervalle, geführter Fluss mit 30-s-Takt |
-| **Arena** | Muay Thai in 2 Taps loggen. **Rundentimer** mit einstellbarer Runde/Pause/Rundenzahl, Gong am Rundenende, Klacken 10 s vorher, Glocke zum Start. Danach direkt eintragen |
-| **Kodex** | 87 Übungen und Stretches, durchsuchbar, filterbar nach Kategorie und Ausprägung (Farbe) |
+| **Arena** | Muay Thai loggen mit **Intensität 1–10** (ab 7 zählt sie wie Sparring) und **Dauer in Stunden**. Eigener Bereich **Rundentimer**: Runde/Pause/Rundenzahl einstellbar, Gong am Rundenende, Klacken 10 s vorher, Glocke zum Start, danach Dauer übernehmen |
+| **Mobility-Check** (Phase 2) | 8 Heimtests mit je 5 Stufen und Skizze → Score 0–100 pro Region, alle 4 Wochen. 3 Fokus-Stretches nach Muay-Thai-Gewicht im täglichen Fluss, Verlaufsdiagramm unter Profil → Mobility |
+| **Kodex** | 96 Übungen und Stretches, durchsuchbar, filterbar nach Kategorie und Ausprägung (Farbe) |
 | **Profil** | Rang, Kampfkraft, Wochen-Streak mit Schild, Deload-Knopf, Bestleistungen, Verlauf, Equipment, KB-Gewichte, Körpergewicht, Pausenzeit, Export/Import |
 
 ### Entscheidungsregeln (in dieser Reihenfolge)
 
+0. Heute Abend Arena = Ja und keine Morgeneinheit gewünscht → nur Fluss (Arena reicht). Mit „Zusätzlich Morgeneinheit: Ja“ fragt die App nach Ort und Zeit und plant normal
 1. „Nur Mobility“ → Fluss + Spaziergang
 2. 3 harte Tage am Stück (Arena oder volle Mission) → Ruhetag (überstimmbar)
 3. Platt **und** gestern hartes Sparring → nur Fluss
@@ -29,6 +31,21 @@ Persönliche Trainings-App fürs iPhone. Du öffnest sie, beantwortest vier Frag
 7. Sonst → nächste Mission der Rotation
 
 **Rotation als Warteschlange:** Die erledigte Mission wandert ans Ende. Wenn du C statt B machst, bleibt B vorne. Infiltration leicht und Kurzeinsatz drehen die Rotation nicht weiter.
+
+### Mobility-Check (Phase 2)
+
+| Region | Test | Muay-Thai-Gewicht |
+| --- | --- | --- |
+| Hüftbeuger | Thomas-Test auf Box/Bett | 1,2 |
+| Adduktoren / Seitspagat | Breiter Stand, Winkel zwischen den Beinen | 1,5 |
+| Hamstrings | Aktives Beinheben in Rückenlage (statt Vorbeuge: misst ohne Mogeln über den Rücken) | 1,2 |
+| Hüftrotation | 90/90-Sitz | 1,2 |
+| Sprunggelenk | Knie-zur-Wand in cm | 0,8 |
+| Brustwirbelsäule | Rotation im Vierfüßlerstand, Po auf den Fersen | 1,2 |
+| Schulter überkopf | Arme an der Wand, Rücken flach | 0,8 |
+| Nacken | Rotation im Sitzen | 0,8 |
+
+Stufe 1–5 → Score 0/25/50/75/100. Priorität = (100 − Score) × Gewicht. Für die drei Regionen mit der höchsten Priorität wählt die App je einen Stretch und wechselt täglich zwischen den zwei besten. Die übrigen fünf Positionen bleiben Basis-Fluss.
 
 ### Pausen, Deload, Progression
 
@@ -53,9 +70,10 @@ js/engine/   reine Logik, ohne DOM:
   plan.js         Plan bauen, Training verbuchen, Arena loggen
   game.js         XP, Ränge, Wochen-Streak, Kampfkraft
   roundtimer.js   Arena-Rundentimer
+  mobility.js     Mobility-Scores, Prioritäten, Fokus-Stretches
   history.js, dates.js
-js/data/     exercises.js (Kodex), missions.js (A–D, Express, Fluss), glyphs.js
-js/ui/       Screens (today, training, arena, kodex, profile, onboarding)
+js/data/     exercises.js (Kodex), missions.js (A–D, Express, Fluss), glyphs.js, mobility.js (Tests)
+js/ui/       Screens (today, training, arena, kodex, profile, onboarding, check)
 js/store.js  IndexedDB + Export/Import
 tests/       Unit-Tests (im Browser)
 ```
@@ -69,9 +87,9 @@ python3 -m http.server 8765
 ```
 
 - App: <http://localhost:8765>. Lokal ist der Service Worker aus, damit Änderungen sofort sichtbar sind. Mit `?sw` ist er an.
-- Tests: <http://localhost:8765/tests/index.html> (zeigt „62/62 grün“)
+- Tests: <http://localhost:8765/tests/index.html> (zeigt „74/74 grün“)
 
-**Nach jeder Code-Änderung** in `sw.js` die Zeile `const VERSION = 'umbra-v2'` hochzählen, sonst zeigt das iPhone die alte Version aus dem Cache. Neue Dateien zusätzlich in die `ASSETS`-Liste eintragen.
+**Nach jeder Code-Änderung** in `sw.js` die Zeile `const VERSION = 'umbra-v3'` hochzählen, sonst zeigt das iPhone die alte Version aus dem Cache. Neue Dateien zusätzlich in die `ASSETS`-Liste eintragen.
 
 ### Referenzmaterial
 
@@ -140,5 +158,4 @@ Du brauchst keine Programmierkenntnisse. Alles läuft im Browser, ohne Terminal.
 
 ## Nächste Phasen
 
-- **Phase 2:** Mobility-Check (8 Regionen, Score 0–100, alle 4 Wochen), 3 personalisierte Stretches im Fluss, Verlaufsdiagramm.
 - **Phase 3:** Wochenabdeckung der Glyphen gegen die Profile „Muay Thai“ und „Vater-Alltag“, wöchentliche Quests aus den Lücken, Ränge pro Attribut, Ascensions, Statistiken.

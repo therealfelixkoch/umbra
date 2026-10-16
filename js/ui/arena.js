@@ -1,11 +1,12 @@
-// Arena: Muay Thai in zwei Taps loggen, dazu ein Rundentimer mit Gong.
+// Arena: Muay Thai loggen (Gefühl 1–10, Dauer in h) und ein eigenständiger Rundentimer mit Gong.
 import { esc, stepper } from './kit.js';
-import { logArena } from '../engine/plan.js';
+import { logArena, HARD_RPE } from '../engine/plan.js';
 import { addDays, formatDay } from '../engine/dates.js';
 import { startTimer, advanceTo, totalMinutes, WARN_SEC } from '../engine/roundtimer.js';
 import { gong, bell, clack, keepAwake } from './sound.js';
 
-const DURATIONS = [45, 60, 90, 120];
+const RPE_LABEL = { 1: 'sehr locker', 3: 'locker', 5: 'mittel', 7: 'hart', 9: 'sehr hart', 10: 'maximal' };
+const hours = (min) => `${(min / 60).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} h`;
 const WORK = [[60, '1 min'], [120, '2 min'], [180, '3 min'], [300, '5 min']];
 const REST = [[0, 'keine'], [30, '30 s'], [60, '1 min'], [90, '1:30']];
 const DEFAULT_RT = { work: 180, rest: 60, rounds: 5 };
@@ -63,11 +64,7 @@ function timerView() {
   if (st.phase === 'done') {
     return `<section class="rt done"><small>Arena-Timer</small><b class="rt-phase">Fertig</b>
       <p class="muted">${st.round} ${st.round === 1 ? 'Runde' : 'Runden'} à ${fmt(cfg.work * 1000)}</p></section>
-      <div class="label">Gleich eintragen?</div>
-      <div class="arena-pick">
-        <button class="arena-btn" data-act="rt-log" data-v="light"><b>Locker</b><small>Technik</small></button>
-        <button class="arena-btn hard" data-act="rt-log" data-v="hard"><b>Hart</b><small>Sparring</small></button>
-      </div>
+      <button class="btn primary wide big" data-act="rt-log">Einheit eintragen</button>
       <button class="btn ghost wide" data-act="rt-close">Ohne Eintrag schließen</button>`;
   }
   const label = st.phase === 'prep' ? 'Bereit' : st.phase === 'rest' ? 'Pause' : `Runde ${st.round}`;
@@ -105,32 +102,36 @@ function setupView(c) {
 export default {
   render(c) {
     ctxRef = c;
-    if (timer) return `<h1 class="h">Arena</h1>${timerView()}`;
+    const tab = c.ui.atab || (timer ? 'timer' : 'log');
+    const seg = `<div class="seg"><button class="${tab === 'log' ? 'on' : ''}" data-act="atab" data-v="log">Eintragen</button><button class="${tab === 'timer' ? 'on' : ''}" data-act="atab" data-v="timer">Rundentimer${timer && timer.st.phase !== 'done' ? ' ●' : ''}</button></div>`;
+    if (tab === 'timer') return `<h1 class="h">Arena</h1>${seg}${timer ? timerView() : setupView(c)}`;
+
     const f = c.ui.arena || (c.ui.arena = { minutes: 60, when: 'today' });
     const recent = c.data.sessions.filter((s) => s.kind === 'arena').slice(-8).reverse();
-    return `<h1 class="h">Arena</h1>
-      ${setupView(c)}
-      <div class="label">Eintragen</div>
-      <div class="arena-pick">
-        <button class="arena-btn${f.intensity === 'light' ? ' on' : ''}" data-act="a-int" data-v="light"><b>Locker</b><small>Technik</small></button>
-        <button class="arena-btn hard${f.intensity === 'hard' ? ' on' : ''}" data-act="a-int" data-v="hard"><b>Hart</b><small>Sparring</small></button>
-      </div>
-      <div class="label">Dauer</div>
-      <div class="chips">${DURATIONS.map((m) => `<button class="chip${f.minutes === m ? ' on' : ''}" data-act="a-min" data-v="${m}">${m} min</button>`).join('')}</div>
-      <div class="label">Wann</div>
-      <div class="chips"><button class="chip${f.when === 'today' ? ' on' : ''}" data-act="a-when" data-v="today">Heute</button><button class="chip${f.when === 'yesterday' ? ' on' : ''}" data-act="a-when" data-v="yesterday">Gestern</button></div>
-      <button class="btn primary wide big" data-act="a-save" ${f.intensity ? '' : 'disabled'}>Arena eintragen</button>
+    const rpeBtn = (n) => `<button class="rpe${f.rpe === n ? ' on' : ''}${n >= HARD_RPE ? ' hard' : ''}" data-act="a-rpe" data-v="${n}">${n}</button>`;
+    return `<h1 class="h">Arena</h1>${seg}
+      <section class="card">
+        <div class="label">Intensität (Gefühl)</div>
+        <div class="rpe-grid">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(rpeBtn).join('')}</div>
+        <p class="muted small">${f.rpe ? `${f.rpe} · ${RPE_LABEL[f.rpe] || RPE_LABEL[f.rpe - 1]}${f.rpe >= HARD_RPE ? ' · zählt als harte Einheit' : ''}` : `1 = locker Technik … 10 = Vollgas. Ab ${HARD_RPE} plant die App wie nach Sparring.`}</p>
+        <div class="label">Dauer gesamt</div>
+        <div class="field"><span class="muted">Zeit der Einheit</span>${stepper('a-dur', hours(f.minutes), '')}</div>
+        <div class="label">Wann</div>
+        <div class="chips"><button class="chip${f.when === 'today' ? ' on' : ''}" data-act="a-when" data-v="today">Heute</button><button class="chip${f.when === 'yesterday' ? ' on' : ''}" data-act="a-when" data-v="yesterday">Gestern</button></div>
+      </section>
+      <button class="btn primary wide big" data-act="a-save" ${f.rpe ? '' : 'disabled'}>Arena eintragen</button>
       ${recent.length ? `<section class="card"><div class="label">Zuletzt</div>${recent.map((s) =>
-        `<div class="done-row"><span>${formatDay(s.day)} · ${s.intensity === 'hard' ? 'Sparring' : 'Technik'} · ${s.minutes} min</span><button class="x" data-act="a-del" data-id="${esc(s.id)}" aria-label="Löschen">×</button></div>`).join('')}</section>` : ''}`;
+        `<div class="done-row"><span>${formatDay(s.day)} · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'} · ${hours(s.minutes)}</span><button class="x" data-act="a-del" data-id="${esc(s.id)}" aria-label="Löschen">×</button></div>`).join('')}</section>` : ''}`;
   },
   actions: {
-    'a-int': (c, d) => { c.ui.arena.intensity = d.v; c.render(); },
-    'a-min': (c, d) => { c.ui.arena.minutes = Number(d.v); c.render(); },
+    atab: (c, d) => c.setUi({ atab: d.v }),
+    'a-rpe': (c, d) => { c.ui.arena.rpe = Number(d.v); c.render(); },
+    'a-dur': (c, d) => { c.ui.arena.minutes = Math.max(15, Math.min(360, c.ui.arena.minutes + Number(d.dir) * 15)); c.render(); },
     'a-when': (c, d) => { c.ui.arena.when = d.v; c.render(); },
     'a-save': (c) => {
       const f = c.ui.arena;
       const day = f.when === 'yesterday' ? addDays(c.today(), -1) : c.today();
-      save(c, day, f.intensity, f.minutes);
+      save(c, day, f.rpe, f.minutes);
       c.ui.arena = { minutes: 60, when: 'today' };
     },
     'a-del': (c, d) => c.update((data) => ({ ...data, sessions: data.sessions.filter((s) => s.id !== d.id) })),
@@ -167,21 +168,22 @@ export default {
       if (!done) timer = null;
       c.render();
     },
-    'rt-log': (c, d) => {
-      const minutes = totalMinutes(timer.cfg, timer.st.round);
+    'rt-log': (c) => {
+      const minutes = Math.max(15, Math.round(totalMinutes(timer.cfg, timer.st.round) / 15) * 15);
       timer = null;
-      save(c, c.today(), d.v, minutes);
+      c.ui.arena = { minutes, when: 'today' };
+      c.setUi({ atab: 'log' });
     },
     'rt-close': (c) => { timer = null; c.render(); },
   },
 };
 
-function save(c, day, intensity, minutes) {
+function save(c, day, rpe, minutes) {
   let xp = 0;
   c.update((data) => {
-    const r = logArena(data, { day, intensity, minutes });
+    const r = logArena(data, { day, rpe, minutes });
     xp = r.session.xp;
     return r.data;
   });
-  c.system('Arena verbucht.', `<div class="xp-gain num">+${xp} XP</div><p class="muted">${minutes} min · ${intensity === 'hard' ? 'Morgen plant das System entsprechend.' : 'Saubere Technik zahlt sich aus.'}</p>`);
+  c.system('Arena verbucht.', `<div class="xp-gain num">+${xp} XP</div><p class="muted">Intensität ${rpe} · ${hours(minutes)}${rpe >= HARD_RPE ? ' · Morgen plant das System entsprechend.' : ''}</p>`);
 }

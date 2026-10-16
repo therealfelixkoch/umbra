@@ -9,11 +9,14 @@ import { getDef } from '../data/exercises.js';
 import { equipmentToggles, kbGrid, toggleIn, ROOM_EQUIPMENT, GYM_EQUIPMENT } from './onboarding.js';
 import { exportFile, readImportFile } from '../store.js';
 import { defaultData } from '../state.js';
+import { scoreChart, historyList } from './check.js';
+import { latestTest } from '../engine/mobility.js';
 
 const setSettings = (c, patch) => c.update((data) => ({ ...data, settings: { ...data.settings, ...patch } }));
 
 function sessionLabel(s) {
-  if (s.kind === 'arena') return `Arena · ${s.intensity === 'hard' ? 'Sparring' : 'Technik'} · ${s.minutes} min`;
+  if (s.kind === 'arena') return `Arena · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'} · ${s.minutes} min`;
+  if (s.kind === 'check') return 'Mobility-Check';
   const m = MISSIONS[s.missionId];
   const pct = s.kind === 'mission' && s.completion < 0.999 ? ` · ${Math.round(s.completion * 100)} %` : '';
   const mod = s.modifier === 'deload' ? ' · Deload' : s.modifier === 'comeback' ? ' · Wiedereinstieg' : '';
@@ -25,7 +28,7 @@ export default {
     const data = c.data;
     const st = playerStats(data, c.today());
     const tab = c.ui.ptab || 'status';
-    const tabs = [['status', 'Status'], ['verlauf', 'Verlauf'], ['setup', 'Einstellungen']];
+    const tabs = [['status', 'Status'], ['mobility', 'Mobility'], ['verlauf', 'Verlauf'], ['setup', 'Setup']];
     let out = `${hud(c)}<div class="seg">${tabs.map(([k, v]) => `<button class="${tab === k ? 'on' : ''}" data-act="ptab" data-v="${k}">${v}</button>`).join('')}</div>`;
 
     if (tab === 'status') {
@@ -50,6 +53,16 @@ export default {
         return `<div class="done-row"><span>${esc(def.name)}</span><b>${r.value}${def.mode === 'time' ? ' s' : ''}${r.load ? ` · ${esc(loadText(def, r.load))}` : ''}</b></div>`;
       }).join('') : '<p class="muted">Noch keine. Die erste Mission setzt die Messlatte.</p>'}</section>`;
       return out;
+    }
+
+    if (tab === 'mobility') {
+      const tests = data.mobility || [];
+      if (!latestTest(tests)) {
+        return out + sys('Noch kein Mobility-Check', '<p>8 Tests, 10 Minuten. Danach kennst du deine Scores pro Region und dein Fluss wird persönlich.</p><button class="btn primary wide" data-act="go" data-to="check">Check starten</button>');
+      }
+      return out + sys('Mobility pro Region', scoreChart(tests))
+        + `<section class="card"><div class="label">Alle Checks</div>${historyList(tests)}</section>
+        <button class="btn primary wide" data-act="go" data-to="check">Neuen Check machen</button>`;
     }
 
     if (tab === 'verlauf') {

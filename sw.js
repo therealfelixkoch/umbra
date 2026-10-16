@@ -1,5 +1,5 @@
 // Service Worker: alles vorab cachen, dann komplett offline. Bei Änderungen VERSION erhöhen.
-const VERSION = 'umbra-v2';
+const VERSION = 'umbra-v3';
 const ASSETS = [
     './',
     './css/app.css',
@@ -13,17 +13,20 @@ const ASSETS = [
     './js/data/exercises.js',
     './js/data/glyphs.js',
     './js/data/missions.js',
+    './js/data/mobility.js',
     './js/engine/cycle.js',
     './js/engine/dates.js',
     './js/engine/decide.js',
     './js/engine/game.js',
     './js/engine/history.js',
+    './js/engine/mobility.js',
     './js/engine/plan.js',
     './js/engine/progression.js',
     './js/engine/roundtimer.js',
     './js/state.js',
     './js/store.js',
     './js/ui/arena.js',
+    './js/ui/check.js',
     './js/ui/kit.js',
     './js/ui/kodex.js',
     './js/ui/onboarding.js',

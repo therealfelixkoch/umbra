@@ -26,6 +26,7 @@ export function defaultData() {
     records: {},
     sessions: [],
     checkins: {},
+    mobility: [],
     active: null,
   };
 }
@@ -42,5 +43,6 @@ export function normalize(raw) {
     settings: { ...d.settings, ...raw.settings,
       equipment: { ...d.settings.equipment, ...(raw.settings.equipment || {}) } },
     engine: { ...d.engine, ...(raw.engine || {}) },
+    mobility: Array.isArray(raw.mobility) ? raw.mobility : [],
   };
 }

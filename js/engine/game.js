@@ -13,7 +13,7 @@ export const RANKS = [
 ];
 
 export const XP = { mission: 100, missionBonus: 25, light: 60, express: 50, flow: 20, rest: 10,
-  arenaLight: 60, arenaHard: 80, record: 20 };
+  arenaLight: 60, arenaHard: 80, record: 20, check: 50 };
 
 export function sessionXp(s) {
   let xp = 0;
@@ -24,8 +24,9 @@ export function sessionXp(s) {
   else if (s.kind === 'express') xp = XP.express;
   else if (s.kind === 'flow') xp = XP.flow;
   else if (s.kind === 'rest') xp = XP.rest;
+  else if (s.kind === 'check') xp = XP.check;
   else if (s.kind === 'arena') {
-    const base = s.intensity === 'hard' ? XP.arenaHard : XP.arenaLight;
+    const base = s.rpe ? 40 + s.rpe * 5 : s.intensity === 'hard' ? XP.arenaHard : XP.arenaLight;
     xp = Math.round(base * Math.min(1.5, Math.max(0.5, (s.minutes || 60) / 60)));
   }
   return xp + (s.records?.length || 0) * XP.record;
@@ -76,14 +77,17 @@ export function weekStreak(sessions, today) {
 }
 
 // Kampfkraft: Konstanz + Kraftwerte (Bestleistungen) + Erfahrung.
-export function kampfkraft({ xp, streak, records }) {
+export function kampfkraft({ xp, streak, records, mobility = 0 }) {
   const strength = Object.values(records || {}).reduce((s, r) => s + (r.score || 0), 0);
-  return Math.round(100 + xp * 0.4 + streak * 40 + strength * 0.5);
+  return Math.round(100 + xp * 0.4 + streak * 40 + strength * 0.5 + mobility * 4);
 }
 
 export function playerStats(data, today) {
   const xp = totalXp(data.sessions);
   const rank = rankFor(xp);
   const week = weekStreak(data.sessions, today);
-  return { xp, rank, week, kk: kampfkraft({ xp, streak: week.streak, records: data.records }) };
+  const last = data.mobility?.[data.mobility.length - 1];
+  const vals = last ? Object.values(last.scores) : [];
+  const mobility = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;
+  return { xp, rank, week, kk: kampfkraft({ xp, streak: week.streak, records: data.records, mobility }) };
 }

@@ -9,6 +9,8 @@ import { addDays, weekStart, daysBetween } from '../js/engine/dates.js';
 import { getDef } from '../js/data/exercises.js';
 import { defaultData, normalize } from '../js/state.js';
 import { startTimer, advanceTo, nextPhase, totalMinutes } from '../js/engine/roundtimer.js';
+import { levelToScore, priorities, selectStretches, isDue } from '../js/engine/mobility.js';
+import { MISSIONS } from '../js/data/missions.js';
 
 const T = '2026-10-16'; // Freitag
 const ci = (o = {}) => ({ yesterdayMT: 'none', feeling: 'normal', tonightMT: 'no', where: 'room', ...o });
@@ -29,6 +31,15 @@ describe('Datum', () => {
 });
 
 describe('Entscheidung', () => {
+  it('Regel 0: Arena heute Abend ohne Morgeneinheit → nur Fluss', () => {
+    const r = decide({ checkin: { yesterdayMT: 'none', feeling: 'frisch', tonightMT: 'yes' }, hardStreak: 0, queue: Q });
+    expect(r.rule).toBe(0);
+    expect(r.kind).toBe('arenaday');
+  });
+  it('Regel 0 entfällt bei gewollter Morgeneinheit oder „Vielleicht“', () => {
+    expect(decide({ checkin: ci({ tonightMT: 'yes', morning: true }), hardStreak: 0, queue: Q }).rule).toBe(7);
+    expect(decide({ checkin: ci({ tonightMT: 'maybe' }), hardStreak: 0, queue: Q }).rule).toBe(7);
+  });
   it('Regel 1: Nur Mobility → Fluss + Spaziergang', () => {
     const r = decide({ checkin: ci({ where: 'mobility', feeling: 'platt' }), hardStreak: 5, queue: Q });
     expect(r.rule).toBe(1);
@@ -59,13 +70,13 @@ describe('Entscheidung', () => {
     expect(r.missionId).toBe('EXPRESS');
   });
   it('Regel 6: Arena heute Abend + B ist dran → nächste Nicht-B-Einheit', () => {
-    const r = decide({ checkin: ci({ tonightMT: 'yes' }), hardStreak: 0, queue: ['B', 'C', 'D', 'A'] });
+    const r = decide({ checkin: ci({ tonightMT: 'yes', morning: true }), hardStreak: 0, queue: ['B', 'C', 'D', 'A'] });
     expect(r.rule).toBe(6);
     expect(r.missionId).toBe('C');
     expect(decide({ checkin: ci({ tonightMT: 'maybe' }), hardStreak: 0, queue: ['B', 'C', 'D', 'A'] }).missionId).toBe('C');
   });
   it('Regel 6 greift nicht, wenn nicht B dran ist', () => {
-    expect(decide({ checkin: ci({ tonightMT: 'yes' }), hardStreak: 0, queue: ['C', 'D', 'A', 'B'] }).missionId).toBe('C');
+    expect(decide({ checkin: ci({ tonightMT: 'yes', morning: true }), hardStreak: 0, queue: ['C', 'D', 'A', 'B'] }).missionId).toBe('C');
   });
   it('Regel 7: nächste Einheit, Profil aus Ort', () => {
     const r = decide({ checkin: ci({ where: 'gym' }), hardStreak: 0, queue: ['D', 'A', 'B', 'C'] });
@@ -354,6 +365,18 @@ describe('Verbuchen', () => {
     const { session } = logArena(defaultData(), { day: T, intensity: 'hard', minutes: 60 });
     expect(session.xp).toBe(80);
   });
+  it('Arena mit Gefühl 1–10: ab 7 hart, XP nach Intensität und Dauer', () => {
+    const hard = logArena(defaultData(), { day: T, rpe: 7, minutes: 90 }).session;
+    expect(hard.intensity).toBe('hard');
+    expect(hard.xp).toBe(113);
+    const light = logArena(defaultData(), { day: T, rpe: 4, minutes: 60 }).session;
+    expect(light.intensity).toBe('light');
+    expect(light.xp).toBe(60);
+  });
+  it('Sparring per Gefühl ≥ 7 löst Regel 4 am nächsten Tag aus', () => {
+    const d = logArena(defaultData(), { day: addDays(T, -1), rpe: 8, minutes: 60 }).data;
+    expect(d.sessions[0].intensity).toBe('hard');
+  });
 });
 
 describe('Gamification', () => {
@@ -436,5 +459,53 @@ describe('Arena-Rundentimer', () => {
   });
   it('Dauer fürs Log', () => {
     expect(totalMinutes(cfg, 3)).toBe(11);
+  });
+});
+
+describe('Mobility-Check', () => {
+  const full = { hueftbeuger: 50, adduktoren: 25, hamstrings: 75, hueftrotation: 50, sprunggelenk: 0,
+    bws: 75, schulter: 100, nacken: 75 };
+  const flow = MISSIONS.FLOW;
+  const pool = [...new Set([...flow.base, ...flow.pool, ...flow.focusPool])].map(getDef);
+  it('Stufe → Score', () => {
+    expect(levelToScore(1)).toBe(0);
+    expect(levelToScore(5)).toBe(100);
+  });
+  it('Priorität = (100 − Score) × Muay-Thai-Gewicht', () => {
+    const p = priorities(full);
+    expect(p[0].region).toBe('adduktoren'); // 75 × 1,5 = 112,5
+    expect(p[1].region).toBe('sprunggelenk'); // 100 × 0,8 = 80
+    expect(p[p.length - 1].region).toBe('schulter');
+  });
+  it('3 Fokus-Stretches decken die Top-Regionen ab', () => {
+    const ids = selectStretches(full, pool, 0);
+    expect(ids.length).toBe(3);
+    expect(getDef(ids[0]).regions.includes('adduktoren')).toBe(true);
+    expect(getDef(ids[1]).regions.includes('sprunggelenk')).toBe(true);
+    expect(new Set(ids).size).toBe(3);
+  });
+  it('Auswahl rotiert leicht von Tag zu Tag', () => {
+    expect(JSON.stringify(selectStretches(full, pool, 0)) !== JSON.stringify(selectStretches(full, pool, 1))).toBe(true);
+  });
+  it('alles 100 → keine Fokus-Stretches', () => {
+    const perfect = Object.fromEntries(Object.keys(full).map((k) => [k, 100]));
+    expect(selectStretches(perfect, pool, 0).length).toBe(0);
+  });
+  it('Re-Test alle 4 Wochen fällig', () => {
+    expect(isDue([], T)).toBe(true);
+    expect(isDue([{ day: addDays(T, -27), scores: full }], T)).toBe(false);
+    expect(isDue([{ day: addDays(T, -28), scores: full }], T)).toBe(true);
+  });
+  it('Fluss mit Check: 3 Fokus vorn, insgesamt 8', () => {
+    const d = defaultData();
+    d.mobility = [{ day: T, scores: full }];
+    const plan = buildPlan({ missionId: 'FLOW', profile: 'room', data: d, today: T });
+    expect(plan.items.length).toBe(8);
+    expect(plan.items.filter((i) => i.focus).length).toBe(3);
+    expect(plan.items[0].focus).toBe(true);
+    expect(new Set(plan.items.map((i) => i.exId)).size).toBe(8);
+  });
+  it('Check bringt 50 XP', () => {
+    expect(sessionXp({ kind: 'check' })).toBe(50);
   });
 });

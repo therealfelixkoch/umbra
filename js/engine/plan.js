@@ -6,6 +6,7 @@ import { modifierFor, completeMission } from './cycle.js';
 import { initialState, progress, ladderFor, snap, canLoad, setScore } from './progression.js';
 import { sessionXp } from './game.js';
 import { daysBetween } from './dates.js';
+import { latestTest, selectStretches } from './mobility.js';
 
 // Equipment und Einstellungen für ein Profil. Im Home Gym ersetzen Kurzhanteln die Kettlebells.
 export function profileContext(settings, profile) {
@@ -47,7 +48,7 @@ function applyModifier(item, mod, def) {
   return out;
 }
 
-function flowItems(mission, today) {
+function flowItems(mission, today, scores, getDef) {
   // Leichte Variation: täglich zwei Basis-Stretches gegen Alternativen tauschen.
   const n = Math.abs(daysBetween('2024-01-01', today));
   const items = [...mission.base];
@@ -55,8 +56,19 @@ function flowItems(mission, today) {
     const slot = (n * 3 + k * 4) % items.length;
     items[slot] = mission.pool[(n * 2 + k) % mission.pool.length];
   }
-  return items.map((id) => ({ exId: id, value: mission.work }));
+  if (!scores) return items.map((id) => ({ exId: id, value: mission.work }));
+  // Mit Mobility-Check: 3 Fokus-Stretches vorn, der Rest bleibt Basis-Fluss.
+  const pool = Object.values(MOBILITY_POOL(getDef));
+  const focus = selectStretches(scores, pool, n);
+  const base = items.filter((id) => !focus.includes(id)).slice(0, items.length - focus.length);
+  return [...focus.map((id) => ({ exId: id, value: mission.work, focus: true })),
+    ...base.map((id) => ({ exId: id, value: mission.work }))];
 }
+
+const MOBILITY_POOL = (getDef) => {
+  const ids = [...MISSIONS.FLOW.base, ...MISSIONS.FLOW.pool, ...MISSIONS.FLOW.focusPool];
+  return Object.fromEntries([...new Set(ids)].map((id) => [id, getDef(id)]).filter(([, d]) => d));
+};
 
 /**
  * Konkreter Plan für heute.
@@ -135,7 +147,9 @@ export function buildPlan({ missionId, profile, data, today, getDef = defaultGet
   }
 
   // flow
-  return { ...base, items: flowItems(mission, today), rounds: mission.rounds, work: mission.work };
+  const scores = latestTest(data.mobility)?.scores;
+  return { ...base, items: flowItems(mission, today, scores, getDef), rounds: mission.rounds, work: mission.work,
+    personalized: !!scores };
 }
 
 // Laufendes Training aus einem Plan. Sätze sind mit dem Ziel vorausgefüllt.
@@ -231,8 +245,13 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
   };
 }
 
-export function logArena(data, { day, intensity, minutes = 60, now = Date.now() }) {
-  const session = { id: `a${now}`, day, kind: 'arena', missionId: 'ARENA', intensity, minutes };
+// Ab diesem Gefühlswert zählt eine Arena-Einheit als hart (wie Sparring).
+export const HARD_RPE = 7;
+
+export function logArena(data, { day, intensity, rpe, minutes = 60, now = Date.now() }) {
+  const r = rpe ?? (intensity === 'hard' ? 8 : 4);
+  const session = { id: `a${now}`, day, kind: 'arena', missionId: 'ARENA', rpe: r,
+    intensity: r >= HARD_RPE ? 'hard' : 'light', minutes };
   session.xp = sessionXp(session);
   return { data: { ...data, sessions: [...data.sessions, session] }, session };
 }

@@ -252,7 +252,7 @@ function flowView(c, a) {
   const left = f.paused ? f.left : (f.endAt - Date.now()) / 1000;
   return `${head(c, a, `${f.i + 1}/${seq.length}`, f.i / seq.length)}
     <section class="t-card center flow">
-      <small class="muted">Runde ${cur.round} von ${p.rounds}</small>
+      <small class="muted">Runde ${cur.round} von ${p.rounds}${cur.focus ? ' · <b class="focus">Fokus</b>' : ''}</small>
       <h1>${esc(def.name)}</h1>
       <b class="clock num" ${f.paused ? '' : `data-clock="${f.endAt}"`}>${fmt(left)}</b>
       ${def.perSide ? '<p class="note">Seite nach der Hälfte wechseln.</p>' : ''}
