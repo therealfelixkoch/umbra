@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UMBRA Tests</title>
+  <style>
+    body { background: #0b0d12; color: #dfe6f3; font: 14px/1.5 -apple-system, system-ui, sans-serif; padding: 16px; }
+    .ok { color: #3fd68a; } .fail { color: #ff4d5e; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div id="out">Läuft …</div>
+  <script type="module">
+    import { report } from './runner.js';
+    import './engine.test.js';
+    window.testResult = report(document.getElementById('out'));
+  </script>
+</body>
+</html>
