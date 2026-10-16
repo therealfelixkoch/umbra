@@ -92,7 +92,7 @@ python3 -m http.server 8765
 - App: <http://localhost:8765>. Lokal ist der Service Worker aus, damit Änderungen sofort sichtbar sind. Mit `?sw` ist er an.
 - Tests: <http://localhost:8765/tests/index.html> (zeigt „92/92 grün“)
 
-**Nach jeder Code-Änderung** in `sw.js` die Zeile `const VERSION = 'umbra-v4'` hochzählen, sonst zeigt das iPhone die alte Version aus dem Cache. Neue Dateien zusätzlich in die `ASSETS`-Liste eintragen.
+**Nach jeder Code-Änderung** in `sw.js` die Zeile `const VERSION = 'umbra-v5'` hochzählen, sonst zeigt das iPhone die alte Version aus dem Cache. Neue Dateien zusätzlich in die `ASSETS`-Liste eintragen.
 
 ### Referenzmaterial
 

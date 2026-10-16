@@ -1,5 +1,5 @@
 // Service Worker: alles vorab cachen, dann komplett offline. Bei Änderungen VERSION erhöhen.
-const VERSION = 'umbra-v4';
+const VERSION = 'umbra-v5';
 const ASSETS = [
     './',
     './css/app.css',
