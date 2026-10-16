@@ -14,7 +14,8 @@ Persönliche Trainings-App fürs iPhone. Du öffnest sie, beantwortest vier Frag
 | --- | --- |
 | **Heute** | Check-in mit 4 Fragen → Empfehlung mit Begründung in einem Satz, „Andere Einheit“, Ruhetag mit Überstimmen und einmaliger Warnung, Fluss-Erinnerung, Deload-Vorschlag, wöchentliche Backup-Erinnerung |
 | **Training** | Übung für Übung: letztes Mal → heute, Steigerungs-Badge, Satz-Logging mit großen ± Tasten, Pausen-Timer mit Ton, Glyph-Chips, Info zum Kodex. Zirkel-Modus (D), Kurzeinsatz mit 15-min-Uhr, Sack-Intervalle, geführter Fluss mit 30-s-Takt |
-| **Arena** | Muay Thai loggen mit **Intensität 1–10** (ab 7 zählt sie wie Sparring) und **Dauer in Stunden**. Eigener Bereich **Rundentimer**: Runde/Pause/Rundenzahl einstellbar, Gong am Rundenende, Klacken 10 s vorher, Glocke zum Start, danach Dauer übernehmen |
+| **Arena** | Muay Thai loggen mit **Intensität 1–10** (ab 7 zählt sie wie Sparring) und **Dauer in Stunden**. Eigener Bereich **Timer**: Runde/Pause/Rundenzahl einstellbar, Boxring-Glocke („Ding Ding Ding“) am Rundenende, Klacken 10 s vorher, ein „Ding“ zum Start, danach Dauer übernehmen. Bereich **Footwork**: 1–3 min Runden, zufällige Kommandos (Right, Left, Forward, Back, Switch) per Roboterstimme in unregelmäßigem Takt |
+| **Woche & Fortschritt** (Phase 3) | Wochen-Quest aus den Lücken der Vorwoche (+100 XP), Glyph-Abdeckung gegen „Muay Thai“ und „Vater-Alltag“, Ausprägungen der Woche, Einsätze der letzten 8 Wochen, Attribut-Ränge (Kraft, Explosivität, Ausdauer, Mobilität, Stabilität, Nacken & Griff), 8 Ascensions mit Aura (+150 XP), Kampfkraft zählt sichtbar hoch, Übungstausch im Training schlägt Lückenfüller vor |
 | **Mobility-Check** (Phase 2) | 8 Heimtests mit je 5 Stufen und Skizze → Score 0–100 pro Region, alle 4 Wochen. 3 Fokus-Stretches nach Muay-Thai-Gewicht im täglichen Fluss, Verlaufsdiagramm unter Profil → Mobility |
 | **Kodex** | 96 Übungen und Stretches, durchsuchbar, filterbar nach Kategorie und Ausprägung (Farbe) |
 | **Profil** | Rang, Kampfkraft, Wochen-Streak mit Schild, Deload-Knopf, Bestleistungen, Verlauf, Equipment, KB-Gewichte, Körpergewicht, Pausenzeit, Export/Import |
@@ -71,9 +72,11 @@ js/engine/   reine Logik, ohne DOM:
   game.js         XP, Ränge, Wochen-Streak, Kampfkraft
   roundtimer.js   Arena-Rundentimer
   mobility.js     Mobility-Scores, Prioritäten, Fokus-Stretches
+  footwork.js     zufällige Footwork-Kommandos
+  progress.js     Wochenabdeckung, Quests, Ascensions, Attribut-Ränge
   history.js, dates.js
 js/data/     exercises.js (Kodex), missions.js (A–D, Express, Fluss), glyphs.js, mobility.js (Tests)
-js/ui/       Screens (today, training, arena, kodex, profile, onboarding, check)
+js/ui/       Screens (today, training, arena, footwork, kodex, profile, week, onboarding, check), voice.js, sound.js
 js/store.js  IndexedDB + Export/Import
 tests/       Unit-Tests (im Browser)
 ```
@@ -87,9 +90,9 @@ python3 -m http.server 8765
 ```
 
 - App: <http://localhost:8765>. Lokal ist der Service Worker aus, damit Änderungen sofort sichtbar sind. Mit `?sw` ist er an.
-- Tests: <http://localhost:8765/tests/index.html> (zeigt „74/74 grün“)
+- Tests: <http://localhost:8765/tests/index.html> (zeigt „92/92 grün“)
 
-**Nach jeder Code-Änderung** in `sw.js` die Zeile `const VERSION = 'umbra-v3'` hochzählen, sonst zeigt das iPhone die alte Version aus dem Cache. Neue Dateien zusätzlich in die `ASSETS`-Liste eintragen.
+**Nach jeder Code-Änderung** in `sw.js` die Zeile `const VERSION = 'umbra-v4'` hochzählen, sonst zeigt das iPhone die alte Version aus dem Cache. Neue Dateien zusätzlich in die `ASSETS`-Liste eintragen.
 
 ### Referenzmaterial
 
@@ -152,10 +155,7 @@ Du brauchst keine Programmierkenntnisse. Alles läuft im Browser, ohne Terminal.
 
 ## Hinweise zu iOS
 
-- **Stummschalter:** Steht der Schalter am iPhone auf lautlos, bleiben Gong und Timer-Töne stumm, weil iOS das für Web-Apps so vorgibt. Vibration können Web-Apps auf dem iPhone nicht auslösen.
+- **Stummschalter:** Steht der Schalter am iPhone auf lautlos, bleiben Glocke und Timer-Töne stumm, weil iOS das für Web-Apps so vorgibt. Vibration können Web-Apps auf dem iPhone nicht auslösen.
 - **Bildschirm an:** Während Training und Rundentimer hält die App den Bildschirm wach. Sperrst du das iPhone, pausiert der Timer. Beim Entsperren holt er die verpasste Zeit wieder auf, der Ton dazwischen fällt aber aus.
 - Die App fragt beim Start, ob iOS den Speicher dauerhaft schützen soll (`navigator.storage.persist()`).
-
-## Nächste Phasen
-
-- **Phase 3:** Wochenabdeckung der Glyphen gegen die Profile „Muay Thai“ und „Vater-Alltag“, wöchentliche Quests aus den Lücken, Ränge pro Attribut, Ascensions, Statistiken.
+- **Footwork-Stimme:** Die App nimmt eine eingebaute englische Roboterstimme (Zarvox, Trinoids, Fred …), sonst die Standardstimme so tief wie möglich. Fehlt die Stimme auf dem iPhone, kannst du sie unter Einstellungen → Bedienungshilfen → Gesprochene Inhalte → Stimmen → Englisch → Neuheit laden.

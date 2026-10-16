@@ -11,6 +11,10 @@ import { defaultData, normalize } from '../js/state.js';
 import { startTimer, advanceTo, nextPhase, totalMinutes } from '../js/engine/roundtimer.js';
 import { levelToScore, priorities, selectStretches, isDue } from '../js/engine/mobility.js';
 import { MISSIONS } from '../js/data/missions.js';
+import { schedule, nextCommand, rng, COMMANDS } from '../js/engine/footwork.js';
+import { weekCoverage, gapsFor, questForWeek, questStatus, checkProgress, ascensionStatus, attributePoints, attrRank, QUESTS } from '../js/engine/progress.js';
+import { swapOptions } from '../js/engine/plan.js';
+import { EXERCISES } from '../js/data/exercises.js';
 
 const T = '2026-10-16'; // Freitag
 const ci = (o = {}) => ({ yesterdayMT: 'none', feeling: 'normal', tonightMT: 'no', where: 'room', ...o });
@@ -507,5 +511,127 @@ describe('Mobility-Check', () => {
   });
   it('Check bringt 50 XP', () => {
     expect(sessionXp({ kind: 'check' })).toBe(50);
+  });
+});
+
+describe('Footwork-Drill', () => {
+  it('Kommandos nur aus dem Satz, nie dreimal gleich, Switch nie doppelt', () => {
+    const plan = schedule(180, 'fast', rng(42));
+    const cmds = plan.map((p) => p.cmd);
+    expect(cmds.every((c) => COMMANDS.includes(c))).toBe(true);
+    for (let i = 2; i < cmds.length; i++) expect(cmds[i] === cmds[i - 1] && cmds[i] === cmds[i - 2]).toBe(false);
+    for (let i = 1; i < cmds.length; i++) expect(cmds[i] === 'switch' && cmds[i - 1] === 'switch').toBe(false);
+  });
+  it('Takt passt zur Dauer und ist unregelmäßig', () => {
+    const plan = schedule(60, 'mid', rng(7));
+    expect(plan.length >= 25 && plan.length <= 50).toBe(true);
+    expect(plan[plan.length - 1].at < 60000).toBe(true);
+    const gaps = plan.slice(1).map((p, i) => p.at - plan[i].at);
+    expect(new Set(gaps).size > 5).toBe(true);
+  });
+  it('alle fünf Kommandos kommen vor', () => {
+    expect(new Set(schedule(120, 'mid', rng(1)).map((p) => p.cmd)).size).toBe(5);
+  });
+  it('kein Davonwandern: nach 3× rechts wird rechts gesperrt', () => {
+    const r = rng(3);
+    for (let i = 0; i < 50; i++) expect(nextCommand(['right', 'forward', 'right', 'right'], r) === 'right').toBe(false);
+  });
+  it('gleicher Seed → gleiche Runde', () => {
+    expect(JSON.stringify(schedule(60, 'mid', rng(9)))).toBe(JSON.stringify(schedule(60, 'mid', rng(9))));
+  });
+});
+
+describe('Phase 3: Abdeckung und Quests', () => {
+  const W = '2026-10-12';
+  const missionA = { day: '2026-10-13', kind: 'mission', missionId: 'A',
+    exercises: [{ exId: 'suitcase_carry', sets: [{ done: true }, { done: true }] }, { exId: 'neck_iso_manual', sets: [{ done: false }] }] };
+  it('Abdeckung zählt nur erledigte Sätze', () => {
+    const cov = weekCoverage([missionA], W);
+    expect(!!cov.attrs.carry).toBe(true);
+    expect(!!cov.attrs.neck).toBe(false);
+  });
+  it('Arena deckt Schlagen und Rotation ab', () => {
+    const cov = weekCoverage([{ day: '2026-10-14', kind: 'arena', minutes: 60 }], W);
+    expect(gapsFor(cov, 'muaythai').attrs.includes('strike')).toBe(false);
+    expect(gapsFor(cov, 'muaythai').attrs.includes('neck')).toBe(false);
+  });
+  it('Zirkel und Fluss zählen über ihre Übungsliste', () => {
+    const cov = weekCoverage([{ day: '2026-10-14', kind: 'flow', missionId: 'FLOW', items: ['ninety_ninety'] }], W);
+    expect(cov.attrs.hip_rot.includes('mobil')).toBe(true);
+  });
+  it('Quest kommt aus einer Lücke der Vorwoche', () => {
+    const lastWeek = [{ day: '2026-10-06', kind: 'arena', minutes: 60 }];
+    const q = questForWeek(lastWeek, T);
+    const cov = weekCoverage(lastWeek, '2026-10-05');
+    const gap = (q.gap.attrs || []).some((a) => !cov.attrs[a]) || (q.gap.expressions || []).some((x) => !cov.expressions[x]);
+    expect(gap).toBe(true);
+    expect(q.id === 'arena2').toBe(false);
+  });
+  it('Quest bleibt die ganze Woche gleich', () => {
+    const d = defaultData();
+    expect(questForWeek(d.sessions, '2026-10-12').id).toBe(questForWeek(d.sessions, '2026-10-18').id);
+  });
+  it('erfüllte Quest wird genau einmal belohnt', () => {
+    const d = defaultData();
+    const quest = questForWeek(d.sessions, T);
+    const flow = (day) => ({ day, kind: 'flow', missionId: 'FLOW', items: ['ninety_ninety'] });
+    const make = { flow5: () => ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16'].map(flow),
+      arena2: () => [{ day: T, kind: 'arena', minutes: 60 }, { day: T, kind: 'arena', minutes: 60 }],
+      legs: () => [{ day: T, kind: 'mission', missionId: 'B', exercises: [] }] }[quest.id];
+    if (!make) return; // andere Quests sind über Übungen gedeckt
+    d.sessions = make();
+    const r1 = checkProgress(d, T, 1);
+    expect(r1.events.some((e) => e.type === 'quest')).toBe(true);
+    const r2 = checkProgress(r1.data, T, 2);
+    expect(r2.events.some((e) => e.type === 'quest')).toBe(false);
+    expect(questStatus(r2.data, T).rewarded).toBe(true);
+  });
+  it('alle Quests haben Ziel und Fortschrittsfunktion', () => {
+    expect(QUESTS.every((q) => q.target > 0 && typeof q.progress === 'function')).toBe(true);
+  });
+});
+
+describe('Phase 3: Ascensions und Attribut-Ränge', () => {
+  it('Erwachen nach der ersten Mission, nur einmal', () => {
+    const d = defaultData();
+    d.sessions = [{ day: T, kind: 'mission', missionId: 'A', exercises: [] }];
+    const r = checkProgress(d, T, 1);
+    expect(r.events.some((e) => e.type === 'ascension' && e.ascension.id === 'erwacht')).toBe(true);
+    expect(checkProgress(r.data, T, 2).events.some((e) => e.type === 'ascension')).toBe(false);
+  });
+  it('Eisengriff ab +16 kg Klimmzug-Rekord', () => {
+    const d = defaultData();
+    d.records = { pullup_tactical: { load: 16, value: 5, score: 1 } };
+    expect(ascensionStatus(d, T).find((a) => a.id === 'eisengriff').reached).toBe(true);
+    d.records.pullup_tactical.load = 12;
+    expect(ascensionStatus(d, T).find((a) => a.id === 'eisengriff').reached).toBe(false);
+  });
+  it('Attributpunkte aus Sätzen und Arena', () => {
+    const d = defaultData();
+    d.sessions = [{ day: T, kind: 'mission', missionId: 'C', exercises: [{ exId: 'dip', sets: [{ done: true }, { done: true }] }] },
+      { day: T, kind: 'arena', minutes: 60 }];
+    const p = attributePoints(d);
+    expect(p.kraft >= 4).toBe(true);
+    expect(p.explosiv > 0).toBe(true);
+    expect(p.nacken > 0).toBe(true);
+  });
+  it('Attribut-Rang-Stufen', () => {
+    expect(attrRank(0).id).toBe('E');
+    expect(attrRank(130).id).toBe('C');
+    expect(attrRank(5000).id).toBe('U');
+  });
+});
+
+describe('Übungstausch', () => {
+  it('Alternativen mit vorhandenem Equipment, ohne die Übung selbst', () => {
+    const opts = swapOptions('kb_row_ballistic', { data: defaultData(), profile: 'room', today: T, all: EXERCISES });
+    expect(opts.length > 0).toBe(true);
+    expect(opts.some((o) => o.id === 'kb_row_ballistic')).toBe(false);
+    expect(opts[0].id).toBe('bw_row');
+    expect(opts.every((o) => (getDef(o.id).equipment || []).every((e) => defaultData().settings.equipment.room.includes(e)))).toBe(true);
+  });
+  it('markiert Übungen, die eine Wochenlücke füllen', () => {
+    const opts = swapOptions('dip', { data: defaultData(), profile: 'room', today: T, all: EXERCISES });
+    expect(opts.some((o) => o.fills.length > 0)).toBe(true);
   });
 });

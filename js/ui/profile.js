@@ -11,12 +11,16 @@ import { exportFile, readImportFile } from '../store.js';
 import { defaultData } from '../state.js';
 import { scoreChart, historyList } from './check.js';
 import { latestTest } from '../engine/mobility.js';
+import { weekView, attributeRanks, ascensionGrid, RANK_LORE } from './week.js';
+import { ASCENSIONS } from '../engine/progress.js';
 
 const setSettings = (c, patch) => c.update((data) => ({ ...data, settings: { ...data.settings, ...patch } }));
 
 function sessionLabel(s) {
   if (s.kind === 'arena') return `Arena · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'} · ${s.minutes} min`;
   if (s.kind === 'check') return 'Mobility-Check';
+  if (s.kind === 'quest') return 'Wochen-Quest erfüllt';
+  if (s.kind === 'ascension') return `Ascension: ${ASCENSIONS.find((a) => a.id === s.ascension)?.name || ''}`;
   const m = MISSIONS[s.missionId];
   const pct = s.kind === 'mission' && s.completion < 0.999 ? ` · ${Math.round(s.completion * 100)} %` : '';
   const mod = s.modifier === 'deload' ? ' · Deload' : s.modifier === 'comeback' ? ' · Wiedereinstieg' : '';
@@ -28,7 +32,7 @@ export default {
     const data = c.data;
     const st = playerStats(data, c.today());
     const tab = c.ui.ptab || 'status';
-    const tabs = [['status', 'Status'], ['mobility', 'Mobility'], ['verlauf', 'Verlauf'], ['setup', 'Setup']];
+    const tabs = [['status', 'Status'], ['woche', 'Woche'], ['mobility', 'Mobil'], ['verlauf', 'Log'], ['setup', 'Setup']];
     let out = `${hud(c)}<div class="seg">${tabs.map(([k, v]) => `<button class="${tab === k ? 'on' : ''}" data-act="ptab" data-v="${k}">${v}</button>`).join('')}</div>`;
 
     if (tab === 'status') {
@@ -36,6 +40,7 @@ export default {
       out += sys(`Rang ${st.rank.name || st.rank.id}`, `
         <div class="rank-row">${RANKS.map((r, i) => `<span class="${i <= st.rank.index ? 'on' : ''}">${r.id === 'U' ? '∞' : r.id}</span>`).join('')}</div>
         <div class="xpbar big"><i style="width:${Math.round(st.rank.progress * 100)}%"></i></div>
+        <p class="lore">${RANK_LORE[st.rank.id]}</p>
         <p class="muted">${st.xp.toLocaleString('de-DE')} XP${next ? ` · noch ${(next.xp - st.xp).toLocaleString('de-DE')} bis ${next.name || `Rang ${next.id}`}` : ''}</p>
         <dl class="facts">
           <div><dt>Kampfkraft</dt><dd class="num">${st.kk.toLocaleString('de-DE')}</dd></div>
@@ -43,6 +48,8 @@ export default {
           <div><dt>Diese Woche</dt><dd>${st.week.thisWeek} von 3 Einsätzen</dd></div>
           <div><dt>Schild</dt><dd>${st.week.shieldUsedThisMonth ? 'diesen Monat verbraucht' : 'bereit'}</dd></div>
         </dl>`);
+      out += sys('Attribut-Ränge', attributeRanks(data));
+      out += sys('Ascensions', ascensionGrid(data, c.today()));
       const e = data.engine;
       out += sys('Belastungssteuerung', `<p>${e.deloadRemaining > 0 ? `Deload aktiv: noch ${e.deloadRemaining} Einheiten.` : `Nächster Deload in ${DELOAD_AFTER - e.fullSinceDeload} vollen Missionen.`}</p>
         ${e.deloadRemaining > 0 ? '' : '<button class="btn wide" data-act="p-deload">Ich brauche einen Deload</button>'}`);
@@ -54,6 +61,8 @@ export default {
       }).join('') : '<p class="muted">Noch keine. Die erste Mission setzt die Messlatte.</p>'}</section>`;
       return out;
     }
+
+    if (tab === 'woche') return out + weekView(c);
 
     if (tab === 'mobility') {
       const tests = data.mobility || [];
@@ -92,6 +101,7 @@ export default {
   },
   actions: {
     ptab: (c, d) => c.setUi({ ptab: d.v }),
+    'wk-tip': (c, d, el) => el.classList.toggle('open'),
     'p-deload': (c) => {
       c.update((data) => ({ ...data, engine: startDeload(data.engine) }));
       c.system('Deload aktiviert', '<p>Die nächsten 4 Missionen: halbe Sätze, gleiches Gewicht, kein Versagen.</p>');

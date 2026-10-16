@@ -10,6 +10,7 @@ import { MISSIONS } from '../data/missions.js';
 import { getDef } from '../data/exercises.js';
 import { exportFile } from '../store.js';
 import { isDue, latestTest } from '../engine/mobility.js';
+import { questStatus, highestAscension, ASCENSIONS } from '../engine/progress.js';
 
 const Q = {
   yesterdayMT: ['Gestern Muay Thai?', [['none', 'Nein'], ['light', 'Locker-Technik'], ['hard', 'Hartes Sparring']]],
@@ -21,9 +22,10 @@ const Q = {
 export function hud(c) {
   const s = playerStats(c.data, c.today());
   const dots = Array.from({ length: WEEK_GOAL }, (_, i) => `<i class="${i < s.week.thisWeek ? 'on' : ''}"></i>`).join('');
+  const asc = highestAscension(c.data);
   return `<header class="hud">
-    <div class="rank-badge r-${s.rank.id}" title="Rang">${s.rank.id === 'U' ? '∞' : s.rank.id}</div>
-    <div class="hud-kk"><small>Kampfkraft</small><b class="num">${s.kk.toLocaleString('de-DE')}</b>
+    <div class="rank-wrap${asc ? ' aura' : ''}" style="${asc ? `--aura:${asc.aura}` : ''}" title="${asc ? esc(asc.name) : 'Rang'}"><div class="rank-badge r-${s.rank.id}">${s.rank.id === 'U' ? '∞' : s.rank.id}</div></div>
+    <div class="hud-kk"><small>Kampfkraft</small><b class="num" data-kk="${s.kk}">${s.kk.toLocaleString('de-DE')}</b>
       <div class="xpbar"><i style="width:${Math.round(s.rank.progress * 100)}%"></i></div></div>
     <div class="hud-week"><small>Woche</small><div class="wdots">${dots}</div><b class="num">${s.week.streak}<span>W</span></b></div>
   </header>`;
@@ -83,6 +85,13 @@ function checkinForm(c) {
     <button class="btn primary wide" data-act="submit-ci" ${ready ? '' : 'disabled'}>Mission anfordern</button>`);
 }
 
+export function questCard(c) {
+  const q = questStatus(c.data, c.today());
+  const pips = Array.from({ length: q.target }, (_, i) => `<i class="${i < q.progress ? 'on' : ''}"></i>`).join('');
+  return `<section class="card quest${q.done ? ' done' : ''}"><div class="quest-head"><div><div class="label">Wochen-Quest</div><b>${esc(q.quest.title)}</b><small>${esc(q.quest.desc)}${q.done ? ' · erfüllt' : ' · +100 XP'}</small></div>
+    <span class="num">${q.progress}/${q.target}</span></div><div class="wdots quest-pips">${pips}</div></section>`;
+}
+
 function backupDue(data, today) {
   if (!data.sessions.length) return false;
   const s = data.settings;
@@ -139,6 +148,7 @@ export default {
       out += `<div class="row gap center"><button class="btn ghost" data-act="swap">Andere Einheit</button><button class="btn ghost" data-act="redo-ci">Check-in ändern</button></div>`;
     }
 
+    out += questCard(c);
     if (isDue(data.mobility, today) && !doneToday.some((s) => s.kind === 'check')) {
       const first = !latestTest(data.mobility);
       out += `<section class="card flow-card"><div><b>Mobility-Check${first ? '' : ' fällig'}</b><small>${first ? '10 min · macht deinen Fluss persönlich' : '4 Wochen um · Fortschritt messen'}</small></div><button class="btn" data-act="go" data-to="check">Starten</button></section>`;
@@ -148,7 +158,7 @@ export default {
     }
     if (doneToday.length) {
       out += `<section class="card"><div class="label">Heute erledigt</div>${doneToday.map((s) =>
-        `<div class="done-row">✓ ${esc(s.kind === 'arena' ? `Arena · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'}` : s.kind === 'check' ? 'Mobility-Check' : MISSIONS[s.missionId]?.name || s.missionId)} <span class="muted">+${s.xp} XP</span></div>`).join('')}</section>`;
+        `<div class="done-row">✓ ${esc(s.kind === 'arena' ? `Arena · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'}` : s.kind === 'check' ? 'Mobility-Check' : s.kind === 'quest' ? 'Wochen-Quest erfüllt' : s.kind === 'ascension' ? `Ascension: ${ASCENSIONS.find((a) => a.id === s.ascension)?.name}` : MISSIONS[s.missionId]?.name || s.missionId)} <span class="muted">+${s.xp} XP</span></div>`).join('')}</section>`;
     }
     const left = DELOAD_AFTER - data.engine.fullSinceDeload;
     out += `<p class="foot muted">Rotation: ${data.engine.queue.map((id) => MISSIONS[id].name).join(' → ')} · Deload in ${left} Missionen</p>`;

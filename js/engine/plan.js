@@ -7,6 +7,8 @@ import { initialState, progress, ladderFor, snap, canLoad, setScore } from './pr
 import { sessionXp } from './game.js';
 import { daysBetween } from './dates.js';
 import { latestTest, selectStretches } from './mobility.js';
+import { weekCoverage, gapsFor } from './progress.js';
+import { weekStart } from './dates.js';
 
 // Equipment und Einstellungen für ein Profil. Im Home Gym ersetzen Kurzhanteln die Kettlebells.
 export function profileContext(settings, profile) {
@@ -104,16 +106,9 @@ export function buildPlan({ missionId, profile, data, today, getDef = defaultGet
       }
       const key = resolveExercise(id, equipment, getDef);
       if (!key) continue;
-      const baseDef = getDef(key);
-      const st = data.exState[key] ||
-        initialState(baseDef, { settings, startValues: data.settings.startValues, getDef });
-      let def = getDef(st.exId) || baseDef;
-      if (!(def.equipment || []).every((e) => equipment.includes(e))) def = baseDef;
-      const { load, ladder } = loadFor(def, st);
-      const target = def.mode === 'fixed' ? def.range[0] : (def.id === st.exId ? st.target : def.range[0]);
-      const item = { key, exId: def.id, sets, target, load, ladder, optional: !!slot.optional,
-        trend: st.lastChange, lastTime: lastSetsFor(data.sessions, def.id), noFailure: false };
-      items.push(applyModifier(item, modifier, def));
+      const item = itemFor(key, { data, profile, sets, getDef });
+      item.optional = !!slot.optional;
+      items.push(applyModifier(item, modifier, getDef(item.exId)));
     }
     return { ...base, items };
   }
@@ -150,6 +145,49 @@ export function buildPlan({ missionId, profile, data, today, getDef = defaultGet
   const scores = latestTest(data.mobility)?.scores;
   return { ...base, items: flowItems(mission, today, scores, getDef), rounds: mission.rounds, work: mission.work,
     personalized: !!scores };
+}
+
+// Ein Satz-Eintrag für eine Übung (Zustand, Variante, Last, Ziel). Auch für den Übungstausch.
+export function itemFor(key, { data, profile, sets, getDef = defaultGetDef }) {
+  const { equipment, settings } = profileContext(data.settings, profile);
+  const baseDef = getDef(key);
+  const st = data.exState[key] || initialState(baseDef, { settings, startValues: data.settings.startValues, getDef });
+  let def = getDef(st.exId) || baseDef;
+  if (!(def.equipment || []).every((e) => equipment.includes(e))) def = baseDef;
+  let load = 0;
+  let ladder = [0];
+  if (def.load && canLoad(def, equipment)) {
+    ladder = ladderFor(def.load, settings);
+    load = snap(ladder, st?.load ?? def.startKg ?? ladder[0]);
+  }
+  const target = def.mode === 'fixed' ? def.range[0] : (def.id === st.exId ? st.target : def.range[0]);
+  return { key, exId: def.id, sets, target, load, ladder, optional: false,
+    trend: st.lastChange, lastTime: lastSetsFor(data.sessions, def.id), noFailure: false };
+}
+
+/**
+ * Tausch-Kandidaten für eine Übung: Alternativen, Stufen und verwandte Übungen derselben Kategorie,
+ * nur mit vorhandenem Equipment. Übungen, die eine Wochenlücke (Muay Thai / Vater-Alltag) füllen, zuerst.
+ */
+export function swapOptions(exId, { data, profile, today, getDef = defaultGetDef, all }) {
+  const { equipment } = profileContext(data.settings, profile);
+  const def = getDef(exId);
+  const attrs = new Set(def.tags.map(([a]) => a));
+  const cov = weekCoverage(data.sessions, weekStart(today), getDef);
+  const gaps = new Set([...gapsFor(cov, 'muaythai').attrs, ...gapsFor(cov, 'vater').attrs]);
+  const direct = new Set([...(def.alternatives || []), def.easier, def.harder].filter(Boolean));
+  return Object.values(all)
+    .filter((d) => d.id !== exId && d.cat !== 'mobility' && d.mode !== 'fixed')
+    .filter((d) => (d.equipment || []).every((e) => equipment.includes(e)))
+    .map((d) => {
+      const shared = d.tags.filter(([a]) => attrs.has(a)).length;
+      const fills = [...new Set(d.tags.map(([a]) => a).filter((a) => gaps.has(a)))];
+      const score = (direct.has(d.id) ? 20 : 0) + shared * 3 + (d.cat === def.cat ? 3 : 0) + Math.min(2, fills.length) * 3;
+      return { id: d.id, fills, direct: direct.has(d.id), score, related: shared > 0 || direct.has(d.id) };
+    })
+    .filter((o) => o.related || o.fills.length)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 8);
 }
 
 // Laufendes Training aus einem Plan. Sätze sind mit dem Ziel vorausgefüllt.
@@ -193,7 +231,8 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
 
   const session = { id: id || `s${now}`, day, kind: p.kind, missionId: p.missionId, profile: p.profile,
     modifier: p.modifier?.type || 'none', completion, minutes: Math.round((now - active.startedAt) / 60000),
-    exercises: [], roundsDone: active.roundsDone };
+    exercises: [], roundsDone: active.roundsDone,
+    items: p.format === 'sets' ? undefined : p.items ? p.items.map((i) => i.exId) : p.exId ? [p.exId] : [] };
 
   if (p.format === 'sets') {
     active.log.forEach((entry, i) => {

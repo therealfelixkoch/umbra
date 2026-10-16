@@ -1,7 +1,9 @@
 // Training: Übung für Übung, Satz-Logging, Pausen-Timer, Zirkel, Kurzeinsatz, Fluss.
 import { sys, esc, glyphChips, targetText, loadText, setsText, trendBadge, stepper, kg } from './kit.js';
 import { getDef } from '../data/exercises.js';
-import { finishSession, completionOf } from '../engine/plan.js';
+import { finishSession, completionOf, swapOptions, itemFor } from '../engine/plan.js';
+import { EXERCISES } from '../data/exercises.js';
+import { ATTRIBUTES } from '../data/glyphs.js';
 import { stepLoad } from '../engine/progression.js';
 import { rankFor, totalXp } from '../engine/game.js';
 import { exerciseDetail } from './kodex.js';
@@ -116,7 +118,7 @@ function setsView(c, a) {
       return `<button class="${st}${k === i ? ' cur' : ''}" data-act="t-goto" data-k="${k}" aria-label="Übung ${k + 1}"></button>`;
     }).join('')}</nav>
     <section class="t-card">
-      <div class="t-name"><h1>${esc(def.name)}${it.optional ? ' <em>optional</em>' : ''}</h1><button class="info" data-act="t-info" data-id="${def.id}" aria-label="Info">i</button></div>
+      <div class="t-name"><h1>${esc(def.name)}${it.optional ? ' <em>optional</em>' : ''}</h1><div class="row gap"><button class="info" data-act="t-swap" aria-label="Übung tauschen">⇄</button><button class="info" data-act="t-info" data-id="${def.id}" aria-label="Info">i</button></div></div>
       ${glyphChips(def, { small: true })}
       ${fixed ? `<p class="t-target">${targetText(def)}${entry.sets.length > 1 ? ` · ${entry.sets.length} Runden` : ''}</p>` : `
       <div class="t-compare">
@@ -340,6 +342,30 @@ export default {
           startRest(restSec, `Pause · gleich: ${getDef(a.log[a.index].exId).name}`);
         } else startRest(restSec);
       }
+      save(c);
+    },
+    't-swap': (c) => {
+      const a = c.data.active;
+      const entry = a.log[a.index];
+      if (entry.sets.some((s) => s.done)) {
+        c.system('Tausch nicht möglich', '<p>Für diese Übung sind schon Sätze geloggt. Tausche vor dem ersten Satz.</p>');
+        return;
+      }
+      const opts = swapOptions(entry.exId, { data: c.data, profile: a.plan.profile, today: c.today(), all: EXERCISES });
+      c.modal(sys('Übung tauschen', `<p class="muted small">Ersatz mit ähnlichem Muster. <b class="focus">Lücke</b> = deckt diese Woche etwas ab, das noch fehlt.</p>
+        <div class="swap-list">${opts.map((o) => `<button class="swap" data-act="t-swap-to" data-id="${o.id}"><b>${esc(getDef(o.id).name)}</b>
+        <small>${o.fills.length ? `<span class="focus">Lücke:</span> ${o.fills.map((x) => esc(ATTRIBUTES[x].name)).join(', ')}` : o.direct ? 'Alternative / Stufe' : 'ähnliches Muster'}</small></button>`).join('') || '<p class="muted">Keine passende Alternative mit deinem Equipment.</p>'}</div>
+        <button class="btn ghost wide" data-act="close-modal">Abbrechen</button>`, { cls: 'pop' }));
+    },
+    't-swap-to': (c, d) => {
+      const a = c.data.active;
+      const old = a.plan.items[a.index];
+      const it = itemFor(d.id, { data: c.data, profile: a.plan.profile, sets: old.sets });
+      it.noFailure = old.noFailure;
+      a.plan.items[a.index] = it;
+      a.log[a.index] = { key: it.key, exId: it.exId,
+        sets: Array.from({ length: it.sets }, () => ({ value: it.target, load: it.load, done: false })) };
+      c.modal(null);
       save(c);
     },
     't-goto': (c, d) => { c.data.active.index = Number(d.k); save(c); },

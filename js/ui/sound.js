@@ -41,58 +41,44 @@ function out() {
   return comp;
 }
 
-// Tiefer, lang ausklingender Gong aus unharmonischen Teiltönen. Ertönt auch bei „Ton aus“.
-export function gong() {
-  navigator.vibrate?.([500, 120, 500]);
-  if (!audio) return;
-  const t = audio.currentTime;
-  const dest = out();
-  const partials = [[98, 1, 5], [196.5, 0.7, 4], [277, 0.5, 3.2], [394, 0.4, 2.6], [523, 0.3, 2], [741, 0.2, 1.4], [1010, 0.12, 0.9]];
-  for (const [f, amp, dur] of partials) {
-    const o = audio.createOscillator();
-    const g = audio.createGain();
-    o.type = 'sine';
-    o.frequency.setValueAtTime(f * 1.015, t);
-    o.frequency.exponentialRampToValueAtTime(f, t + 0.4);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(amp, t + 0.012);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(dest);
-    o.start(t);
-    o.stop(t + dur + 0.05);
-  }
-  // Anschlag: kurzes Rauschen
-  const len = Math.floor(audio.sampleRate * 0.08);
-  const buf = audio.createBuffer(1, len, audio.sampleRate);
-  const ch = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
-  const n = audio.createBufferSource();
-  const ng = audio.createGain();
-  ng.gain.value = 0.5;
-  n.buffer = buf;
-  n.connect(ng).connect(dest);
-  n.start(t);
-}
-
-// Heller Doppelschlag als Signal „Runde beginnt“.
-export function bell() {
-  navigator.vibrate?.(200);
+// Boxring-Glocke: heller Metallschlag mit Glocken-Teiltönen.
+// times = 3 → „Ding Ding Ding“ (Rundenende), times = 1 → Rundenstart. Ertönt auch bei „Ton aus“.
+export function ringBell(times = 1) {
+  navigator.vibrate?.(times > 1 ? [150, 120, 150, 120, 150] : 200);
   if (!audio) return;
   const dest = out();
-  [0, 0.22].forEach((d) => {
-    const t = audio.currentTime + d;
-    [[1320, 0.6], [2640, 0.25]].forEach(([f, a]) => {
+  // Teiltöne einer kleinen Messingglocke (inharmonisch), jeweils mit eigener Abklingzeit.
+  const partials = [[1, 1, 1.6], [2.76, 0.55, 1.1], [5.4, 0.3, 0.7], [8.93, 0.16, 0.45], [0.5, 0.25, 1.2]];
+  const f0 = 830;
+  for (let k = 0; k < times; k++) {
+    const t = audio.currentTime + k * 0.38;
+    for (const [ratio, amp, dur] of partials) {
       const o = audio.createOscillator();
       const g = audio.createGain();
-      o.frequency.value = f;
+      o.type = 'sine';
+      o.frequency.value = f0 * ratio;
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(a, t + 0.005);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+      g.gain.exponentialRampToValueAtTime(amp * 0.9, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       o.connect(g).connect(dest);
       o.start(t);
-      o.stop(t + 0.55);
-    });
-  });
+      o.stop(t + dur + 0.05);
+    }
+    // Klöppel-Anschlag: sehr kurzes, helles Rauschen
+    const len = Math.floor(audio.sampleRate * 0.015);
+    const buf = audio.createBuffer(1, len, audio.sampleRate);
+    const ch = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const n = audio.createBufferSource();
+    const hp = audio.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 3000;
+    const ng = audio.createGain();
+    ng.gain.value = 0.6;
+    n.buffer = buf;
+    n.connect(hp).connect(ng).connect(dest);
+    n.start(t);
+  }
 }
 
 // Kurzes Klacken als 10-Sekunden-Warnung.

@@ -3,6 +3,7 @@ import * as store from './store.js';
 import { toDay } from './engine/dates.js';
 import { ICONS, sys, esc } from './ui/kit.js';
 import { unlockAudio, setSound } from './ui/sound.js';
+import { checkProgress } from './engine/progress.js';
 import today from './ui/today.js';
 import training from './ui/training.js';
 import arena from './ui/arena.js';
@@ -20,6 +21,8 @@ const app = {
   param: null,
   ui: {},     // flüchtiger UI-Zustand je Screen
   modal: null,
+  events: [], // Erfolge, die nach dem aktuellen Modal angezeigt werden
+  lastKK: null,
 };
 
 const root = document.getElementById('app');
@@ -33,6 +36,12 @@ export const ctx = {
   update(fn) {
     const next = fn(app.data);
     if (next) app.data = next;
+    const r = checkProgress(app.data, toDay());
+    if (r.events.length) {
+      app.data = r.data;
+      app.events.push(...r.events);
+      setTimeout(flushEvents, 60);
+    }
     store.save(app.data);
     setSound(app.data.settings.sound !== false);
     render();
@@ -69,6 +78,40 @@ function render() {
   const showTabs = !['onboarding', 'training', 'check'].includes(route);
   root.innerHTML = `<main class="screen screen-${route}">${screen.render(ctx)}</main>${showTabs ? tabbar(route) : ''}`;
   screen.mount?.(ctx, root);
+  animateKK();
+}
+
+// Kampfkraft zählt sichtbar hoch, wenn sie gestiegen ist.
+function animateKK() {
+  const el = root.querySelector('[data-kk]');
+  if (!el) return;
+  const to = Number(el.dataset.kk);
+  const from = app.lastKK;
+  app.lastKK = to;
+  if (from == null || to <= from || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const t0 = performance.now();
+  el.classList.add('kk-up');
+  const step = (t) => {
+    const p = Math.min(1, (t - t0) / 1100);
+    const v = Math.round(from + (to - from) * (1 - (1 - p) ** 3));
+    el.textContent = v.toLocaleString('de-DE');
+    if (p < 1) requestAnimationFrame(step);
+    else setTimeout(() => el.classList.remove('kk-up'), 600);
+  };
+  requestAnimationFrame(step);
+}
+
+function flushEvents() {
+  if (app.modal || !app.events.length) return;
+  const ev = app.events.shift();
+  if (ev.type === 'ascension') {
+    const a = ev.ascension;
+    ctx.system('Ascension freigeschaltet', `<div class="asc-big" style="--aura:${a.aura}"><span>◆</span><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div><div class="xp-gain num">+150 XP</div>`,
+      [['close-modal', 'Weiter', 'primary']], 'gold aura');
+  } else if (ev.type === 'quest') {
+    ctx.system('Quest erfüllt', `<p class="reason">${esc(ev.quest.title)}: ${esc(ev.quest.desc)}.</p><div class="xp-gain num">+100 XP</div>`,
+      [['close-modal', 'Weiter', 'primary']], 'gold');
+  }
 }
 
 function tabbar(route) {
@@ -84,7 +127,10 @@ function renderModal() {
 
 const GLOBAL = {
   go: (c, d) => c.go(d.to, d.param),
-  'close-modal': () => ctx.modal(null),
+  'close-modal': () => {
+    ctx.modal(null);
+    setTimeout(flushEvents, 250);
+  },
 };
 
 function currentScreen() {

@@ -3,7 +3,8 @@ import { esc, stepper } from './kit.js';
 import { logArena, HARD_RPE } from '../engine/plan.js';
 import { addDays, formatDay } from '../engine/dates.js';
 import { startTimer, advanceTo, totalMinutes, WARN_SEC } from '../engine/roundtimer.js';
-import { gong, bell, clack, keepAwake } from './sound.js';
+import { ringBell, clack, keepAwake } from './sound.js';
+import { footworkView, footworkActions, isRunning as footworkRunning } from './footwork.js';
 
 const RPE_LABEL = { 1: 'sehr locker', 3: 'locker', 5: 'mittel', 7: 'hart', 9: 'sehr hart', 10: 'maximal' };
 const hours = (min) => `${(min / 60).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} h`;
@@ -22,8 +23,8 @@ let ticker = null;
 let ctxRef = null;
 
 function play(event) {
-  if (event === 'gong') gong();
-  if (event === 'bell') bell();
+  if (event === 'gong') ringBell(3);
+  if (event === 'bell') ringBell(1);
 }
 
 function tick() {
@@ -95,7 +96,7 @@ function setupView(c) {
       <div class="chips">${REST.map(([v, l]) => chip('rt-rest', v, l, rt.rest === v)).join('')}</div>
       <div class="field"><span>Runden</span>${stepper('rt-rounds', rt.rounds, '')}</div>
       <button class="btn primary wide big" data-act="rt-start">Timer starten</button>
-      <p class="muted small">Gong am Rundenende, Klacken 10 s vorher, Glocke zum Start. Stummschalter am iPhone aus.</p>
+      <p class="muted small">Ding-Ding-Ding am Rundenende, Klacken 10 s vorher, ein Ding zum Start. Stummschalter am iPhone aus.</p>
     </section>`;
 }
 
@@ -103,8 +104,9 @@ export default {
   render(c) {
     ctxRef = c;
     const tab = c.ui.atab || (timer ? 'timer' : 'log');
-    const seg = `<div class="seg"><button class="${tab === 'log' ? 'on' : ''}" data-act="atab" data-v="log">Eintragen</button><button class="${tab === 'timer' ? 'on' : ''}" data-act="atab" data-v="timer">Rundentimer${timer && timer.st.phase !== 'done' ? ' ●' : ''}</button></div>`;
+    const seg = `<div class="seg"><button class="${tab === 'log' ? 'on' : ''}" data-act="atab" data-v="log">Eintragen</button><button class="${tab === 'timer' ? 'on' : ''}" data-act="atab" data-v="timer">Timer${timer && timer.st.phase !== 'done' ? ' ●' : ''}</button><button class="${tab === 'footwork' ? 'on' : ''}" data-act="atab" data-v="footwork">Footwork${footworkRunning() ? ' ●' : ''}</button></div>`;
     if (tab === 'timer') return `<h1 class="h">Arena</h1>${seg}${timer ? timerView() : setupView(c)}`;
+    if (tab === 'footwork') return `<h1 class="h">Arena</h1>${seg}${footworkView(c)}`;
 
     const f = c.ui.arena || (c.ui.arena = { minutes: 60, when: 'today' });
     const recent = c.data.sessions.filter((s) => s.kind === 'arena').slice(-8).reverse();
@@ -124,6 +126,7 @@ export default {
         `<div class="done-row"><span>${formatDay(s.day)} · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'} · ${hours(s.minutes)}</span><button class="x" data-act="a-del" data-id="${esc(s.id)}" aria-label="Löschen">×</button></div>`).join('')}</section>` : ''}`;
   },
   actions: {
+    ...footworkActions,
     atab: (c, d) => c.setUi({ atab: d.v }),
     'a-rpe': (c, d) => { c.ui.arena.rpe = Number(d.v); c.render(); },
     'a-dur': (c, d) => { c.ui.arena.minutes = Math.max(15, Math.min(360, c.ui.arena.minutes + Number(d.dir) * 15)); c.render(); },
