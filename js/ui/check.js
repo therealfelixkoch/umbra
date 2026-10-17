@@ -106,7 +106,7 @@ function focusList(scores, today) {
   const focus = selectStretches(scores, pool, n);
   return `<p class="muted">Größte Hebel fürs Muay Thai: <b>${top.map(esc).join(', ')}</b>.</p>
     <ul class="cues">${focus.map((id) => `<li>${esc(getDef(id).name)}</li>`).join('')}</ul>
-    <p class="muted small">Diese drei stehen ab jetzt vorn in deinem täglichen Fluss und wechseln leicht von Tag zu Tag.</p>`;
+    <p class="muted small">Diese drei stehen ab jetzt vorn in deinem täglichen FLOW und wechseln leicht von Tag zu Tag.</p>`;
 }
 
 export default {
@@ -118,14 +118,14 @@ export default {
     if (st.step === 'result') {
       const last = latestTest(tests);
       return `${sys('Mobility-Check abgeschlossen', `<div class="xp-gain num">Ø ${averageScore(last.scores)}</div>${scoreChart(tests)}`, { tone: 'gold' })}
-        ${sys('Fokus für deinen Fluss', focusList(last.scores, today))}
+        ${sys('Fokus für deinen FLOW', focusList(last.scores, today))}
         <button class="btn primary wide" data-act="chk-done">Fertig</button>`;
     }
 
     if (st.step === -1) {
       const last = latestTest(tests);
       return `<button class="btn ghost back" data-act="go" data-to="profil">← Profil</button>
-        ${sys('Mobility-Check', `<p>8 kurze Tests, etwa 10 Minuten. Pro Region tippst du an, wie weit du kommst. Daraus berechnet das System einen Score von 0 bis 100 und wählt drei Stretches für deinen täglichen Fluss, gewichtet nach Muay Thai.</p>
+        ${sys('Mobility-Check', `<p>8 kurze Tests, etwa 10 Minuten. Pro Region tippst du an, wie weit du kommst. Daraus berechnet das System einen Score von 0 bis 100 und wählt drei Stretches für deinen täglichen FLOW, gewichtet nach Muay Thai.</p>
           <p class="muted">Aufwärmen ist nicht nötig, aber nichts erzwingen. Bei zwei Seiten zählt die schlechtere. Wiederholen alle ${RETEST_DAYS / 7} Wochen.</p>
           ${last ? `<p class="muted">Letzter Check: ${formatDay(last.day)} · Ø ${averageScore(last.scores)}</p>` : ''}
           <p class="muted small">Du brauchst: Box oder Bett, eine Wand, ein Maßband oder Lineal.</p>
@@ -173,7 +173,7 @@ export default {
     'chk-done': (c) => {
       c.ui.chk = null;
       c.go('heute');
-      c.system('Mobility-Check verbucht.', `<div class="xp-gain num">+50 XP</div><p class="muted">Dein Fluss ist jetzt auf dich zugeschnitten.</p>`);
+      c.system('Mobility-Check verbucht.', `<div class="xp-gain num">+50 XP</div><p class="muted">Dein FLOW ist jetzt auf dich zugeschnitten.</p>`);
     },
     'chart-row': (c, d, el) => el.classList.toggle('open'),
   },

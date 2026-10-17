@@ -1,10 +1,12 @@
-// Arena: Muay Thai loggen (Gefühl 1–10, Dauer in h) und ein eigenständiger Rundentimer mit Gong.
+// ARENA: Muay Thai loggen (Gefühl 1–10, Dauer in h) und ein eigenständiger Rundentimer mit Gong.
 import { esc, stepper } from './kit.js';
 import { logArena, HARD_RPE } from '../engine/plan.js';
 import { addDays, formatDay } from '../engine/dates.js';
 import { startTimer, advanceTo, totalMinutes, WARN_SEC } from '../engine/roundtimer.js';
 import { ringBell, clack, keepAwake } from './sound.js';
 import { footworkView, footworkActions, isRunning as footworkRunning } from './footwork.js';
+import { bmtView, bmtActions, bmtInput } from './bmt.js';
+import { BMT_NAME } from '../engine/bmt.js';
 
 const RPE_LABEL = { 1: 'sehr locker', 3: 'locker', 5: 'mittel', 7: 'hart', 9: 'sehr hart', 10: 'maximal' };
 const hours = (min) => `${(min / 60).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} h`;
@@ -63,7 +65,7 @@ function stopTicker() {
 function timerView() {
   const { cfg, st } = timer;
   if (st.phase === 'done') {
-    return `<section class="rt done"><small>Arena-Timer</small><b class="rt-phase">Fertig</b>
+    return `<section class="rt done"><small>ARENA-Timer</small><b class="rt-phase">Fertig</b>
       <p class="muted">${st.round} ${st.round === 1 ? 'Runde' : 'Runden'} à ${fmt(cfg.work * 1000)}</p></section>
       <button class="btn primary wide big" data-act="rt-log">Einheit eintragen</button>
       <button class="btn ghost wide" data-act="rt-close">Ohne Eintrag schließen</button>`;
@@ -100,19 +102,21 @@ function setupView(c) {
     </section>`;
 }
 
-export default {
+const screen = {
   render(c) {
     ctxRef = c;
     const tab = c.ui.atab || (timer ? 'timer' : 'log');
-    const seg = `<div class="seg"><button class="${tab === 'log' ? 'on' : ''}" data-act="atab" data-v="log">Eintragen</button><button class="${tab === 'timer' ? 'on' : ''}" data-act="atab" data-v="timer">Timer${timer && timer.st.phase !== 'done' ? ' ●' : ''}</button><button class="${tab === 'footwork' ? 'on' : ''}" data-act="atab" data-v="footwork">Footwork${footworkRunning() ? ' ●' : ''}</button></div>`;
-    if (tab === 'timer') return `<h1 class="h">Arena</h1>${seg}${timer ? timerView() : setupView(c)}`;
-    if (tab === 'footwork') return `<h1 class="h">Arena</h1>${seg}${footworkView(c)}`;
+    const seg = `<div class="seg"><button class="${tab === 'log' ? 'on' : ''}" data-act="atab" data-v="log">Eintragen</button><button class="${tab === 'bmt' ? 'on' : ''}" data-act="atab" data-v="bmt">BMT</button><button class="${tab === 'timer' ? 'on' : ''}" data-act="atab" data-v="timer">Timer${timer && timer.st.phase !== 'done' ? ' ●' : ''}</button><button class="${tab === 'footwork' ? 'on' : ''}" data-act="atab" data-v="footwork">Footwork${footworkRunning() ? ' ●' : ''}</button></div>`;
+    if (tab === 'timer') return `<h1 class="h">ARENA</h1>${seg}${timer ? timerView() : setupView(c)}`;
+    if (tab === 'footwork') return `<h1 class="h">ARENA</h1>${seg}${footworkView(c)}`;
+    if (tab === 'bmt') return `<h1 class="h">ARENA</h1>${seg}${bmtView(c)}`;
 
     const f = c.ui.arena || (c.ui.arena = { minutes: 60, when: 'today' });
     const recent = c.data.sessions.filter((s) => s.kind === 'arena').slice(-8).reverse();
     const rpeBtn = (n) => `<button class="rpe${f.rpe === n ? ' on' : ''}${n >= HARD_RPE ? ' hard' : ''}" data-act="a-rpe" data-v="${n}">${n}</button>`;
-    return `<h1 class="h">Arena</h1>${seg}
+    return `<h1 class="h">ARENA</h1>${seg}
       <section class="card">
+        ${f.bmt ? `<div class="bmt-link"><span>${BMT_NAME} · Woche ${f.bmt.week}</span><button class="x" data-act="a-unlink" aria-label="Verknüpfung lösen">×</button></div>` : ''}
         <div class="label">Intensität (Gefühl)</div>
         <div class="rpe-grid">${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(rpeBtn).join('')}</div>
         <p class="muted small">${f.rpe ? `${f.rpe} · ${RPE_LABEL[f.rpe] || RPE_LABEL[f.rpe - 1]}${f.rpe >= HARD_RPE ? ' · zählt als harte Einheit' : ''}` : `1 = locker Technik … 10 = Vollgas. Ab ${HARD_RPE} plant die App wie nach Sparring.`}</p>
@@ -121,12 +125,34 @@ export default {
         <div class="label">Wann</div>
         <div class="chips"><button class="chip${f.when === 'today' ? ' on' : ''}" data-act="a-when" data-v="today">Heute</button><button class="chip${f.when === 'yesterday' ? ' on' : ''}" data-act="a-when" data-v="yesterday">Gestern</button></div>
       </section>
-      <button class="btn primary wide big" data-act="a-save" ${f.rpe ? '' : 'disabled'}>Arena eintragen</button>
+      <button class="btn primary wide big" data-act="a-save" ${f.rpe ? '' : 'disabled'}>ARENA eintragen</button>
       ${recent.length ? `<section class="card"><div class="label">Zuletzt</div>${recent.map((s) =>
-        `<div class="done-row"><span>${formatDay(s.day)} · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'} · ${hours(s.minutes)}</span><button class="x" data-act="a-del" data-id="${esc(s.id)}" aria-label="Löschen">×</button></div>`).join('')}</section>` : ''}`;
+        `<div class="done-row"><span>${formatDay(s.day)}${s.bmt ? ` · BMT W${s.bmt.week}` : ''} · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'} · ${hours(s.minutes)}</span><button class="x" data-act="a-del" data-id="${esc(s.id)}" aria-label="Löschen">×</button></div>`).join('')}</section>` : ''}`;
+  },
+  onInput(c, name, value) {
+    bmtInput(c, name, value);
   },
   actions: {
     ...footworkActions,
+    ...bmtActions,
+    // Block mit Zeitangabe → Rundentimer mit 1 min Pause
+    'bmt-timer': (c, d) => {
+      c.ui.rt = { work: Number(d.work), rest: 60, rounds: Number(d.rounds) };
+      c.ui.atab = 'timer';
+      screen.actions['rt-start'](c);
+    },
+    // Footwork-Block → Footwork-Drill mit dieser Dauer (Start per Tipp, wegen der Sprachausgabe)
+    'bmt-footwork': (c, d) => {
+      const min = Number(d.min) || 3;
+      c.ui.fw = { ...(c.ui.fw || { tempo: 'mid' }), duration: Math.min(180, Math.max(60, Math.round(min * 2) * 30)), rounds: Number(d.rounds) || 1 };
+      c.setUi({ atab: 'footwork' });
+    },
+    // ARENA-Eintrag mit dieser BMT-Woche verknüpfen
+    'bmt-log': (c, d) => {
+      const w = (c.data.bmt?.weeks || []).find((x) => x.id === d.id);
+      c.ui.arena = { ...(c.ui.arena || { minutes: 60, when: 'today' }), bmt: w ? { weekId: w.id, week: w.number } : null };
+      c.setUi({ atab: 'log' });
+    },
     atab: (c, d) => c.setUi({ atab: d.v }),
     'a-rpe': (c, d) => { c.ui.arena.rpe = Number(d.v); c.render(); },
     'a-dur': (c, d) => { c.ui.arena.minutes = Math.max(15, Math.min(360, c.ui.arena.minutes + Number(d.dir) * 15)); c.render(); },
@@ -134,9 +160,10 @@ export default {
     'a-save': (c) => {
       const f = c.ui.arena;
       const day = f.when === 'yesterday' ? addDays(c.today(), -1) : c.today();
-      save(c, day, f.rpe, f.minutes);
+      save(c, day, f.rpe, f.minutes, f.bmt);
       c.ui.arena = { minutes: 60, when: 'today' };
     },
+    'a-unlink': (c) => { c.ui.arena.bmt = null; c.render(); },
     'a-del': (c, d) => c.update((data) => ({ ...data, sessions: data.sessions.filter((s) => s.id !== d.id) })),
 
     'rt-work': (c, d) => { c.ui.rt.work = Number(d.v); c.render(); },
@@ -181,12 +208,14 @@ export default {
   },
 };
 
-function save(c, day, rpe, minutes) {
+export default screen;
+
+function save(c, day, rpe, minutes, bmt = null) {
   let xp = 0;
   c.update((data) => {
-    const r = logArena(data, { day, rpe, minutes });
+    const r = logArena(data, { day, rpe, minutes, bmt });
     xp = r.session.xp;
     return r.data;
   });
-  c.system('Arena verbucht.', `<div class="xp-gain num">+${xp} XP</div><p class="muted">Intensität ${rpe} · ${hours(minutes)}${rpe >= HARD_RPE ? ' · Morgen plant das System entsprechend.' : ''}</p>`);
+  c.system('ARENA verbucht.', `<div class="xp-gain num">+${xp} XP</div><p class="muted">Intensität ${rpe} · ${hours(minutes)}${rpe >= HARD_RPE ? ' · Morgen plant das System entsprechend.' : ''}</p>`);
 }

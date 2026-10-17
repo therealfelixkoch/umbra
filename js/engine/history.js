@@ -1,14 +1,18 @@
 // Was die App aus dem Log selbst weiß. Reine Funktionen über die Session-Liste.
 import { addDays, daysBetween } from './dates.js';
+import { FULL_MISSIONS } from '../data/missions.js';
+import { workingGap } from './arc.js';
 
 export const ROTATION = ['A', 'B', 'C', 'D'];
 
+// Volle Mission: A–D (auch Kompakt), FORGE, 4x4. Nicht: D leicht, Express.
 export function isFullMission(s) {
-  return s.kind === 'mission' && ROTATION.includes(s.missionId);
+  return s.kind === 'mission' && FULL_MISSIONS.includes(s.missionId);
 }
 
+// Für „3 harte Tage am Stück“: Arena oder volle Mission (Kompakt zählt hier als leicht).
 export function isHard(s) {
-  return s.kind === 'arena' || isFullMission(s);
+  return s.kind === 'arena' || (isFullMission(s) && !s.compact);
 }
 
 // Harte Tage am Stück, endend gestern.
@@ -33,10 +37,23 @@ export function lastFullDay(sessions, before) {
   return last;
 }
 
-// Tage seit der letzten vollen Einheit (A–D) vor heute; null, wenn es noch keine gab.
-export function gapDays(sessions, today) {
+// Tage seit der letzten vollen Mission vor heute; null, wenn es noch keine gab.
+// Mit Feiertagsmodus zählen Feiertage nicht mit.
+export function gapDays(sessions, today, holiday) {
   const last = lastFullDay(sessions, today);
-  return last ? daysBetween(last, today) : null;
+  if (!last) return null;
+  return holiday?.enabled ? workingGap(last, today, holiday) : daysBetween(last, today);
+}
+
+// Letzter Tag je Rotationsplatz (FORGE/4x4 zählen für ihren Platz).
+export function lastDoneBySlot(sessions) {
+  const out = {};
+  for (const s of sessions) {
+    if (!isFullMission(s)) continue;
+    const pos = ROTATION.includes(s.missionId) ? s.missionId : s.slot;
+    if (pos && (!out[pos] || s.day > out[pos])) out[pos] = s.day;
+  }
+  return out;
 }
 
 // Arena von gestern laut Log: 'none' | 'light' | 'hard'.

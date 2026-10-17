@@ -62,6 +62,8 @@ export const TREND = {
   reps_up: ['▲', '+1 Wdh.'],
   time_up: ['▲', '+5 s'],
   variant_up: ['◆', 'Neue Stufe'],
+  variant_ready: ['◆', 'Neue Stufe im nächsten Arc'],
+  variant_down_ready: ['◆', 'Leichtere Stufe im nächsten Arc'],
   load_down: ['▼', 'Etwas leichter'],
   variant_down: ['▼', 'Leichtere Variante'],
   reps_down: ['▼', 'Ziel angepasst'],
@@ -71,7 +73,7 @@ export const TREND = {
 export function trendBadge(trend) {
   if (!trend || !TREND[trend]) return '';
   const [sym, label] = TREND[trend];
-  const cls = trend.endsWith('_up') ? 'up' : trend === 'top' ? 'top' : 'down';
+  const cls = trend.endsWith('_up') || trend === 'variant_ready' ? 'up' : trend === 'top' ? 'top' : 'down';
   return `<span class="trend ${cls}">${sym} ${label}</span>`;
 }
 

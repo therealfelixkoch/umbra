@@ -54,7 +54,7 @@ export default {
     return `<h1 class="h">Startwerte</h1>${dots}
       <p class="muted">Grob reicht. Unbekannt? Überspringen – die erste Woche startet konservativ und lernt aus deinem Log.</p>
       ${START_KEYS.map(([k, label]) => `<div class="field"><label>${label}</label>${stepper('ob-start', d.startValues[k] ?? '–', 'Wdh.', { idx: k })}</div>`).join('')}
-      <div class="row gap sticky-bottom"><button class="btn" data-act="ob-finish" data-skip="1">Überspringen</button><button class="btn primary grow" data-act="ob-finish">Los geht’s</button></div>`;
+      <div class="row gap sticky-bottom"><button class="btn" data-act="ob-finish" data-skip="1">Überspringen</button><button class="btn primary grow" data-act="ob-finish">Beginnen</button></div>`;
   },
   actions: {
     'ob-next': (c) => c.setUi({ obStep: (c.ui.obStep || 0) + 1 }),

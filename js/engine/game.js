@@ -1,25 +1,28 @@
 // XP, Ränge, Wochen-Streak mit Schild, Kampfkraft.
 import { weekStart, addDays, monthKey } from './dates.js';
-import { ROTATION } from './history.js';
+import { FULL_MISSIONS } from '../data/missions.js';
+import { isHolidayWeek } from './arc.js';
 
+// Gesamtränge. Index = Wächter-Stufe (guardian-0 … guardian-5).
 export const RANKS = [
-  { id: 'E', xp: 0 },
-  { id: 'D', xp: 1000 },
-  { id: 'C', xp: 3000 },
-  { id: 'B', xp: 7000 },
-  { id: 'A', xp: 15000 },
-  { id: 'S', xp: 30000 },
-  { id: 'U', xp: 60000, name: 'Unzerbrechlich' },
+  { id: 'SHADE', xp: 0 },
+  { id: 'BLADE', xp: 1000 },
+  { id: 'WARDEN', xp: 3000 },
+  { id: 'PHANTOM', xp: 7000 },
+  { id: 'UMBRA', xp: 15000 },
+  { id: 'UNBREAKABLE', xp: 30000, name: 'Unzerbrechlich' },
 ];
+export const rankName = (r) => r.name || r.id;
 
-export const XP = { mission: 100, missionBonus: 25, light: 60, express: 50, flow: 20, rest: 10,
+export const XP = { mission: 100, compact: 70, missionBonus: 25, light: 60, express: 50, flow: 20, rest: 10,
   arenaLight: 60, arenaHard: 80, record: 20, check: 50 };
 
 export function sessionXp(s) {
   let xp = 0;
-  if (s.kind === 'mission' && ROTATION.includes(s.missionId)) {
+  if (s.kind === 'mission' && FULL_MISSIONS.includes(s.missionId)) {
     const c = Math.max(0.2, s.completion ?? 1);
-    xp = Math.round(XP.mission * c) + (c >= 0.999 ? XP.missionBonus : 0);
+    const base = s.compact ? XP.compact : XP.mission;
+    xp = Math.round(base * c) + (c >= 0.999 ? XP.missionBonus : 0);
   } else if (s.missionId === 'D_LIGHT') xp = Math.round(XP.light * Math.max(0.3, s.completion ?? 1));
   else if (s.kind === 'express') xp = XP.express;
   else if (s.kind === 'flow') xp = XP.flow;
@@ -45,35 +48,46 @@ export function rankFor(xp) {
     progress: next ? (xp - cur.xp) / (next.xp - cur.xp) : 1 };
 }
 
-// Einsätze, die für die Woche zählen: Arena, Missionen, Kurzeinsätze.
+// Einsätze, die für die Woche zählen: ARENA, Missionen, SHADOWSTEPs.
 export const countsForWeek = (s) => s.kind === 'arena' || s.kind === 'mission' || s.kind === 'express';
 export const WEEK_GOAL = 3;
+export const HOLIDAY_GOAL = 2;
 
-/** Wochen-Streak. Laufende Woche bricht nichts, ein Schild pro Monat rettet eine verpasste Woche. */
-export function weekStreak(sessions, today) {
+/**
+ * Wochen-Streak. Laufende Woche bricht nichts, ein Schild pro Monat rettet eine verpasste Woche.
+ * Feiertagswochen: Ziel 2 Einsätze, und auch FLOW zählt.
+ */
+export function weekStreak(sessions, today, holiday) {
   const counts = new Map();
+  const holidayWeeks = new Map();
+  const isHW = (w) => {
+    if (!holidayWeeks.has(w)) holidayWeeks.set(w, isHolidayWeek(w, holiday));
+    return holidayWeeks.get(w);
+  };
   for (const s of sessions) {
-    if (!countsForWeek(s)) continue;
     const w = weekStart(s.day);
+    if (!countsForWeek(s) && !(s.kind === 'flow' && isHW(w))) continue;
     counts.set(w, (counts.get(w) || 0) + 1);
   }
+  const goalFor = (w) => (isHW(w) ? HOLIDAY_GOAL : WEEK_GOAL);
   const current = weekStart(today);
   const thisWeek = counts.get(current) || 0;
-  if (!counts.size) return { streak: 0, best: 0, thisWeek, shieldUsedThisMonth: false };
+  const goal = goalFor(current);
+  if (!counts.size) return { streak: 0, best: 0, thisWeek, goal, shieldUsedThisMonth: false };
 
   const first = [...counts.keys()].sort()[0];
   const shieldsUsed = new Set();
   let streak = 0;
   let best = 0;
   for (let w = first; w < current; w = addDays(w, 7)) {
-    if ((counts.get(w) || 0) >= WEEK_GOAL) streak++;
+    if ((counts.get(w) || 0) >= goalFor(w)) streak++;
     else if (streak > 0 && !shieldsUsed.has(monthKey(w))) shieldsUsed.add(monthKey(w));
     else streak = 0;
     best = Math.max(best, streak);
   }
-  if (thisWeek >= WEEK_GOAL) streak++;
+  if (thisWeek >= goal) streak++;
   best = Math.max(best, streak);
-  return { streak, best, thisWeek, shieldUsedThisMonth: shieldsUsed.has(monthKey(today)) };
+  return { streak, best, thisWeek, goal, shieldUsedThisMonth: shieldsUsed.has(monthKey(today)) };
 }
 
 // Kampfkraft: Konstanz + Kraftwerte (Bestleistungen) + Erfahrung.
@@ -85,7 +99,7 @@ export function kampfkraft({ xp, streak, records, mobility = 0 }) {
 export function playerStats(data, today) {
   const xp = totalXp(data.sessions);
   const rank = rankFor(xp);
-  const week = weekStreak(data.sessions, today);
+  const week = weekStreak(data.sessions, today, data.settings?.holiday);
   const last = data.mobility?.[data.mobility.length - 1];
   const vals = last ? Object.values(last.scores) : [];
   const mobility = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : 0;

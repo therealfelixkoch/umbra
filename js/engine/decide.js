@@ -1,36 +1,45 @@
 // Entscheidungsregeln: Check-in + Wissen aus dem Log → Empfehlung für heute.
-// Reihenfolge der Regeln ist bewusst fix (siehe README).
+// Reihenfolge der Regeln ist bewusst fix (siehe README). Jede Empfehlung ist überstimmbar.
+import { loadClass } from './load.js';
+
+const NAMES = { A: 'Ziehen', B: 'Beine', C: 'Drücken', D: 'Zirkel' };
 
 /**
  * @param {object} p
- * @param {{yesterdayMT:'none'|'light'|'hard', feeling:'frisch'|'normal'|'platt', tonightMT:'yes'|'no'|'maybe', morning?:boolean, where?:'room'|'gym'|'express'|'mobility'}} p.checkin
+ * @param {{yesterdayMT:'none'|'light'|'hard', feeling:'frisch'|'normal'|'platt', tonightMT:'yes'|'no'|'maybe', morning?:boolean,
+ *          where?:'room'|'gym'|'kompakt'|'express'|'mobility'}} p.checkin
  * @param {number} p.hardStreak  harte Tage am Stück bis gestern
  * @param {string[]} p.queue     Rotations-Queue, z. B. ['B','C','D','A']
  * @param {boolean} [p.overrideRest] Ruhetag wurde bewusst überstimmt
- * @returns {{kind:string, missionId:string, profile:string, reason:string, rule:number, canOverride?:boolean}}
+ * @param {'high'|'normal'|'low'|null} [p.yesterday] Belastungsklasse von gestern
+ * @param {number|null} [p.gap] Tage seit der letzten vollen Mission (ohne Feiertage)
+ * @param {object} [p.lastDone] letzter Tag je Rotationsplatz
+ * @param {boolean} [p.holiday] Feiertagsmodus aktiv (keine Pausenlogik)
+ * @param {boolean} [p.fourByFourDue] Arc III: 4x4 diese Woche noch offen
  */
-export function decide({ checkin, hardStreak, queue, overrideRest = false }) {
+export function decide({ checkin, hardStreak, queue, overrideRest = false, yesterday = null, gap = null,
+  lastDone = {}, holiday = false, fourByFourDue = false }) {
   const { yesterdayMT, feeling, tonightMT, where } = checkin;
   const profile = where === 'gym' ? 'gym' : 'room';
   const platt = feeling === 'platt';
   const sparred = yesterdayMT === 'hard';
 
-  // Arena heute Abend reicht in der Regel: morgens frei, außer du willst bewusst eine Morgeneinheit.
+  // ARENA heute Abend reicht in der Regel: morgens frei, außer du willst bewusst eine Morgeneinheit.
   if (tonightMT === 'yes' && !checkin.morning) {
     return { rule: 0, kind: 'arenaday', missionId: 'FLOW', profile,
-      reason: 'Heute Abend Arena. Das reicht, heute früh nur Fluss, damit du abends frisch bist.' };
+      reason: 'Heute Abend ARENA. Das reicht, heute früh nur FLOW, damit du abends frisch bist.' };
   }
   if (where === 'mobility') {
     return { rule: 1, kind: 'flow', missionId: 'FLOW', profile, walk: true,
-      reason: 'Nur Mobility gewählt: Fluss und danach ein Spaziergang.' };
+      reason: 'Nur Mobility gewählt: FLOW und danach ein Spaziergang.' };
   }
   if (hardStreak >= 3 && !overrideRest) {
     return { rule: 2, kind: 'rest', missionId: 'FLOW', profile, canOverride: true,
-      reason: `${hardStreak} harte Tage am Stück. Heute erholst du dich, nur Fluss.` };
+      reason: `${hardStreak} harte Tage am Stück. Heute erholst du dich, nur FLOW.` };
   }
   if (platt && sparred) {
     return { rule: 3, kind: 'flow', missionId: 'FLOW', profile,
-      reason: 'Platt und gestern hartes Sparring: Heute nur Fluss.' };
+      reason: 'Platt und gestern hartes Sparring: Heute nur FLOW.' };
   }
   if (platt || sparred) {
     const why = platt ? 'Du bist platt' : 'Gestern hartes Sparring';
@@ -43,20 +52,68 @@ export function decide({ checkin, hardStreak, queue, overrideRest = false }) {
   }
   if (where === 'express') {
     return { rule: 5, kind: 'express', missionId: 'EXPRESS', profile,
-      reason: 'Nur 15 Minuten: Kurzeinsatz. Der zählt voll für deine Woche.' };
+      reason: 'Nur 15 Minuten: SHADOWSTEP. Der zählt voll für deine Woche.' };
   }
-  const next = queue[0];
+
+  // ——— Welche Mission? ———
+  const compact = where === 'kompakt';
+  let rule = 7;
+  let next = queue[0];
+  let rotate = null;
+  const reasons = [];
+
+  // Pause 5–14 Tage: die Mission, deren Muster am längsten liegt. Danach läuft die Rotation ab ihr weiter.
+  if (!holiday && gap != null && gap >= 5 && gap <= 14) {
+    const overdue = [...queue].sort((a, b) => (lastDone[a] || '').localeCompare(lastDone[b] || ''))[0];
+    next = overdue;
+    rotate = 'restart';
+    rule = 9;
+    reasons.push(`${gap} Tage Pause. Am längsten liegt ${NAMES[overdue]}, da steigen wir ein.`);
+  }
+
+  // ARENA heute Abend: keine Beine.
   if ((tonightMT === 'yes' || tonightMT === 'maybe') && next === 'B') {
-    const alt = queue.find((m) => m !== 'B');
-    return { rule: 6, kind: 'mission', missionId: alt, profile,
-      reason: tonightMT === 'yes'
-        ? 'Heute Abend Arena, darum Oberkörper statt Beine.'
-        : 'Vielleicht Arena heute Abend, darum heben wir uns die Beine auf.' };
+    next = queue.find((m) => m !== 'B');
+    rule = 6;
+    reasons.push(tonightMT === 'yes'
+      ? 'Heute Abend ARENA, darum Oberkörper statt Beine.'
+      : 'Vielleicht ARENA heute Abend, darum heben wir uns die Beine auf.');
   }
-  return { rule: 7, kind: 'mission', missionId: next, profile,
-    reason: tonightMT === 'yes'
-      ? 'Nächste Mission in der Rotation, sie verträgt sich mit der Arena heute Abend.'
-      : 'Nächste Mission in der Rotation.' };
+
+  // Was steht konkret auf dem Platz? Home Gym → FORGE, Arc III → 4x4 statt D.
+  let missionId = next;
+  let slot = null;
+  if (profile === 'gym' && !compact) {
+    missionId = 'FORGE';
+    slot = next;
+  } else if (next === 'D' && fourByFourDue && !compact) {
+    missionId = 'NOR4X4';
+    slot = 'D';
+  }
+
+  // Nicht zwei High-Tage in Folge (Kompakt ist Low und fällt nicht darunter).
+  if (yesterday === 'high' && loadClass({ kind: 'mission', missionId, compact }) === 'high') {
+    const normal = queue.find((m) => m !== next && loadClass({ kind: 'mission', missionId: m }) === 'normal');
+    if (normal) {
+      rule = 8;
+      reasons.push(`Gestern war ein High-Tag, darum heute ${NAMES[normal]}. ${missionId === 'FORGE' ? 'FORGE' : NAMES[next]} bleibt vorgemerkt.`);
+      next = normal;
+      missionId = normal;
+      slot = null;
+      rotate = null;
+    }
+  }
+
+  if (!reasons.length) {
+    reasons.push(tonightMT === 'yes'
+      ? 'Nächste Mission in der Rotation, sie verträgt sich mit der ARENA heute Abend.'
+      : missionId === 'FORGE' ? 'Home Gym: FORGE übernimmt den nächsten Platz in der Rotation.'
+        : missionId === 'NOR4X4' ? 'Arc-Fokus Ausdauer: Heute 4x4 statt Zirkel.'
+          : 'Nächste Mission in der Rotation.');
+  }
+  if (compact) reasons.push('Kompakt: nur die Hauptübungen, je 2 Sätze.');
+
+  return { rule, kind: 'mission', missionId, slot, rotate, compact, profile, reason: reasons.join(' ') };
 }
 
 // Queue weiterdrehen: Die erledigte Mission wandert ans Ende, alle anderen behalten ihre Reihenfolge.

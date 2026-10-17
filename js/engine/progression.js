@@ -94,8 +94,9 @@ export function progress(def, st, sets, ctx) {
       const up = stepLoad(ladder, load, +1);
       if (up > load) return { ...st, load: up, target: lo, miss: 0, lastChange: 'load_up' };
     }
+    // Varianten wechseln nur beim Arc-Wechsel: hier nur vormerken.
     if (harder && harderAvailable(harder, ctx.equipment)) {
-      return { exId: harder.id, load: 0, target: harder.range[0], miss: 0, lastChange: 'variant_up' };
+      return { ...st, load, target: hi, miss: 0, pendingVariant: harder.id, lastChange: 'variant_ready' };
     }
     return { ...st, load, target: hi, miss: 0, lastChange: 'top' };
   }
@@ -108,7 +109,7 @@ export function progress(def, st, sets, ctx) {
       return { ...st, load: down, target: Math.round((lo + hi) / 2), miss: 0, lastChange: 'load_down' };
     }
     if (easier) {
-      return { exId: easier.id, load: 0, target: easier.range[0], miss: 0, lastChange: 'variant_down' };
+      return { ...st, load, target: lo, miss: 0, pendingVariant: easier.id, lastChange: 'variant_down_ready' };
     }
     return { ...st, load, target: lo, miss: 0, lastChange: 'reps_down' };
   }

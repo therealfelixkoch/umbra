@@ -7,20 +7,19 @@ import { weekStart, addDays, formatDay } from '../engine/dates.js';
 import { questCard } from './today.js';
 
 export const RANK_LORE = {
-  E: 'Unbemerkt. Jeder Wächter beginnt im Schatten.',
-  D: 'Der Schatten bewegt sich.',
-  C: 'Man beginnt, dich zu spüren.',
-  B: 'Die Nacht kennt deinen Namen.',
-  A: 'Wenige stehen hier.',
-  S: 'Elite der Wächter.',
-  U: 'Unzerbrechlich.',
+  SHADE: 'Formlos. Jeder Wächter beginnt als Schatten.',
+  BLADE: 'Der Schatten bekommt eine Kante.',
+  WARDEN: 'Du hältst die Stellung. Die Nacht bemerkt dich.',
+  PHANTOM: 'Man sieht dich nicht kommen.',
+  UMBRA: 'Der Kern des Schattens. Wenige erreichen ihn.',
+  UNBREAKABLE: 'Was dich trifft, bricht. Du nicht.',
 };
 
 export function attributeRanks(data) {
   const pts = attributePoints(data);
   return `<div class="attr-list">${ATTR_GROUPS.map((g) => {
     const r = attrRank(pts[g.id]);
-    return `<div class="attr-row"><span class="attr-rank num">${r.id === 'U' ? '∞' : r.id}</span>
+    return `<div class="attr-row"><span class="attr-rank num">${r.id}</span>
       <div class="attr-main"><div class="attr-top"><span>${esc(g.name)}</span><small class="muted">${r.next ? `${r.toNext} bis ${r.next}` : 'Maximum'}</small></div>
       <div class="xpbar"><i style="width:${Math.round(r.progress * 100)}%"></i></div></div></div>`;
   }).join('')}</div>`;
@@ -55,7 +54,7 @@ function expressionBars(cov) {
     const n = cov.expressions[k] || 0;
     return `<div class="bar-row static"><span class="bar-label"><i class="dot" style="background:${e.color}"></i>${esc(e.name)}</span>
       <span class="bar-track"><i class="bar-fill" style="width:${n ? Math.max(4, (n / max) * 100) : 0}%"></i></span><span class="bar-val num">${n}</span></div>`;
-  }).join('')}</div><p class="muted small">Anzahl Übungen bzw. Einheiten pro Ausprägung, Arena eingerechnet.</p>`;
+  }).join('')}</div><p class="muted small">Anzahl Übungen bzw. Einheiten pro Ausprägung, ARENA eingerechnet.</p>`;
 }
 
 function weeksChart(sessions, today) {
@@ -68,7 +67,7 @@ function weeksChart(sessions, today) {
     ${counts.map((n, i) => `<button class="wk-col" data-act="wk-tip" title="Woche ab ${formatDay(weeks[i])}: ${n} Einsätze">
       <i class="wk-bar${i === 7 ? ' cur' : ''}" style="height:${(n / max) * 100}%"><span class="wk-val num">${n || ''}</span></i>
       <span class="wk-label">${formatDay(weeks[i]).slice(0, 5)}</span></button>`).join('')}
-  </div><p class="muted small">Einsätze pro Woche (Mission, Kurzeinsatz, Arena). Ganz rechts: diese Woche.</p>`;
+  </div><p class="muted small">Einsätze pro Woche (Mission, SHADOWSTEP, ARENA). Ganz rechts: diese Woche.</p>`;
 }
 
 function totals(data) {
@@ -76,9 +75,9 @@ function totals(data) {
   const arenaH = s.filter((x) => x.kind === 'arena').reduce((m, x) => m + (x.minutes || 0), 0) / 60;
   const rows = [
     ['Missionen', s.filter((x) => x.kind === 'mission').length],
-    ['Kurzeinsätze', s.filter((x) => x.kind === 'express').length],
-    ['Arena', `${s.filter((x) => x.kind === 'arena').length} · ${arenaH.toLocaleString('de-DE', { maximumFractionDigits: 1 })} h`],
-    ['Fluss-Tage', new Set(s.filter((x) => x.kind === 'flow').map((x) => x.day)).size],
+    ['SHADOWSTEPs', s.filter((x) => x.kind === 'express').length],
+    ['ARENA', `${s.filter((x) => x.kind === 'arena').length} · ${arenaH.toLocaleString('de-DE', { maximumFractionDigits: 1 })} h`],
+    ['FLOW-Tage', new Set(s.filter((x) => x.kind === 'flow').map((x) => x.day)).size],
     ['Bestleistungen', Object.keys(data.records || {}).length],
     ['Erfüllte Quests', s.filter((x) => x.kind === 'quest').length],
   ];

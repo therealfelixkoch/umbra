@@ -62,40 +62,55 @@ const countSessions = (list, pred) => list.filter(pred).length;
 const hasTag = (s, getDef, fn) => sessionTags(s, getDef).some(fn);
 
 export const QUESTS = [
-  { id: 'neck', title: 'Stahlnacken', desc: '3 Einheiten mit Nackentraining', target: 3, gap: { attrs: ['neck'] },
+  { id: 'neck', title: 'STEEL NECK', desc: '3 Einheiten mit Nackentraining', target: 3, gap: { attrs: ['neck'] },
     progress: (l, g) => countSessions(l, (s) => s.kind !== 'arena' && hasTag(s, g, ([a, x]) => a === 'neck' && x !== 'mobil')) },
-  { id: 'flow5', title: 'Fließender Schatten', desc: 'Fluss an 5 Tagen', target: 5, gap: { expressions: ['mobil'] },
+  { id: 'flow5', title: 'FLOWING SHADOW', desc: 'FLOW an 5 Tagen', target: 5, gap: { expressions: ['mobil'] },
     progress: (l) => new Set(l.filter((s) => s.kind === 'flow').map((s) => s.day)).size },
-  { id: 'carry', title: 'Lastträger', desc: '2 Einheiten mit einseitigem Tragen', target: 2, gap: { attrs: ['carry', 'anti_lat'] },
+  { id: 'carry', title: 'BURDEN', desc: '2 Einheiten mit einseitigem Tragen', target: 2, gap: { attrs: ['carry', 'anti_lat'] },
     progress: (l, g) => countSessions(l, (s) => hasTag(s, g, ([a]) => a === 'carry' || a === 'anti_lat')) },
-  { id: 'rotation', title: 'Drehmoment', desc: '2 Einheiten mit Rotation', target: 2, gap: { attrs: ['rotation'] },
+  { id: 'rotation', title: 'TORQUE', desc: '2 Einheiten mit Rotation', target: 2, gap: { attrs: ['rotation'] },
     progress: (l, g) => countSessions(l, (s) => s.kind !== 'arena' && hasTag(s, g, ([a, x]) => a === 'rotation' && x !== 'mobil')) },
-  { id: 'explosive', title: 'Zündung', desc: '2 Einheiten mit Sprüngen oder Swings', target: 2, gap: { expressions: ['explosiv'] },
+  { id: 'explosive', title: 'SPARK', desc: '2 Einheiten mit Sprüngen oder Swings', target: 2, gap: { expressions: ['explosiv'] },
     progress: (l, g) => countSessions(l, (s) => s.kind !== 'arena' && hasTag(s, g, ([, x]) => x === 'explosiv')) },
-  { id: 'arena2', title: 'Arenaruf', desc: '2 Arena-Einheiten', target: 2, gap: { attrs: ['strike'] },
+  { id: 'arena2', title: 'CALL OF THE ARENA', desc: '2 ARENA-Einheiten', target: 2, gap: { attrs: ['strike'] },
     progress: (l) => countSessions(l, (s) => s.kind === 'arena') },
-  { id: 'legs', title: 'Fundament', desc: 'Mission Fundament abschließen', target: 1, gap: { attrs: ['squat', 'lunge'] },
+  { id: 'legs', title: 'BEDROCK', desc: 'Mission BEDROCK abschließen', target: 1, gap: { attrs: ['squat', 'lunge'] },
     progress: (l) => countSessions(l, (s) => s.missionId === 'B') },
-  { id: 'hinge', title: 'Hintere Kette', desc: '2 Einheiten mit Hip Hinge', target: 2, gap: { attrs: ['hinge'] },
+  { id: 'hinge', title: 'POSTERIOR CHAIN', desc: '2 Einheiten mit Hip Hinge', target: 2, gap: { attrs: ['hinge'] },
     progress: (l, g) => countSessions(l, (s) => hasTag(s, g, ([a, x]) => a === 'hinge' && x !== 'mobil')) },
 ];
 
 const isGap = (q, cov) => (q.gap.attrs || []).some((a) => !cov.attrs[a]) || (q.gap.expressions || []).some((x) => !cov.expressions[x]);
 
-/** Quest der Woche: aus den Lücken der Vorwoche, stabil über die ganze Woche. */
-export function questForWeek(sessions, today, getDef) {
+/**
+ * Side Quest der Woche: aus den Lücken der Vorwoche, stabil über die ganze Woche,
+ * nie zweimal hintereinander dieselbe (`previousId` = Quest der Vorwoche).
+ */
+export function questForWeek(sessions, today, getDef, previousId = null) {
   const ws = weekStart(today);
   const lastCov = weekCoverage(sessions, addDays(ws, -7), getDef);
   const hadWeek = weekSessions(sessions, addDays(ws, -7)).length > 0;
-  const candidates = hadWeek ? QUESTS.filter((q) => isGap(q, lastCov)) : QUESTS;
-  const list = candidates.length ? candidates : QUESTS;
+  const pool = QUESTS.filter((q) => q.id !== previousId);
+  const candidates = hadWeek ? pool.filter((q) => isGap(q, lastCov)) : pool;
+  const list = candidates.length ? candidates : pool;
   const idx = Math.floor(Math.abs(daysBetween('2024-01-01', ws)) / 7) % list.length;
   return list[idx];
 }
 
+// Wählt die Quest der laufenden Woche einmal und merkt sie sich (data.sideQuests[Woche] = id).
+export function ensureSideQuest(data, today, getDef) {
+  const ws = weekStart(today);
+  if (data.sideQuests?.[ws]) return data;
+  const prev = data.sideQuests?.[addDays(ws, -7)] || null;
+  const q = questForWeek(data.sessions, today, getDef, prev);
+  return { ...data, sideQuests: { ...(data.sideQuests || {}), [ws]: q.id } };
+}
+
 export function questStatus(data, today, getDef = defaultGetDef) {
   const ws = weekStart(today);
-  const quest = questForWeek(data.sessions, today, getDef);
+  const stored = data.sideQuests?.[ws];
+  const quest = (stored && QUESTS.find((q) => q.id === stored))
+    || questForWeek(data.sessions, today, getDef, data.sideQuests?.[addDays(ws, -7)] || null);
   const list = weekSessions(data.sessions, ws);
   const progress = Math.min(quest.target, quest.progress(list, getDef));
   const rewarded = data.sessions.some((s) => s.kind === 'quest' && s.week === ws);
@@ -107,27 +122,33 @@ const recordLoad = (data, id) => data.records?.[id]?.load || 0;
 const count = (data, pred) => data.sessions.filter(pred).length;
 
 export const ASCENSIONS = [
-  { id: 'erwacht', name: 'Erwachen', aura: '#4fe3ff', desc: 'Erste Mission abgeschlossen', target: 1,
+  { id: 'erwacht', name: 'AWAKENING', aura: '#4fe3ff', desc: 'Erste Mission abgeschlossen', target: 1,
     value: (d) => count(d, (s) => s.kind === 'mission' || s.kind === 'express') },
-  { id: 'arena10', name: 'Arenablut', aura: '#ff4d5e', desc: '10 Arena-Einheiten', target: 10,
+  { id: 'arena10', name: 'ARENA BLOOD', aura: '#ff4d5e', desc: '10 ARENA-Einheiten', target: 10,
     value: (d) => count(d, (s) => s.kind === 'arena') },
-  { id: 'fluss30', name: 'Fließender Schatten', aura: '#3fd68a', desc: 'Fluss an 30 Tagen', target: 30,
+  { id: 'fluss30', name: 'FLOWING SHADOW', aura: '#3fd68a', desc: 'FLOW an 30 Tagen', target: 30,
     value: (d) => new Set(d.sessions.filter((s) => s.kind === 'flow').map((s) => s.day)).size },
-  { id: 'stahlnacken', name: 'Stahlnacken', aura: '#ff9a3c', desc: '20 Einheiten mit Nackentraining', target: 20,
+  { id: 'stahlnacken', name: 'STEEL NECK', aura: '#ff9a3c', desc: '20 Einheiten mit Nackentraining', target: 20,
     value: (d) => count(d, (s) => s.kind !== 'arena' && sessionTags(s).some(([a, x]) => a === 'neck' && x !== 'mobil')) },
-  { id: 'eisengriff', name: 'Eisengriff', aura: '#ffcf5a', desc: 'Gewichteter Klimmzug mit +16 kg', target: 16, unit: 'kg',
+  { id: 'eisengriff', name: 'WEIGHTED ASCENT', aura: '#ffcf5a', desc: 'Gewichteter Klimmzug mit +16 kg', target: 16, unit: 'kg',
     value: (d) => recordLoad(d, 'pullup_tactical') },
-  { id: 'offenehuefte', name: 'Offene Hüfte', aura: '#4da3ff', desc: 'Mobility Hüfte über 70', target: 71,
+  { id: 'offenehuefte', name: 'OPEN HIPS', aura: '#4da3ff', desc: 'Mobility Hüfte über 70', target: 71,
     value: (d) => {
       const t = latestTest(d.mobility);
       if (!t) return 0;
       const v = ['hueftbeuger', 'adduktoren', 'hueftrotation'].map((r) => t.scores[r] ?? 0);
       return Math.round(v.reduce((a, b) => a + b, 0) / v.length);
     } },
-  { id: 'unbeugsam', name: 'Unbeugsam', aura: '#a874ff', desc: '12 Wochen Konstanz am Stück', target: 12,
+  { id: 'unbeugsam', name: 'UNBENDING', aura: '#a874ff', desc: '12 Wochen Konstanz am Stück', target: 12,
     value: (d, today) => weekStreak(d.sessions, today).best },
-  { id: 'nachtwaechter', name: 'Wächter der Nacht', aura: '#ffffff', desc: '100 Einsätze', target: 100,
+  { id: 'nachtwaechter', name: 'NIGHT WARDEN', aura: '#ffffff', desc: '100 Einsätze', target: 100,
     value: (d) => count(d, countsForWeek) },
+  { id: 'irongrip', name: 'IRON GRIP', aura: '#c9d1ff', desc: 'Dead Hang 90 Sekunden', target: 90, unit: 's',
+    value: (d) => d.records?.dead_hang?.value || 0 },
+  { id: 'eclipse', name: 'ECLIPSE FORM', aura: '#ffcf5a', desc: 'Erster Arc mit besiegtem Boss', target: 1,
+    value: (d) => Object.values(d.engine?.bossEvents || {}).filter((e) => e.defeated).length },
+  { id: 'unbroken', name: 'UNBROKEN', aura: '#ff9a3c', desc: '4 Arcs abgeschlossen', target: 4,
+    value: (d) => (d.engine?.arcHistory || []).length },
 ];
 
 export function ascensionStatus(data, today) {
@@ -147,7 +168,7 @@ export const ATTR_GROUPS = [
   { id: 'stabil', name: 'Stabilität', expressions: ['stabil', 'proprio'], color: '#ff9a3c' },
   { id: 'nacken', name: 'Nacken & Griff', attrs: ['neck', 'grip'], color: '#3fd68a' },
 ];
-export const ATTR_RANKS = [['E', 0], ['D', 40], ['C', 120], ['B', 300], ['A', 700], ['S', 1400], ['U', 2800]];
+export const ATTR_RANKS = [['E', 0], ['D', 40], ['C', 120], ['B', 300], ['A', 700], ['S', 1400]];
 
 export function attributePoints(data, getDef = defaultGetDef) {
   const pts = Object.fromEntries(ATTR_GROUPS.map((g) => [g.id, 0]));

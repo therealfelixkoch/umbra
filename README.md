@@ -4,6 +4,7 @@ Persönliche Trainings-App fürs iPhone. Du öffnest sie, beantwortest vier Frag
 
 - **Offline:** Die App läuft als Web-App vom Homescreen, auch im Flugmodus.
 - **Privat:** Alle Daten liegen nur auf deinem iPhone (IndexedDB). Es gibt kein Konto und keinen Server. Sicherungen machst du über Export/Import (JSON-Datei).
+- **Übungsnamen:** Alle Übungen tragen ihre englischen Standardnamen (z. B. Bulgarian Split Squat, Nordic Curls, Prayer Squat). Erklärungen bleiben deutsch.
 - **Grundlage:** Die Trainingsprinzipien basieren auf Adam Sinickis (The Bioneer) Programm *SuperMover*, angepasst auf Muay Thai und Vater-Alltag. Alle Texte in der App sind eigene Formulierungen.
 
 ---
@@ -48,7 +49,59 @@ Persönliche Trainings-App fürs iPhone. Du öffnest sie, beantwortest vier Frag
 
 Stufe 1–5 → Score 0/25/50/75/100. Priorität = (100 − Score) × Gewicht. Für die drei Regionen mit der höchsten Priorität wählt die App je einen Stretch und wechselt täglich zwischen den zwei besten. Die übrigen fünf Positionen bleiben Basis-Fluss.
 
-### Pausen, Deload, Progression
+### Bang Muay Thai (ARENA → BMT)
+
+- Eigenes Programm „Bang Muay Thai · Jahr 1“ mit einem Plan pro Woche. Wochen trägst du selbst ein, auch nachträglich und in beliebiger Reihenfolge (ARENA → BMT → Wochen verwalten → Neue Woche).
+- Plan als Text, so wie du ihn aus dem Kurs rausschreibst: Leerzeile = neuer Block, erste Zeile = Blocktitel. „Week 7“ in der ersten Zeile setzt die Wochennummer. Zeitangaben wie „2 Runden 3 min“ oder „2x 3 min“ bekommen einen Rundentimer-Knopf (1 min Pause), „1x 3 min footwork“ einen Footwork-Drill-Knopf.
+- In der Ansicht: Fortschritt über alle Wochen (trainiert ×, abgeschlossen ✓, aktuell in Gold), der Plan der aktuellen Woche zum Abhaken, „Einheit eintragen“ (ARENA-Eintrag mit Intensität und Dauer, verknüpft mit der Woche), „Woche abschließen“ (dann wird die nächste offene Woche aktuell).
+- Pauschal per Zeit eintragen geht weiterhin unter ARENA → Eintragen.
+
+### Update v2 · Paket 3: Lore, UI und Gamification
+
+- **Namen:** Missionen ASCENT (A), BEDROCK (B), IMPACT (C), INFILTRATION (D), QUICK STRIKE (Kompakt), SHADOWSTEP (15 min), FLOW (Mobility), ARENA (Muay Thai), FORGE (Home Gym). Arcs: IRONROOT, IGNITION, ENDLESS NIGHT, STILL WATER. Titel und Eigennamen englisch, alle Texte deutsch. Erzähler ist das System, ernst und knapp.
+- **Ränge:** SHADE → BLADE → WARDEN → PHANTOM → UMBRA → Unzerbrechlich, je mit eigenem SVG-Emblem und Wächter-Stufe (guardian-0 … 5). Attribut-Ränge E–S.
+- **Bosse:** TORPOR, FRACTURE, HOLLOW, RIGOR mit Lebensbalken. Fällt der Boss vor Woche 6: Siegsequenz. Steht er in der Deload-Woche noch: Rückzug („Er wird wiederkommen.“). **Nemesis THE PLATEAU** erscheint bei Stagnation Stufe 2 und verschwindet nach abgeschlossener Deload-Woche.
+- **Arc-Intro** (Karte auf „Heute“, 5 Panels: Welt, Boss, Konfrontation, Trainingsinhalt, Zitat) und **Debrief** (Panels mit deinen echten Zahlen: Boss-Ausgang, Konstanz, Kraft, Mobility, Körpersignale, Zitat; danach 3 Fragen und Export).
+- **Freischaltbares:** Chronik im Kodex (neue Übungen, Rekorde, Bosse), Ascensions inkl. IRON GRIP (Dead Hang 90 s), ECLIPSE FORM (erster Boss besiegt), UNBROKEN (4 Arcs), Titel zum Ausrüsten (z. B. „Der Unermüdliche“, „Der Geduldige“, „Der Zurückgekehrte“).
+- **Zitate:** nur mit sicher belegter Quelle (Marc Aurel, Seneca, Epiktet, Jocko Willink, David Goggins). Erscheinen im Intro, im Debrief und nach jeder dritten Mission. In Setup ausblenden oder eigene hinzufügen.
+- **Startbildschirm:** oben Check-in bzw. Mission, darunter klein Rang, Kampfkraft, Boss-Lebensbalken, Arc-Woche.
+- **Feedback:** Vibration bei erledigtem Satz, Pausenende und Rang-Aufstieg, Ton beim Pausenende, beides abschaltbar. Auf dem iPhone gibt es keine Vibrations-Schnittstelle. Die App nutzt dort den haptischen Klick des iOS-Schalters (ab iOS 18). Der funktioniert nur direkt beim Antippen, also beim erledigten Satz und beim Aufstieg, nicht beim zeitgesteuerten Pausenende.
+
+### Update v2 · Paket 2: Körpersignale und Auswertung
+
+- **Ellbogen:** Jede Übung hat `elbowLoad` (0 keine, 1 mittel, 2 hoch). Melden im Check-in („Ellbogen zwickt?“) oder im Training: Der Tap „Ellbogen gezwickt“ erscheint nur bei Übungen mit Ellbogenlast, nach dem ersten Satz. Zähler über 7 Tage, voll ab 3 Meldungen (Profil → Setup änderbar). Bei vollem Zähler ersetzt die App Übungen mit hoher Ellbogenlast (Kettlebell Hammer Curls statt Goblet Curls, Single-Arm Cable Row statt schwerer Rows, bei Dips weniger Zusatzgewicht). „Heute ohne Anpassung“ lehnt das für den Tag ab. Nach 3 Wochen in Folge mit vollem Zähler einmal der Hinweis, es von einem Physio anschauen zu lassen.
+- **Ellbogen-Prehab** fest in A und C (unter 3 Minuten): Forearm Pronation & Supination, Eccentric Wrist Extensions, Dead Hang, mit Progression. Nicht im Kompakt-Modus.
+- **Zwick-Melder:** optional im Check-in, Körperkarte mit 7 Regionen. Eine markierte Region gilt 7 Tage: Übungen mit Last auf dieser Region werden durch Varianten mit gleichem Muster ersetzt, sonst steht „nur locker und schmerzfrei, notfalls weglassen“ dabei. Muster wie „Knie meldet sich 2 Tage nach Box Jumps (2×)“ erscheinen im Wochenrückblick und im Debrief.
+- **Side Quest:** aus den Glyph-Lücken der Vorwoche, nie zweimal hintereinander dieselbe.
+- **Wochenrückblick** (sonntags, montags noch für die Vorwoche): Einsätze, Verteilung High/Normal/Low, Ellbogen-Zähler, gemeldete Regionen, Stagnation, Boss-Lebensbalken, Muster. Dazu 2 Taps: Spaß 1–5, Belastung 1–5.
+- **Boss-Lebensbalken:** 15 Lebenspunkte (3 Einsätze × 5 Wochen). Schaden: Mission 1, Kompakt 0,6, Kurzeinsatz 0,3, Arena 0,5, Bestleistung +0,5. Heilt nie, die Deload-Woche zählt nicht.
+- **Arc-Debrief** (in Woche 6 und bis 3 Wochen nach Arc-Ende): Zahlen des Arcs, 3 Fragen, Export als JSON für den Coach (alle Logs des Arcs, Antworten, Wochenrückblicke, Regel-Protokoll, Einstellungen).
+
+### Lore-Bilder
+
+- Ablage: `assets/lore/` als WebP, Namen laut `docs/umbra-bild-prompts.md`, max. ca. 300 KB pro Bild. Prüfen mit `python3 tools/check_lore.py` (Name, Größe, Format, was noch fehlt).
+- Die Originale aus Firefly liegen in `lore-originale/` und werden **nicht** hochgeladen. Für die App werden sie auf WebP-Qualität 86 verkleinert (gleiche Pixelmaße, etwa 25–200 KB statt 0,7–2 MB, sichtbar gleich).
+- Fehlt ein Bild, zeigt die App einen SVG-Platzhalter (dunkle Silhouette, violetter Rand). Bilder laufen an den Kanten weich in den Hintergrund #0B0A10 aus.
+- Offline: Der Service Worker lädt die Lore-Bilder in einen eigenen Cache. Fehlende Bilder brechen nichts. Neu hochgeladene Bilder holt er bei jedem App-Start mit Netz automatisch nach, dafür musst du nichts an der Version ändern.
+- Wächter-Stufe je Gesamtrang (bis Paket 3: E→0, D→1, C→2, B→3, A/S→4, Unzerbrechlich→5), Ascension-Aura als Leuchtebene. Boss-Zustände per Effekt: angeschlagen (Risse nach Lebensbalken, Entsättigung), besiegt (grau, goldene Risse, Zerfall), Rückzug (verblasst).
+- Vorschau aller Bilder und Zustände: **Kodex → Archiv** (zeigt auch, welche Datei vorhanden ist und wie groß).
+
+### Update v2 · Paket 1: Arcs und Trainingslogik
+
+- **Arcs (6 Wochen):** IRONROOT (I) → IGNITION (II) → ENDLESS NIGHT (III) → STILL WATER (IV), dann von vorn. Eine Kalenderwoche schiebt den Arc nur weiter, wenn darin 2 volle Missionen stattfanden (Kompakt zählt, Kurzeinsatz nicht). RIR-Ziel: Woche 1 → 3, 2–3 → 2, 4–5 → 1 (letzter Satz darf ans Versagen), Woche 6 = Deload (halbe Sätze) und Mobility-Re-Test. Ersetzt den alten Deload-Zähler.
+- **Varianten** wechseln nur beim Arc-Wechsel: Hauptübungen zur vorgemerkten Stufe, Nebenplätze mit Variantenliste rotieren. Ausnahme: Stagnation Stufe 1.
+- **Belastungsklassen:** High (hartes Sparring, B, FORGE, 4x4), Normal (A, C, D), Low (Technik, D leicht, Kurzeinsatz, Kompakt, Fluss). Nie zwei High-Tage in Folge, die High-Einheit bleibt vorgemerkt.
+- **Neue Check-in-Option „Nur 30 Minuten“** = QUICK STRIKE: Hauptübungen, je 2 Sätze, zählt für Rotation und Arc-Woche.
+- **Home Gym = FORGE:** ersetzt die nächste Mission auf ihrem Rotationsplatz. Kontrastpaar Barbell Deadlift ↔ Vertical Jump, Push Press bzw. Barbell Bench Press, Single-Arm Dumbbell Row, Explosive Step-ups, in Arc III plus Rowing 4x4.
+- **Arc II:** Kontrastpaare (schwer ↔ explosiv) und Top-Satz + Backdown (−18 %), Progression nur über den Top-Satz. **Arc III:** 4x4 ersetzt einmal pro Woche D. **Arc IV:** ein Satz weniger, belastete Mobility (Copenhagen Plank, Long Lunge Hold, Kettlebell Windmill …).
+- **Plyo-Stufen 1–5** je Arc-Woche auf dem Sprungplatz von B. Steht Stufe 4–5 an, fragt die App, ob morgen hartes Sparring geplant ist, dann bleibt es bei Stufe 3.
+- **Stagnation:** Stufe 1 (eine Übung: 3 Einheiten ohne Fortschritt oder 2× unter Arc-Bestwert) → Vorschlag Variante. Stufe 2 (≥ 3 Muster) → Vorschlag Deload-Woche. Nicht in Woche 1 und nicht in den ersten 2 Einheiten nach einer Pause.
+- **Pausen:** 1–4 Tage normal, 5–7 Tage die am längsten liegende Mission (Rotation läuft ab dort weiter), 8–14 zusätzlich −10 % und ein Satz weniger, 15+ zwei Einheiten −20 % ohne Versagen, die Arc-Woche wird wiederholt.
+- **Feiertagsmodus** (Standard 21.12.–03.01., in Setup änderbar): Arc pausiert, Wochenziel 2, Kurzeinsatz, Kompakt und Fluss zählen voll, keine Pausenlogik.
+- **Regel-Protokoll:** Empfehlungen und deine Entscheidungen werden mitgeschrieben (für den Arc-Debrief in Paket 2).
+- **Migration:** Bestehende Daten werden beim ersten Start automatisch auf Schema 2 gehoben. Log, Rekorde, Gewichte, Check-ins und Mobility bleiben erhalten, Arc I startet in der Woche des Updates.
+
+### Pausen, Deload, Progression (Basis aus Phase 1)
 
 - **Pausen** (Tage seit der letzten vollen Mission): 8–14 Tage → erste Einheit −10 % und ein Satz weniger. Ab 15 Tagen → zwei Einheiten −20 % ohne Versagen. Ab 10 Tagen gilt die Pause als Deload.
 - **Deload:** nach 18 vollen Missionen folgen 4 Einheiten mit halben Sätzen, gleichem Gewicht und ohne Versagen. Bei 3× „Platt“ in 7 Tagen schlägt die App einen Deload vor. Es gibt auch einen manuellen Knopf.
@@ -90,9 +143,9 @@ python3 -m http.server 8765
 ```
 
 - App: <http://localhost:8765>. Lokal ist der Service Worker aus, damit Änderungen sofort sichtbar sind. Mit `?sw` ist er an.
-- Tests: <http://localhost:8765/tests/index.html> (zeigt „92/92 grün“)
+- Tests: <http://localhost:8765/tests/index.html> (zeigt „194/194 grün“)
 
-**Nach jeder Code-Änderung** in `sw.js` die Zeile `const VERSION = 'umbra-v5'` hochzählen, sonst zeigt das iPhone die alte Version aus dem Cache. Neue Dateien zusätzlich in die `ASSETS`-Liste eintragen.
+**Nach jeder Code-Änderung** `python3 tools/build_sw.py` ausführen. Das Skript zählt die Version in `sw.js` hoch (aktuell `umbra-v10`) und trägt alle Dateien ein. Sonst zeigt das iPhone die alte Version aus dem Cache.
 
 ### Referenzmaterial
 
@@ -121,8 +174,8 @@ Du brauchst keine Programmierkenntnisse. Alles läuft im Browser, ohne Terminal.
 
 1. Im neuen Repo auf den Link **„uploading an existing file“** klicken.
 2. Im Finder den UMBRA-Ordner öffnen und **diese** Dateien und Ordner in das Browserfenster ziehen:
-   `index.html`, `manifest.webmanifest`, `sw.js`, `README.md`, `.gitignore`, `css`, `fonts`, `icons`, `js`, `tests`.
-   **Nicht** hochladen: `reference/` (das Buch) und `.claude/`.
+   `index.html`, `manifest.webmanifest`, `sw.js`, `README.md`, `.gitignore`, `assets`, `css`, `fonts`, `icons`, `js`, `tests`, `tools`.
+   **Nicht** hochladen: `reference/` (das Buch), `lore-originale/` (unkomprimierte Bilder), `.claude/`.
    Tipp: `.gitignore` ist im Finder versteckt. Mit **⌘ + ⇧ + .** werden versteckte Dateien sichtbar. Wenn sie fehlt, ist das auch nicht schlimm.
 3. Unten auf **Commit changes**.
 

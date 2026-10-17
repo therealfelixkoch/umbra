@@ -1,4 +1,4 @@
-// Footwork-Drill in der Arena: zufällige Kommandos per Roboterstimme, Glocke zu Start und Ende.
+// Footwork-Drill in der ARENA: zufällige Kommandos per Roboterstimme, Glocke zu Start und Ende.
 import { schedule, rng, LABELS, ARROWS } from '../engine/footwork.js';
 import { ringBell, keepAwake } from './sound.js';
 import { speak, stopSpeaking, canSpeak, voiceName } from './voice.js';
@@ -104,7 +104,7 @@ export function footworkView(c) {
   if (fw.phase === 'done') {
     return `<section class="rt done"><small>Footwork</small><b class="rt-phase">Protokoll beendet</b>
         <p class="muted">${fw.cfg.rounds} × ${fmt(fw.cfg.duration * 1000)} · ${fw.total} Kommandos</p></section>
-      <button class="btn primary wide big" data-act="fw-log">Als Arena eintragen</button>
+      <button class="btn primary wide big" data-act="fw-log">Als ARENA eintragen</button>
       <button class="btn ghost wide" data-act="fw-close">Schließen</button>`;
   }
   const label = fw.phase === 'prep' ? 'Bereit' : fw.phase === 'rest' ? 'Pause' : `Runde ${fw.round}`;

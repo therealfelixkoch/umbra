@@ -1,9 +1,12 @@
 // Aus Mission + Profil + Log wird ein konkreter Plan; nach dem Training wird der Log verbucht.
-import { MISSIONS, MISSION_KIND } from '../data/missions.js';
-import { getDef as defaultGetDef } from '../data/exercises.js';
-import { ROTATION, gapDays, lastSetsFor } from './history.js';
+import { MISSIONS, MISSION_KIND, FULL_MISSIONS } from '../data/missions.js';
+import { getDef as defaultGetDef, EXERCISES } from '../data/exercises.js';
+import { elbowStatus, activeRegions, adjustment } from './signals.js';
+import { PLYO, CONTRAST } from '../data/arcs.js';
+import { gapDays, lastSetsFor } from './history.js';
+import { initialArc, weekInfo, holidayActive, DEFAULT_HOLIDAY } from './arc.js';
 import { modifierFor, completeMission } from './cycle.js';
-import { initialState, progress, ladderFor, snap, canLoad, setScore } from './progression.js';
+import { initialState, progress, ladderFor, snap, canLoad, setScore, stepLoad } from './progression.js';
 import { sessionXp } from './game.js';
 import { daysBetween } from './dates.js';
 import { latestTest, selectStretches } from './mobility.js';
@@ -76,14 +79,23 @@ const MOBILITY_POOL = (getDef) => {
  * Konkreter Plan für heute.
  * @param {{missionId:string, profile:'room'|'gym', data:object, today:string, getDef?:Function}} p
  */
-export function buildPlan({ missionId, profile, data, today, getDef = defaultGetDef }) {
+export function buildPlan({ missionId, profile, data, today, compact = false, slot = null, rotate = null,
+  plyoCap = false, getDef = defaultGetDef }) {
   const mission = MISSIONS[missionId];
   const { equipment, settings } = profileContext(data.settings, profile);
-  const full = ROTATION.includes(missionId);
-  const gap = gapDays(data.sessions, today);
-  const modifier = full ? modifierFor(data.engine, gap) : { type: 'none' };
-  const base = { missionId, name: mission.name, focus: mission.focus, minutes: mission.minutes,
-    format: mission.format, kind: MISSION_KIND(missionId), profile, modifier, gap };
+  const full = FULL_MISSIONS.includes(missionId);
+  const holiday = data.settings.holiday ?? DEFAULT_HOLIDAY;
+  const inHoliday = holidayActive(today, holiday);
+  const gap = gapDays(data.sessions, today, holiday);
+  // Im Feiertagsmodus greift die Pausenlogik nicht.
+  const modifier = full ? modifierFor(data.engine, inHoliday ? null : gap) : { type: 'none' };
+  const arc = data.engine.arc || initialArc(today);
+  const info = weekInfo(arc);
+  const isCompact = compact && mission.format === 'sets';
+  const base = { missionId, name: isCompact ? `QUICK STRIKE · ${mission.name}` : mission.name,
+    focus: isCompact ? 'Hauptübungen · je 2 Sätze' : mission.focus, minutes: isCompact ? 30 : mission.minutes,
+    format: mission.format, kind: MISSION_KIND(missionId), profile, modifier, gap, compact: isCompact,
+    slot, rotate, arc: { n: arc.n, week: arc.week }, rir: modifier.type === 'deload' ? 3 : info.rir };
 
   const loadFor = (def, st) => {
     if (!def.load || !canLoad(def, equipment)) return { load: 0, ladder: [0] };
@@ -93,24 +105,82 @@ export function buildPlan({ missionId, profile, data, today, getDef = defaultGet
 
   if (mission.format === 'sets') {
     const items = [];
-    for (const slot of mission.slots) {
-      if (slot.only && slot.only !== profile) continue;
-      let id = slot.ex;
-      let sets = slot.sets;
-      if (profile === 'gym' && slot.gym) {
-        if (Array.isArray(slot.gym)) {
-          const n = data.sessions.filter((s) => s.missionId === missionId && s.profile === 'gym').length;
-          id = slot.gym[n % slot.gym.length];
-        } else id = slot.gym;
-        sets = slot.gymSets ?? slot.sets;
+    const focus = info.arc.id;
+    // Körpersignale: Ellbogen-Zähler voll oder gemeldete Region → Übung anpassen (für heute ablehnbar)
+    const declined = data.engine.signalsDeclined === today;
+    const sig = declined ? { elbowFull: false, regions: [] }
+      : { elbowFull: elbowStatus(data, today).full, regions: activeRegions(data.signals, today) };
+    const contrastOn = focus === 'II' || mission.contrast;
+    const plyo = plyoFor(info, arc, plyoCap);
+    mission.slots.forEach((s, i) => {
+      if (s.only && s.only !== profile) return;
+      if (s.arcOnly && s.arcOnly !== focus) return;
+      if (isCompact && !s.main) return;
+      if (s.plyo && contrastOn) return; // In Arc II übernehmen die Kontrastpaare die Sprünge.
+      const slotKey = `${missionId}:${i}`;
+      let id = data.engine.slotVariant?.[slotKey] || s.ex;
+      let sets = s.sets;
+      if (s.plyo) id = plyo.exId;
+      else if (profile === 'gym' && s.gym && !data.engine.slotVariant?.[slotKey]) {
+        if (Array.isArray(s.gym)) {
+          const n = data.sessions.filter((x) => x.missionId === missionId && x.profile === 'gym').length;
+          id = s.gym[n % s.gym.length];
+        } else id = s.gym;
+        sets = s.gymSets ?? s.sets;
       }
       const key = resolveExercise(id, equipment, getDef);
-      if (!key) continue;
-      const item = itemFor(key, { data, profile, sets, getDef });
-      item.optional = !!slot.optional;
-      items.push(applyModifier(item, modifier, getDef(item.exId)));
-    }
-    return { ...base, items };
+      if (!key) return;
+      const def0 = getDef(key);
+      if (isCompact) sets = 2;
+      else if (focus === 'IV' && !s.arcOnly && def0.mode !== 'fixed') sets = Math.max(1, sets - 1);
+      // Arc II: Top-Satz + Backdown bei Hauptübungen mit Zusatzlast
+      const topSet = focus === 'II' && s.main && !isCompact && def0.load && canLoad(def0, equipment);
+      const range = topSet ? [3, 5] : undefined;
+      let item = itemFor(key, { data, profile, sets: topSet ? 2 : sets, getDef, arcN: arc.n, range });
+      item = { ...item, optional: !!s.optional, main: !!s.main, slotKey, plyoStage: s.plyo ? plyo.stage : undefined, prehab: !!s.prehab };
+      const adj = (sig.elbowFull || sig.regions.length)
+        ? adjustment(getDef(item.exId), { ...sig, equipment, all: EXERCISES, getDef }) : null;
+      if (adj) {
+        if (adj.id !== item.exId) {
+          const swapped = itemFor(adj.id, { data, profile, sets: item.sets, getDef, arcN: arc.n });
+          item = { ...swapped, optional: item.optional, main: item.main, slotKey, originalKey: key };
+        } else if (adj.lessLoad && item.load > 0) {
+          item = { ...item, load: stepLoad(item.ladder, item.load, -1), noFailure: true };
+        }
+        item.adjust = adj.reason;
+        item.caution = !!adj.caution;
+      }
+      if (topSet) {
+        const ladder = item.ladder;
+        item.topSet = true;
+        item.setPlan = [
+          { value: item.target, load: item.load, label: 'Top-Satz' },
+          { value: 8, load: snap(ladder, item.load * 0.82), label: 'Backdown' },
+        ];
+      }
+      item = applyModifier(item, modifier, getDef(item.exId));
+      if (item.setPlan) {
+        // Modifikatoren (Deload, Wiedereinstieg) wirken auch auf Top-Satz und Backdown.
+        item.setPlan = item.setPlan.slice(0, Math.max(1, item.sets)).map((x, j) => (j === 0
+          ? { ...x, value: item.target, load: item.load } : { ...x, load: snap(item.ladder, item.load * 0.82) }));
+        item.sets = item.setPlan.length;
+      }
+      item.rir = base.rir;
+      item.failLast = !!info.failLast && !item.noFailure && modifier.type !== 'deload';
+      if (modifier.type === 'deload') item.noFailure = true;
+      items.push(item);
+      // Kontrastpaar: explosiver Partner desselben Musters direkt danach
+      const partnerId = contrastOn && s.main && !isCompact && CONTRAST[item.exId];
+      const partner = partnerId && resolveExercise(partnerId, equipment, getDef);
+      if (partner) {
+        const pd = getDef(partner);
+        items.push({ key: partner, exId: partner, sets: modifier.type === 'deload' ? 2 : 3,
+          target: pd.mode === 'time' ? pd.range[0] : 5, load: 0, ladder: [0], optional: false,
+          explosive: true, noFailure: true, rir: null, trend: null, lastTime: lastSetsFor(data.sessions, partner) });
+      }
+    });
+    // Plyo-Info nur, wenn die Mission heute wirklich einen Sprungplatz hat
+    return { ...base, items, plyo: items.some((it) => it.plyoStage) ? plyo : null };
   }
 
   if (mission.format === 'circuit') {
@@ -138,7 +208,8 @@ export function buildPlan({ missionId, profile, data, today, getDef = defaultGet
   }
 
   if (mission.format === 'intervals') {
-    return { ...base, rounds: mission.rounds, work: mission.work, rest: mission.rest, exId: mission.ex };
+    const exId = profile === 'gym' && mission.gymEx ? mission.gymEx : mission.ex;
+    return { ...base, rounds: mission.rounds, work: mission.work, rest: mission.rest, exId };
   }
 
   // flow
@@ -148,10 +219,14 @@ export function buildPlan({ missionId, profile, data, today, getDef = defaultGet
 }
 
 // Ein Satz-Eintrag für eine Übung (Zustand, Variante, Last, Ziel). Auch für den Übungstausch.
-export function itemFor(key, { data, profile, sets, getDef = defaultGetDef }) {
+export function itemFor(key, { data, profile, sets, getDef = defaultGetDef, arcN = null, range }) {
   const { equipment, settings } = profileContext(data.settings, profile);
   const baseDef = getDef(key);
-  const st = data.exState[key] || initialState(baseDef, { settings, startValues: data.settings.startValues, getDef });
+  let st = data.exState[key] || initialState(baseDef, { settings, startValues: data.settings.startValues, getDef });
+  // Neuer Arc (oder anderer Wiederholungsbereich): Ziel startet am unteren Ende, die Last bleibt.
+  const r = range || (getDef(st.exId) || baseDef).range;
+  if (arcN != null && st.arc != null && st.arc !== arcN) st = { ...st, target: r[0], lastChange: null };
+  if (range && st.target > range[1]) st = { ...st, target: range[1] };
   let def = getDef(st.exId) || baseDef;
   if (!(def.equipment || []).every((e) => equipment.includes(e))) def = baseDef;
   let load = 0;
@@ -161,8 +236,18 @@ export function itemFor(key, { data, profile, sets, getDef = defaultGetDef }) {
     load = snap(ladder, st?.load ?? def.startKg ?? ladder[0]);
   }
   const target = def.mode === 'fixed' ? def.range[0] : (def.id === st.exId ? st.target : def.range[0]);
-  return { key, exId: def.id, sets, target, load, ladder, optional: false,
+  return { key, exId: def.id, sets, target, load, ladder, optional: false, range: range || def.range,
     trend: st.lastChange, lastTime: lastSetsFor(data.sessions, def.id), noFailure: false };
+}
+
+// Sprungübung für die Plyo-Stufe des Arcs. Vor hartem Sparring maximal Stufe 3.
+export function plyoFor(info, arc, cap) {
+  let stage = info.arc.plyo[arc.week - 1];
+  if (stage === 4 && info.cycle >= 1 && (arc.week === 4 || arc.week === 5)) stage = 5;
+  const wanted = stage;
+  if (cap && stage > 3) stage = 3;
+  const list = PLYO[stage];
+  return { stage, wanted, capped: wanted !== stage, exId: list[arc.week % list.length] };
 }
 
 /**
@@ -196,7 +281,8 @@ export function createActive(plan, today, now = Date.now()) {
   if (plan.format === 'sets') {
     active.log = plan.items.map((it) => ({
       key: it.key, exId: it.exId,
-      sets: Array.from({ length: it.sets }, () => ({ value: it.target, load: it.load, done: false })),
+      sets: it.setPlan ? it.setPlan.map((x) => ({ value: x.value, load: x.load, label: x.label, done: false }))
+        : Array.from({ length: it.sets }, () => ({ value: it.target, load: it.load, done: false })),
     }));
   }
   return active;
@@ -230,6 +316,8 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
   const bodyweight = data.settings.bodyweight || 80;
 
   const session = { id: id || `s${now}`, day, kind: p.kind, missionId: p.missionId, profile: p.profile,
+    compact: p.compact || undefined, slot: p.slot || undefined, arc: p.arc,
+    afterPause: p.gap != null && p.gap >= 8 ? true : undefined, gap: p.gap ?? undefined,
     modifier: p.modifier?.type || 'none', completion, minutes: Math.round((now - active.startedAt) / 60000),
     exercises: [], roundsDone: active.roundsDone,
     items: p.format === 'sets' ? undefined : p.items ? p.items.map((i) => i.exId) : p.exId ? [p.exId] : [] };
@@ -248,14 +336,20 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
         records[entry.exId] = { score: best, value: top.value, load: top.load, day };
         if (prev) newRecords.push({ exId: entry.exId, value: top.value, load: top.load });
       }
-      // Progression nur bei normalen Einheiten
+      // Progression nur bei normalen Einheiten, nie für explosive Kontrast-Partner
+      const item = p.items[i];
+      if (item.explosive) return;
       if (p.modifier?.type && p.modifier.type !== 'none') return;
       const base = getDef(entry.key);
       const st = exState[entry.key] ||
         initialState(base, { settings, startValues: data.settings.startValues, getDef });
-      const cur = st.exId === entry.exId ? st : { ...st, exId: entry.exId, target: p.items[i].target };
-      exState[entry.key] = progress(def, cur, done.map((s) => ({ value: s.value, load: s.load })),
-        { settings, equipment, getDef });
+      const cur = st.exId === entry.exId ? { ...st, target: item.target } : { ...st, exId: entry.exId, target: item.target };
+      // Arc II: Progression nur über den Top-Satz
+      const counted = item.topSet ? done.filter((s) => s.label === 'Top-Satz') : done;
+      if (!counted.length) return;
+      const ranged = item.range ? { ...def, range: item.range } : def;
+      exState[entry.key] = { ...progress(ranged, cur, counted.map((s) => ({ value: s.value, load: s.load })),
+        { settings, equipment, getDef }), arc: p.arc?.n };
     });
   }
 
@@ -275,8 +369,11 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
   session.records = newRecords;
   session.xp = sessionXp(session);
 
-  const gap = gapDays(data.sessions, day);
-  const engine = completeMission(data.engine, { missionId: p.missionId, gap, modifier: p.modifier });
+  const holiday = data.settings.holiday ?? DEFAULT_HOLIDAY;
+  const gap = holidayActive(day, holiday) ? null : gapDays(data.sessions, day, holiday);
+  const engine = p.compact || FULL_MISSIONS.includes(p.missionId)
+    ? completeMission(data.engine, { missionId: p.missionId, slot: p.slot, rotate: p.rotate, gap, modifier: p.modifier })
+    : data.engine;
 
   return {
     data: { ...data, exState, records, engine, sessions: [...data.sessions, session], active: null },
@@ -287,10 +384,12 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
 // Ab diesem Gefühlswert zählt eine Arena-Einheit als hart (wie Sparring).
 export const HARD_RPE = 7;
 
-export function logArena(data, { day, intensity, rpe, minutes = 60, now = Date.now() }) {
+export function logArena(data, { day, intensity, rpe, minutes = 60, bmt = null, now = Date.now() }) {
   const r = rpe ?? (intensity === 'hard' ? 8 : 4);
+  const arc = data.engine?.arc;
   const session = { id: `a${now}`, day, kind: 'arena', missionId: 'ARENA', rpe: r,
-    intensity: r >= HARD_RPE ? 'hard' : 'light', minutes };
+    intensity: r >= HARD_RPE ? 'hard' : 'light', minutes, arc: arc ? { n: arc.n, week: arc.week } : undefined,
+    bmt: bmt || undefined };
   session.xp = sessionXp(session);
   return { data: { ...data, sessions: [...data.sessions, session] }, session };
 }

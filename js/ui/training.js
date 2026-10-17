@@ -1,12 +1,18 @@
-// Training: Übung für Übung, Satz-Logging, Pausen-Timer, Zirkel, Kurzeinsatz, Fluss.
+// Training: Übung für Übung, Satz-Logging, Pausen-Timer, Zirkel, SHADOWSTEP, FLOW.
 import { sys, esc, glyphChips, targetText, loadText, setsText, trendBadge, stepper, kg } from './kit.js';
 import { getDef } from '../data/exercises.js';
 import { finishSession, completionOf, swapOptions, itemFor } from '../engine/plan.js';
 import { EXERCISES } from '../data/exercises.js';
 import { ATTRIBUTES } from '../data/glyphs.js';
-import { stepLoad } from '../engine/progression.js';
+import { stepLoad, snap } from '../engine/progression.js';
 import { rankFor, totalXp } from '../engine/game.js';
 import { exerciseDetail } from './kodex.js';
+import { showsElbowTap, reportElbow } from '../engine/signals.js';
+import { haptic } from './haptics.js';
+import { quoteAfterMission } from '../engine/story.js';
+import { guardianImage } from './lore.js';
+import { guardianTier } from '../data/lore.js';
+import { rankName } from '../engine/game.js';
 import { beep, keepAwake } from './sound.js';
 
 const fmt = (sec) => {
@@ -30,11 +36,12 @@ function drawRest() {
   }
   const left = (rest.endAt - Date.now()) / 1000;
   el.className = `open${left <= 0 ? ' over' : ''}`;
-  el.innerHTML = `<div class="rest-inner"><small>${esc(rest.label)}</small><b class="num">${left > 0 ? fmt(left) : 'Los!'}</b>
+  el.innerHTML = `<div class="rest-inner"><small>${esc(rest.label)}</small><b class="num">${left > 0 ? fmt(left) : 'Los'}</b>
     <div class="row gap"><button class="btn" data-act="rest-add">+15 s</button><button class="btn primary" data-act="rest-skip">${left > 0 ? 'Überspringen' : 'Weiter'}</button></div></div>`;
   if (left <= 0 && !rest.fired) {
     rest.fired = true;
     beep(3);
+    haptic([120, 80, 120]);
     setTimeout(() => { if (rest?.fired) { rest = null; drawRest(); } }, 4000);
   }
 }
@@ -88,10 +95,14 @@ function setsView(c, a) {
   const loadable = def.load && it.ladder.length > 1;
   const last = it.lastTime;
   const fixed = def.mode === 'fixed';
-  const rir = fixed ? '' : it.noFailure
-    ? '<p class="rir">Heute kein Versagen: alle Sätze mit 1–2 Wdh. Reserve.</p>'
-    : def.mode === 'amrap' ? '<p class="rir">Ein Satz bis kurz vor Versagen, saubere Technik.</p>'
-      : `<p class="rir">${entry.sets.length > 1 ? `Satz 1–${entry.sets.length - 1}: 1–2 Wdh. Reserve. ` : ''}Letzter Satz: bis kurz vor Versagen.</p>`;
+  const r = it.rir ?? 2;
+  const setCount = entry.sets.length;
+  const rir = fixed ? '' : it.explosive
+    ? '<p class="rir">Kontrast: jede Wiederholung maximal explosiv, volle Pause. Stopp, sobald die Explosivität nachlässt.</p>'
+    : it.topSet ? '<p class="rir">Top-Satz: 3–5 Wdh., 1 Wdh. im Tank. Backdown: 6–10 Wdh. mit ca. 18 % weniger Last.</p>'
+      : def.mode === 'amrap' ? `<p class="rir">${it.noFailure ? `Ein Satz, ${r} Wdh. im Tank.` : 'Ein Satz bis kurz vor Versagen, saubere Technik.'}</p>`
+        : it.failLast && setCount > 1 ? `<p class="rir">Satz 1–${setCount - 1}: ${r} Wdh. im Tank. Letzter Satz darf ans Versagen.</p>`
+          : `<p class="rir">Alle Sätze mit ${r} Wdh. im Tank${it.noFailure ? ', kein Versagen' : ''}.</p>`;
 
   const rows = entry.sets.map((s, k) => {
     const isNext = !s.done && entry.sets.findIndex((x) => !x.done) === k;
@@ -101,7 +112,7 @@ function setsView(c, a) {
         <button class="check" data-act="t-done" data-k="${k}" aria-label="Erledigt">✓</button></div>`;
     }
     const step = def.mode === 'time' ? 5 : 1;
-    return `<div class="set-row${s.done ? ' done' : ''}${isNext ? ' next' : ''}"><span class="set-n">${k + 1}</span>
+    return `<div class="set-row${s.done ? ' done' : ''}${isNext ? ' next' : ''}"><span class="set-n">${s.label ? `<i class="set-tag">${s.label === 'Top-Satz' ? 'TOP' : 'BD'}</i>` : k + 1}</span>
       ${stepper('t-val', `${s.value}`, def.mode === 'time' ? 's' : 'Wdh.', { idx: `${k}:${step}`, big: true })}
       ${loadable && s.done ? `<small class="set-load">${kg(s.load)} kg</small>` : ''}
       <button class="check" data-act="t-done" data-k="${k}" aria-label="Satz erledigt">✓</button></div>`;
@@ -126,9 +137,12 @@ function setsView(c, a) {
         <span class="arrow">→</span>
         <div><small>Heute</small><b>${entry.sets.length} × ${targetText(def, it.target)}</b><em>${def.load ? esc(loadText(def, it.load)) : ''}</em></div>
       </div>${trendBadge(it.trend)}`}
+      ${it.adjust ? `<p class="note">${esc(it.adjust)}</p>` : ''}
       ${rir}
       ${loadRow}
       <div class="sets">${rows}</div>
+      ${showsElbowTap(def) && entry.sets.some((s) => s.done)
+        ? `<button class="elbow-tap${entry.elbowReported ? ' done' : ''}" data-act="t-elbow" ${entry.elbowReported ? 'disabled' : ''}>${entry.elbowReported ? 'Ellbogen gemeldet' : 'Ellbogen gezwickt'}</button>` : ''}
     </section>
     <footer class="t-nav">
       <button class="btn" data-act="t-prev" ${i === 0 ? 'disabled' : ''}>←</button>
@@ -212,7 +226,7 @@ function advanceInterval(c) {
   save(c);
 }
 
-// ——— Fluss ———
+// ——— FLOW ———
 function flowSeq(p) {
   const seq = [];
   for (let r = 0; r < p.rounds; r++) p.items.forEach((it) => seq.push({ ...it, round: r + 1 }));
@@ -242,10 +256,10 @@ function flowView(c, a) {
     return `${head(c, a, `${seq.length}×`, 0)}
       <section class="t-card"><p class="t-target">${p.items.length} Positionen à ${p.work} s, ${p.rounds} Runden</p>
       <p class="rir">Weich in die Position, darin bewegen, atmen. Nie erzwingen.</p>${itemList({ items: p.items.map((x) => ({ ...x, value: p.work })) })}</section>
-      <footer class="t-nav"><button class="btn primary grow" data-act="t-flow-start">Fluss starten</button></footer>`;
+      <footer class="t-nav"><button class="btn primary grow" data-act="t-flow-start">FLOW starten</button></footer>`;
   }
   if (f.done) {
-    return `${head(c, a, '✓', 1)}<section class="t-card center"><p class="t-target">Fluss abgeschlossen.</p></section>
+    return `${head(c, a, '✓', 1)}<section class="t-card center"><p class="t-target">FLOW abgeschlossen.</p></section>
       <footer class="t-nav"><button class="btn gold grow" data-act="t-finish">Abschließen</button></footer>`;
   }
   const cur = seq[f.i];
@@ -279,17 +293,22 @@ function finish(c) {
   const after = rankFor(totalXp(c.data.sessions));
   const s = result.session;
   const rec = s.records.map((r) => {
-    if (r.exId === 'EXPRESS') return `<li>Kurzeinsatz: ${r.value} Runden</li>`;
+    if (r.exId === 'EXPRESS') return `<li>SHADOWSTEP: ${r.value} Runden</li>`;
     const def = getDef(r.exId);
     return `<li>${esc(def.name)}: ${r.value}${def.mode === 'time' ? ' s' : ''}${r.load ? ` · ${esc(loadText(def, r.load))}` : ''}</li>`;
   }).join('');
-  const title = s.kind === 'flow' ? 'Fluss abgeschlossen.' : s.completion >= 0.999 ? 'Mission abgeschlossen.' : 'Einsatz verbucht.';
+  const title = s.kind === 'flow' ? 'FLOW abgeschlossen.' : s.completion >= 0.999 ? 'Mission abgeschlossen.' : 'Einsatz verbucht.';
+  const rankUp = after.index > before.index;
+  const quote = quoteAfterMission(c.data, s);
   c.go('heute');
-  c.system(title, `<div class="xp-gain num">+${s.xp} XP</div>
+  if (rankUp) haptic([60, 40, 60, 40, 160]);
+  c.system(rankUp ? 'Rang-Prüfung bestanden' : title, `${rankUp ? `<div class="rankup epic">${guardianImage(guardianTier(after.id), { cls: 'rankup-guardian' })}
+      <small>Neuer Rang</small><b>${esc(rankName(after))}</b></div>` : ''}
+    <div class="xp-gain num">+${s.xp} XP</div>
     ${s.completion < 0.999 && s.kind === 'mission' ? `<p class="muted">${Math.round(s.completion * 100)} % geschafft. Zählt trotzdem.</p>` : ''}
     ${rec ? `<div class="record"><b>Rekord gebrochen</b><ul>${rec}</ul></div>` : ''}
-    ${after.index > before.index ? `<div class="rankup"><small>Rang-Prüfung bestanden</small><b>${after.name || `Rang ${after.id}`}</b></div>` : ''}`,
-  [['close-modal', 'Weiter', 'primary']], after.index > before.index ? 'gold aura' : rec ? 'gold' : 'sys');
+    ${quote ? `<blockquote class="quote">„${esc(quote.text)}“<cite>${esc(quote.person)} · ${esc(quote.source)}</cite></blockquote>` : ''}`,
+  [['close-modal', 'Weiter', 'primary']], rankUp ? 'gold aura' : rec ? 'gold' : 'sys');
 }
 
 export default {
@@ -323,9 +342,15 @@ export default {
       const sets = a.log[a.index].sets;
       const open = sets.find((s) => !s.done) || sets[sets.length - 1];
       const nl = stepLoad(it.ladder, open.load, Number(d.dir));
-      // Neue Last gilt für alle offenen Sätze.
-      sets.forEach((s) => { if (!s.done) s.load = nl; });
-      if (sets.every((s) => s.done)) sets[sets.length - 1].load = nl;
+      if (it.topSet && open.label === 'Top-Satz') {
+        // Top-Satz bestimmt den Backdown: ca. 18 % weniger.
+        open.load = nl;
+        sets.forEach((s) => { if (!s.done && s.label === 'Backdown') s.load = snap(it.ladder, nl * 0.82); });
+      } else {
+        // Neue Last gilt für alle offenen Sätze.
+        sets.forEach((s) => { if (!s.done) s.load = nl; });
+        if (sets.every((s) => s.done)) sets[sets.length - 1].load = nl;
+      }
       save(c);
     },
     't-done': (c, d) => {
@@ -333,6 +358,7 @@ export default {
       const sets = a.log[a.index].sets;
       const k = Number(d.k);
       sets[k].done = !sets[k].done;
+      if (sets[k].done) haptic();
       const lastOverall = a.index === a.plan.items.length - 1 && sets.every((s) => s.done);
       if (sets[k].done && !lastOverall) {
         const def = getDef(a.log[a.index].exId);
@@ -368,6 +394,13 @@ export default {
       c.modal(null);
       save(c);
     },
+    't-elbow': (c) => {
+      const a = c.data.active;
+      const entry = a.log[a.index];
+      if (entry.elbowReported) return;
+      entry.elbowReported = true;
+      c.update((data) => reportElbow(data, { day: a.day, exId: entry.exId, source: 'training' }));
+    },
     't-goto': (c, d) => { c.data.active.index = Number(d.k); save(c); },
     't-next': (c) => { const a = c.data.active; a.index = Math.min(a.plan.items.length - 1, a.index + 1); save(c); },
     't-prev': (c) => { const a = c.data.active; a.index = Math.max(0, a.index - 1); save(c); },
@@ -379,7 +412,7 @@ export default {
       save(c);
     },
     't-clock': (c) => { c.data.active.clockEnd = Date.now() + 15 * 60000; save(c); },
-    't-round-plus': (c) => { c.data.active.roundsDone += 1; beep(1, 1200); save(c); },
+    't-round-plus': (c) => { c.data.active.roundsDone += 1; haptic(); save(c); },
     't-round-minus': (c) => { const a = c.data.active; a.roundsDone = Math.max(0, a.roundsDone - 1); save(c); },
     't-iv-start': (c) => { c.data.active.iv = { phase: 'work', round: 1, endAt: Date.now() + c.data.active.plan.work * 1000 }; save(c); },
     't-flow-start': (c) => { c.data.active.flow = { i: 0, endAt: Date.now() + c.data.active.plan.work * 1000 }; save(c); },

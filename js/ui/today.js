@@ -1,11 +1,23 @@
 // Heute: Check-in → Empfehlung → Start.
 import { sys, esc, chips, glyphChips, targetText, loadText, trendBadge, nameOf } from './kit.js';
 import { decide } from '../engine/decide.js';
-import { hardStreak, arenaOn, plattCount } from '../engine/history.js';
-import { shouldSuggestDeload, startDeload, DELOAD_AFTER } from '../engine/cycle.js';
+import { hardStreak, arenaOn, plattCount, gapDays, lastDoneBySlot } from '../engine/history.js';
+import { shouldSuggestDeload, startDeload } from '../engine/cycle.js';
+import { weekInfo, holidayActive, DEFAULT_HOLIDAY } from '../engine/arc.js';
+import { yesterdayClass } from '../engine/load.js';
+import { stagnationStatus } from '../engine/stagnation.js';
+import { logDecision } from '../engine/rulelog.js';
+import { PLYO_NAMES, ARC_WEEKS, arcOf } from '../data/arcs.js';
+import { bossStatus } from '../engine/boss.js';
+import { introDue } from '../engine/story.js';
+import { rankEmblem } from './emblem.js';
+import { bossImage } from './lore.js';
+import { BOSSES } from '../data/lore.js';
+import { REGIONS, elbowStatus, reportElbow, reportPain, physioNoteDue, activeRegions } from '../engine/signals.js';
+import { reviewDue, debriefDue } from '../engine/debrief.js';
 import { buildPlan, createActive, logArena } from '../engine/plan.js';
-import { playerStats, WEEK_GOAL } from '../engine/game.js';
-import { addDays, daysBetween } from '../engine/dates.js';
+import { playerStats, WEEK_GOAL, rankName } from '../engine/game.js';
+import { addDays, daysBetween, weekStart } from '../engine/dates.js';
 import { MISSIONS } from '../data/missions.js';
 import { getDef } from '../data/exercises.js';
 import { exportFile } from '../store.js';
@@ -16,15 +28,31 @@ const Q = {
   yesterdayMT: ['Gestern Muay Thai?', [['none', 'Nein'], ['light', 'Locker-Technik'], ['hard', 'Hartes Sparring']]],
   feeling: ['Wie fühlst du dich?', [['frisch', 'Frisch'], ['normal', 'Normal'], ['platt', 'Platt']]],
   tonightMT: ['Heute Abend Muay Thai?', [['yes', 'Ja'], ['no', 'Nein'], ['maybe', 'Vielleicht']]],
-  where: ['Wo und wie viel Zeit?', [['room', 'Eigener Raum · 45 min'], ['gym', 'Home Gym · 60 min'], ['express', 'Nur 15 Minuten'], ['mobility', 'Nur Mobility']]],
+  where: ['Wo und wie viel Zeit?', [['room', 'Eigener Raum · 45 min'], ['gym', 'Home Gym · 60 min'], ['kompakt', 'Nur 30 Minuten'], ['express', 'Nur 15 Minuten'], ['mobility', 'Nur Mobility']]],
 };
+
+// Kleiner Status unter der Mission: Rang, Kampfkraft, Boss-Lebensbalken, Arc-Woche (x/6), Wochenziel.
+export function statusStrip(c) {
+  const s = playerStats(c.data, c.today());
+  const arc = c.data.engine.arc;
+  const b = bossStatus(c.data);
+  const dots = Array.from({ length: s.week.goal || WEEK_GOAL }, (_, i) => `<i class="${i < s.week.thisWeek ? 'on' : ''}"></i>`).join('');
+  const asc = highestAscension(c.data);
+  return `<section class="strip" data-act="go" data-to="profil">
+    <div class="strip-rank${asc ? ' aura' : ''}" style="${asc ? `--aura:${asc.aura}` : ''}">${rankEmblem(s.rank.index, { size: 40 })}</div>
+    <div class="strip-main">
+      <div class="strip-top"><b>${esc(rankName(s.rank))}</b><span class="num" data-kk="${s.kk}">${s.kk.toLocaleString('de-DE')}</span><small>Kampfkraft</small></div>
+      ${b ? `<div class="strip-boss"><span>${BOSSES[b.id].name}</span><div class="hpbar"><i style="width:${(b.hp / b.max) * 100}%"></i></div><span class="num">${b.hp.toLocaleString('de-DE')}</span></div>` : ''}
+      <div class="strip-bottom">${arc ? `<span>ARC ${arcOf(arc.n).id} · Woche ${arc.week}/6</span>` : ''}<span class="wdots">${dots}</span></div>
+    </div></section>`;
+}
 
 export function hud(c) {
   const s = playerStats(c.data, c.today());
-  const dots = Array.from({ length: WEEK_GOAL }, (_, i) => `<i class="${i < s.week.thisWeek ? 'on' : ''}"></i>`).join('');
+  const dots = Array.from({ length: s.week.goal || WEEK_GOAL }, (_, i) => `<i class="${i < s.week.thisWeek ? 'on' : ''}"></i>`).join('');
   const asc = highestAscension(c.data);
   return `<header class="hud">
-    <div class="rank-wrap${asc ? ' aura' : ''}" style="${asc ? `--aura:${asc.aura}` : ''}" title="${asc ? esc(asc.name) : 'Rang'}"><div class="rank-badge r-${s.rank.id}">${s.rank.id === 'U' ? '∞' : s.rank.id}</div></div>
+    <div class="rank-wrap${asc ? ' aura' : ''}" style="${asc ? `--aura:${asc.aura}` : ''}" title="${asc ? esc(asc.name) : 'Rang'}">${rankEmblem(s.rank.index, { size: 56 })}</div>
     <div class="hud-kk"><small>Kampfkraft</small><b class="num" data-kk="${s.kk}">${s.kk.toLocaleString('de-DE')}</b>
       <div class="xpbar"><i style="width:${Math.round(s.rank.progress * 100)}%"></i></div></div>
     <div class="hud-week"><small>Woche</small><div class="wdots">${dots}</div><b class="num">${s.week.streak}<span>W</span></b></div>
@@ -36,10 +64,20 @@ function recommendation(c) {
   const today = c.today();
   const ci = data.checkins[today];
   if (!ci) return null;
+  const holiday = data.settings.holiday ?? DEFAULT_HOLIDAY;
+  const arc = data.engine.arc;
+  const ws = weekStart(today);
+  const fourByFourDue = !!arc && weekInfo(arc).arc.id === 'III'
+    && !data.sessions.some((s) => s.missionId === 'NOR4X4' && s.day >= ws);
   const rec = decide({ checkin: ci, hardStreak: hardStreak(data.sessions, today), queue: data.engine.queue,
-    overrideRest: ci.overrideRest });
+    overrideRest: ci.overrideRest, yesterday: yesterdayClass(data.sessions, today, ci.yesterdayMT),
+    gap: gapDays(data.sessions, today, holiday), lastDone: lastDoneBySlot(data.sessions),
+    holiday: holidayActive(today, holiday), fourByFourDue });
   if (ci.choice) {
-    return { ...rec, kind: MISSIONS[ci.choice].format === 'flow' ? 'flow' : 'mission', missionId: ci.choice,
+    const id = ci.choice;
+    return { ...rec, kind: MISSIONS[id].format === 'flow' ? 'flow' : 'mission', missionId: id,
+      slot: id === 'FORGE' ? data.engine.queue[0] : id === 'NOR4X4' ? 'D' : null, rotate: null,
+      profile: id === 'FORGE' ? 'gym' : rec.profile, compact: !!rec.compact && ['A', 'B', 'C'].includes(id),
       reason: 'Von dir gewählt.', manual: true };
   }
   return rec;
@@ -49,7 +87,7 @@ function planPreview(plan) {
   if (plan.format === 'sets') {
     return `<ol class="ex-list">${plan.items.map((it) => {
       const def = getDef(it.exId);
-      return `<li><span>${esc(def.name)}${it.optional ? ' <em>optional</em>' : ''}</span><span class="muted">${def.mode === 'fixed' ? `${it.sets > 1 ? `${it.sets} × ` : ''}${targetText(def)}` : `${it.sets} × ${targetText(def, it.target)}`}${loadText(def, it.load) && def.load ? ` · ${loadText(def, it.load)}` : ''} ${trendBadge(it.trend)}</span></li>`;
+      return `<li><span>${esc(def.name)}${it.optional ? ' <em>optional</em>' : ''}${it.adjust ? ' <em class="warn-tag">angepasst</em>' : ''}</span><span class="muted">${def.mode === 'fixed' ? `${it.sets > 1 ? `${it.sets} × ` : ''}${targetText(def)}` : `${it.sets} × ${targetText(def, it.target)}`}${loadText(def, it.load) && def.load ? ` · ${loadText(def, it.load)}` : ''} ${trendBadge(it.trend)}</span></li>`;
     }).join('')}</ol>`;
   }
   if (plan.format === 'intervals') return `<p class="muted">${plan.rounds} × ${plan.work / 60} min ${esc(nameOf(plan.exId))}, ${plan.rest / 60} min Pause.</p>`;
@@ -67,9 +105,22 @@ function modifierNote(plan) {
   const m = plan.modifier;
   if (!m || m.type === 'none') return '';
   if (m.type === 'deload') {
-    return `<p class="note">Deload-Phase: halbe Sätze, gleiches Gewicht, kein Versagen. Noch ${m.left} ${m.left === 1 ? 'Einheit' : 'Einheiten'}.</p>`;
+    return '<p class="note">Deload-Woche: halbe Sätze, gleiches Gewicht, 3 Wdh. im Tank. Mobility-Check diese Woche wiederholen.</p>';
   }
   return `<p class="note">Willkommen zurück. Wir steigen sauber wieder ein: ca. ${Math.round(m.pct * 100)} % weniger${m.dropSets ? ', ein Satz weniger' : ''}${m.noFailure ? ', kein Versagen' : ''}.</p>`;
+}
+
+// Körperkarte: Punkte auf einer Silhouette und dieselben Regionen als Chips (beides antippbar).
+const SPOTS = { nacken: [[60, 34]], schulter: [[41, 47], [79, 47]], handgelenk: [[25, 103], [95, 103]], ruecken: [[60, 88]],
+  huefte: [[51, 107], [69, 107]], knie: [[51, 146], [69, 146]], sprunggelenk: [[52, 184], [68, 184]] };
+export function bodyMap(selected) {
+  const spots = Object.entries(SPOTS).flatMap(([r, pts]) => pts.map(([x, y]) =>
+    `<circle class="spot${selected.includes(r) ? ' on' : ''}" cx="${x}" cy="${y}" r="7" data-act="pain-toggle" data-region="${r}"><title>${REGIONS[r]}</title></circle>`)).join('');
+  return `<div class="bodymap"><svg viewBox="0 0 120 200" aria-hidden="true">
+    <path class="body" d="M60 10c-7 0-12 6-12 13s5 13 12 13 12-6 12-13-5-13-12-13zM44 40c-9 2-14 8-15 18l-5 44c-1 4 5 6 6 1l6-36 3 30-4 86c0 5 7 5 8 1l9-74h4l9 74c1 4 8 4 8-1l-4-86 3-30 6 36c1 5 7 3 6-1l-5-44c-1-10-6-16-15-18z"/>
+    ${spots}</svg>
+    <div class="chips">${Object.entries(REGIONS).map(([r, name]) => `<button class="chip${selected.includes(r) ? ' on' : ''}" data-act="pain-toggle" data-region="${r}">${name}</button>`).join('')}</div>
+    <p class="muted small">Markierte Regionen: 7 Tage lang schlägt die App Varianten ohne Last auf dieser Stelle vor.</p></div>`;
 }
 
 function checkinForm(c) {
@@ -79,17 +130,65 @@ function checkinForm(c) {
   const ready = f.feeling && f.tonightMT && (!askWhere || f.where);
   const q = (k) => `<div class="q"><div class="q-label">${Q[k][0]}</div>${chips(k, Q[k][1], f[k])}</div>`;
   const morning = f.tonightMT === 'yes'
-    ? `<div class="q"><div class="q-label">Zusätzlich Morgeneinheit?</div>${chips('morning', [['no', 'Nein, Arena reicht'], ['yes', 'Ja, ich hab Bock']], f.morning ? 'yes' : 'no')}</div>`
+    ? `<div class="q"><div class="q-label">Zusätzlich Morgeneinheit?</div>${chips('morning', [['no', 'Nein, ARENA reicht'], ['yes', 'Ja, zusätzlich']], f.morning ? 'yes' : 'no')}</div>`
     : '';
-  return sys('Tages-Check-in', `${q('yesterdayMT')}${q('feeling')}${q('tonightMT')}${morning}${askWhere ? q('where') : ''}
+  const elbow = `<div class="q"><div class="q-label">Ellbogen zwickt?</div>${chips('elbow', [['no', 'Nein'], ['yes', 'Ja']], f.elbow || 'no')}</div>`;
+  const painOpen = f.painOpen || (f.pain || []).length > 0;
+  const pain = `<div class="q"><div class="q-label">Zwickt sonst etwas?</div>${chips('painOpen', [['no', 'Alles okay'], ['yes', 'Ja']], painOpen ? 'yes' : 'no')}
+    ${painOpen ? bodyMap(f.pain || []) : ''}</div>`;
+  return sys('Tages-Check-in', `${q('yesterdayMT')}${q('feeling')}${elbow}${pain}${q('tonightMT')}${morning}${askWhere ? q('where') : ''}
     <button class="btn primary wide" data-act="submit-ci" ${ready ? '' : 'disabled'}>Mission anfordern</button>`);
 }
 
 export function questCard(c) {
   const q = questStatus(c.data, c.today());
   const pips = Array.from({ length: q.target }, (_, i) => `<i class="${i < q.progress ? 'on' : ''}"></i>`).join('');
-  return `<section class="card quest${q.done ? ' done' : ''}"><div class="quest-head"><div><div class="label">Wochen-Quest</div><b>${esc(q.quest.title)}</b><small>${esc(q.quest.desc)}${q.done ? ' · erfüllt' : ' · +100 XP'}</small></div>
+  return `<section class="card quest${q.done ? ' done' : ''}"><div class="quest-head"><div><div class="label">Side Quest</div><b>${esc(q.quest.title)}</b><small>${esc(q.quest.desc)}${q.done ? ' · erfüllt' : ' · +100 XP'}</small></div>
     <span class="num">${q.progress}/${q.target}</span></div><div class="wdots quest-pips">${pips}</div></section>`;
+}
+
+export function arcLine(data, today, plan) {
+  const arc = data.engine.arc;
+  if (!arc) return '';
+  const info = weekInfo(arc);
+  const holiday = holidayActive(today, data.settings.holiday ?? DEFAULT_HOLIDAY);
+  const plyo = plan?.plyo ? ` · Plyo ${plan.plyo.stage} (${PLYO_NAMES[plan.plyo.stage]})` : '';
+  return `<div class="arc-line"><b>ARC ${info.arc.id} · ${esc(info.arc.name)}</b><span>Woche ${arc.week}/${ARC_WEEKS} · ${esc(info.label)} · RIR ${plan?.rir ?? info.rir}${plyo}</span>
+    ${holiday ? '<span class="muted">Feiertagsmodus: Arc pausiert, Wochenziel 2 Einsätze.</span>' : ''}</div>`;
+}
+
+function adjustNote(c, plan) {
+  const today = c.today();
+  const items = (plan.items || []).filter((i) => i.adjust);
+  c.ui.lastAdjust = items.map((i) => i.adjust);
+  const el = elbowStatus(c.data, today);
+  const regions = activeRegions(c.data.signals, today);
+  const status = `${el.count ? `Ellbogen-Zähler ${el.count}/${el.threshold}` : ''}${el.count && regions.length ? ' · ' : ''}${regions.length ? `gemeldet: ${regions.map((r) => REGIONS[r]).join(', ')}` : ''}`;
+  if (c.data.engine.signalsDeclined === today && (el.full || regions.length)) {
+    return `<div class="signal-note"><span>Körpersignale heute nicht berücksichtigt. ${esc(status)}</span><button class="btn small ghost" data-act="signals-restore">Wieder anpassen</button></div>`;
+  }
+  if (!items.length) return status ? `<p class="muted small">${esc(status)}</p>` : '';
+  return `<div class="signal-note"><b>Angepasst wegen Körpersignalen</b><ul>${items.map((i) => `<li>${esc(i.adjust)}</li>`).join('')}</ul>
+    <span class="muted small">${esc(status)}</span><button class="btn small ghost" data-act="signals-decline">Heute ohne Anpassung</button></div>`;
+}
+
+function stagnationPanel(c) {
+  const data = c.data;
+  const st = stagnationStatus(data);
+  let out = '';
+  const recent = data.engine.plateauDismissed && daysBetween(data.engine.plateauDismissed, c.today()) < 7;
+  if (st.stage2 && data.engine.arc?.week !== ARC_WEEKS && !recent) {
+    out += sys('Stagnation in mehreren Mustern', `<p>${st.stage1.length} Hauptübungen aus verschiedenen Mustern kommen nicht mehr voran. Vorschlag: Deload-Woche jetzt, danach geht es frisch weiter.</p>
+      <div class="row gap"><button class="btn primary grow" data-act="deload-yes" data-rule="plateau">Deload-Woche jetzt</button><button class="btn" data-act="deload-no" data-rule="plateau">Ablehnen</button></div>`, { tone: 'warn' });
+    return out;
+  }
+  for (const x of st.stage1.slice(0, 2)) {
+    if (!x.suggestion) continue;
+    out += sys('Stagnation', `<p>${esc(x.reason)} Vorschlag: Variante wechseln zu <b>${esc(getDef(x.suggestion).name)}</b>.</p>
+      <div class="row gap"><button class="btn primary grow" data-act="stag-accept" data-slot="${x.slotKey}" data-from="${x.exId}" data-to="${x.suggestion}">Wechseln</button>
+      <button class="btn" data-act="stag-decline" data-slot="${x.slotKey}" data-from="${x.exId}" data-to="${x.suggestion}" data-n="${x.sessions}">Ablehnen</button></div>`);
+  }
+  return out;
 }
 
 function backupDue(data, today) {
@@ -103,72 +202,113 @@ export default {
   render(c) {
     const data = c.data;
     const today = c.today();
-    let out = hud(c);
-
+    // Ganz oben: Status (Rang, Kampfkraft, Boss, Arc-Woche). Darunter Check-in bzw. Mission, dann Hinweise.
+    let out = statusStrip(c);
+    let notes = '';
     if (data.active) {
       out += sys('Mission läuft', `<p><b>${esc(data.active.plan.name)}</b> · begonnen ${data.active.day === today ? 'heute' : 'am ' + data.active.day}</p>
         <div class="row gap"><button class="btn primary grow" data-act="go" data-to="training">Fortsetzen</button><button class="btn" data-act="discard-active">Verwerfen</button></div>`, { tone: 'gold' });
     }
 
-    if (shouldSuggestDeload(data.engine, plattCount(data.checkins, today), today)) {
-      out += sys('Deload empfohlen', `<p>Dreimal „platt“ in sieben Tagen. Ein paar leichtere Einheiten bringen dich schneller zurück auf Kurs.</p>
-        <div class="row gap"><button class="btn primary grow" data-act="deload-yes">Deload starten</button><button class="btn" data-act="deload-no">Nicht jetzt</button></div>`);
+    if (introDue(data)) {
+      const a = arcOf(data.engine.arc.n);
+      notes += `<section class="card intro-card"><div><b>ARC ${a.id} · ${esc(a.name)}</b><small>Das Intro wartet. Wer der Gegner ist und was dieser Arc trainiert.</small></div><button class="btn primary" data-act="go" data-to="intro">Öffnen</button></section>`;
     }
+    if (data.engine.nemesis?.active) {
+      notes += sys('Nemesis', `<div class="boss-row">${bossImage('plateau', { cls: 'lore-small' })}<div><p class="reason">THE PLATEAU steht im Weg.</p>
+        <p class="muted small">Mehrere Muster stagnieren. Er verschwindet, sobald eine Deload-Woche abgeschlossen ist.</p></div></div>`, { tone: 'warn' });
+    }
+    if (shouldSuggestDeload(data.engine, plattCount(data.checkins, today), today)) {
+      notes += sys('Deload empfohlen', `<p>Dreimal „platt“ in sieben Tagen. Vorschlag: direkt in die Deload-Woche des Arcs springen. Danach beginnt der nächste Arc ausgeruht.</p>
+        <div class="row gap"><button class="btn primary grow" data-act="deload-yes" data-rule="platt">In die Deload-Woche</button><button class="btn" data-act="deload-no" data-rule="platt">Nicht jetzt</button></div>`);
+    }
+    notes += stagnationPanel(c);
+    if (physioNoteDue(data, today)) {
+      notes += sys('Hinweis', `<p class="reason">Wenn das anhält, lass es von einem Physio anschauen.</p>
+        <p class="muted small">Der Ellbogen-Zähler war drei Wochen in Folge voll.</p>
+        <div class="row gap"><button class="btn" data-act="physio-ok">Verstanden</button></div>`, { tone: 'calm' });
+    }
+    const rv = reviewDue(data, today);
+    if (rv) notes += `<section class="card flow-card"><div><b>Wochenrückblick</b><small>Unter 2 Minuten · 2 Taps</small></div><button class="btn primary" data-act="go" data-to="review">Öffnen</button></section>`;
+    const db = debriefDue(data, today);
+    if (db != null) notes += `<section class="card flow-card"><div><b>Arc-Debrief</b><small>3 Fragen und Export für deinen Coach</small></div><button class="btn primary" data-act="go" data-to="debrief">Öffnen</button></section>`;
 
     if (backupDue(data, today)) {
-      out += sys('Sicherung empfohlen', `<p>iOS räumt den Speicher von Web-Apps manchmal auf. Eine Sicherung dauert zehn Sekunden.</p>
+      notes += sys('Sicherung empfohlen', `<p>iOS räumt den Speicher von Web-Apps manchmal auf. Eine Sicherung dauert zehn Sekunden.</p>
         <div class="row gap"><button class="btn primary grow" data-act="backup-now">Jetzt sichern</button><button class="btn" data-act="backup-later">Später</button></div>`);
     }
 
     const rec = recommendation(c);
-    if (!rec) return out + checkinForm(c);
+    if (!rec) return out + checkinForm(c) + notes;
 
     const doneToday = data.sessions.filter((s) => s.day === today);
     const trained = doneToday.filter((s) => s.kind === 'mission' || s.kind === 'express').length;
     const ci = data.checkins[today];
     if (trained > (ci.extra || 0)) {
-      out += sys('Tagesziel erreicht', `<p class="reason">Mission erfüllt.${ci.tonightMT === 'yes' ? ' Heute Abend wartet die Arena.' : ' Der Rest des Tages gehört der Erholung.'}</p>
-        <p class="muted">Stärke entsteht in der Pause. Ein Fluss am Abend hält dich geschmeidig.</p>
+      out += sys('Tagesziel erreicht', `<p class="reason">Mission erfüllt.${ci.tonightMT === 'yes' ? ' Heute Abend wartet die ARENA.' : ' Der Rest des Tages gehört der Erholung.'}</p>
+        <p class="muted">Stärke entsteht in der Pause. Ein FLOW am Abend hält dich geschmeidig.</p>
         <div class="row gap"><button class="btn ghost" data-act="swap">Weitere Einheit</button></div>`, { tone: 'calm' });
     } else if (rec.kind === 'arenaday') {
-      out += sys('Arena-Tag', `<p class="reason">${esc(rec.reason)}</p><p class="muted">Ein kurzer Fluss am Morgen macht die Hüfte frei für die Kicks am Abend.</p>
-        <div class="row gap"><button class="btn primary grow" data-act="start" data-id="FLOW">Fluss starten</button><button class="btn" data-act="morning-yes">Doch Morgeneinheit</button></div>`, { tone: 'calm' });
+      out += sys('ARENA-Tag', `<p class="reason">${esc(rec.reason)}</p><p class="muted">Ein kurzer FLOW am Morgen macht die Hüfte frei für die Kicks am Abend.</p>
+        <div class="row gap"><button class="btn primary grow" data-act="start" data-id="FLOW">FLOW starten</button><button class="btn" data-act="morning-yes">Doch Morgeneinheit</button></div>`, { tone: 'calm' });
     } else if (rec.kind === 'rest') {
-      out += sys('Ruhetag', `<p class="reason">${esc(rec.reason)}</p><p class="muted">Erholung ist Teil des Trainings. Ein lockerer Fluss hält dich beweglich.</p>
-        <div class="row gap"><button class="btn primary grow" data-act="start" data-id="FLOW">Fluss starten</button><button class="btn" data-act="override-rest">Trotzdem trainieren</button></div>`, { tone: 'calm' });
+      out += sys('Ruhetag', `<p class="reason">${esc(rec.reason)}</p><p class="muted">Erholung ist Teil des Trainings. Ein lockerer FLOW hält dich beweglich.</p>
+        <div class="row gap"><button class="btn primary grow" data-act="start" data-id="FLOW">FLOW starten</button><button class="btn" data-act="override-rest">Trotzdem trainieren</button></div>`, { tone: 'calm' });
     } else {
-      const plan = buildPlan({ missionId: rec.missionId, profile: rec.profile, data, today });
-      const m = MISSIONS[rec.missionId];
-      out += sys('Mission verfügbar', `<div class="mission-title"><span class="mid">${rec.missionId.length === 1 ? rec.missionId : '◆'}</span><div><h2>${esc(m.name)}</h2><small>${esc(m.focus)} · ca. ${m.minutes} min${rec.profile === 'gym' && plan.kind === 'mission' ? ' · Home Gym' : ''}</small></div></div>
+      const plan = buildPlan({ missionId: rec.missionId, profile: rec.profile, data, today, compact: rec.compact,
+        slot: rec.slot, rotate: rec.rotate, plyoCap: ci.sparTomorrow === true });
+      c.ui.lastRec = { ...rec, plyoCap: ci.sparTomorrow === true };
+      const sparQ = plan.plyo && plan.plyo.wanted >= 4 && ci.sparTomorrow == null
+        ? `<div class="q"><div class="q-label">Morgen hartes Sparring geplant?</div>${chips('sparTomorrow', [['no', 'Nein'], ['yes', 'Ja']], null).replace(/data-act="pick"/g, 'data-act="spar"')}<p class="muted small">Heute steht Plyo-Stufe ${plan.plyo.wanted} an. Vor hartem Sparring bleibt es bei Stufe 3.</p></div>` : '';
+      out += sys('Mission verfügbar', `<div class="mission-title"><span class="mid">${rec.missionId.length === 1 ? rec.missionId : '◆'}</span><div><h2>${esc(plan.name)}</h2><small>${esc(plan.focus)} · ca. ${plan.minutes} min${rec.profile === 'gym' && plan.kind === 'mission' && rec.missionId !== 'FORGE' ? ' · Home Gym' : ''}</small></div></div>
+        ${plan.kind === 'mission' ? arcLine(data, today, plan) : ''}
         <p class="reason">${esc(rec.reason)}</p>${rec.walk ? '<p class="note">Danach 20–30 Minuten spazieren.</p>' : ''}${modifierNote(plan)}
-        ${planPreview(plan)}
-        <button class="btn primary wide" data-act="start" data-id="${rec.missionId}" data-profile="${rec.profile}">Mission starten</button>`);
+        ${sparQ}${adjustNote(c, plan)}${planPreview(plan)}
+        <button class="btn primary wide" data-act="start-rec">Mission starten</button>`);
     }
     if (trained <= (ci.extra || 0)) {
       out += `<div class="row gap center"><button class="btn ghost" data-act="swap">Andere Einheit</button><button class="btn ghost" data-act="redo-ci">Check-in ändern</button></div>`;
     }
+    out += notes;
 
     out += questCard(c);
     if (isDue(data.mobility, today) && !doneToday.some((s) => s.kind === 'check')) {
       const first = !latestTest(data.mobility);
-      out += `<section class="card flow-card"><div><b>Mobility-Check${first ? '' : ' fällig'}</b><small>${first ? '10 min · macht deinen Fluss persönlich' : '4 Wochen um · Fortschritt messen'}</small></div><button class="btn" data-act="go" data-to="check">Starten</button></section>`;
+      out += `<section class="card flow-card"><div><b>Mobility-Check${first ? '' : ' fällig'}</b><small>${first ? '10 min · macht deinen FLOW persönlich' : '4 Wochen um · Fortschritt messen'}</small></div><button class="btn" data-act="go" data-to="check">Starten</button></section>`;
     }
     if (rec.missionId !== 'FLOW' && !doneToday.some((s) => s.kind === 'flow')) {
-      out += `<section class="card flow-card"><div><b>Fluss</b><small>Täglich 10 min Mobility</small></div><button class="btn" data-act="start" data-id="FLOW">Starten</button></section>`;
+      out += `<section class="card flow-card"><div><b>FLOW</b><small>Täglich 10 min Mobility</small></div><button class="btn" data-act="start" data-id="FLOW">Starten</button></section>`;
     }
     if (doneToday.length) {
       out += `<section class="card"><div class="label">Heute erledigt</div>${doneToday.map((s) =>
-        `<div class="done-row">✓ ${esc(s.kind === 'arena' ? `Arena · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'}` : s.kind === 'check' ? 'Mobility-Check' : s.kind === 'quest' ? 'Wochen-Quest erfüllt' : s.kind === 'ascension' ? `Ascension: ${ASCENSIONS.find((a) => a.id === s.ascension)?.name}` : MISSIONS[s.missionId]?.name || s.missionId)} <span class="muted">+${s.xp} XP</span></div>`).join('')}</section>`;
+        `<div class="done-row">✓ ${esc(s.kind === 'arena' ? `ARENA${s.bmt ? ` · BMT W${s.bmt.week}` : ''} · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'}` : s.kind === 'check' ? 'Mobility-Check' : s.kind === 'quest' ? 'Wochen-Quest erfüllt' : s.kind === 'ascension' ? `Ascension: ${ASCENSIONS.find((a) => a.id === s.ascension)?.name}` : MISSIONS[s.missionId]?.name || s.missionId)} <span class="muted">+${s.xp} XP</span></div>`).join('')}</section>`;
     }
-    const left = DELOAD_AFTER - data.engine.fullSinceDeload;
-    out += `<p class="foot muted">Rotation: ${data.engine.queue.map((id) => MISSIONS[id].name).join(' → ')} · Deload in ${left} Missionen</p>`;
+    out += `<p class="foot muted">Rotation: ${data.engine.queue.map((id) => MISSIONS[id].name).join(' → ')}</p>`;
     return out;
   },
 
   actions: {
     pick: (c, d) => {
-      c.ui.ci = { ...c.ui.ci, [d.name]: d.name === 'morning' ? d.value === 'yes' : d.value };
+      const v = d.name === 'morning' ? d.value === 'yes' : d.name === 'painOpen' ? d.value === 'yes' : d.value;
+      c.ui.ci = { ...c.ui.ci, [d.name]: v, ...(d.name === 'painOpen' && !v ? { pain: [] } : {}) };
       c.render();
+    },
+    'pain-toggle': (c, d) => {
+      const cur = c.ui.ci?.pain || [];
+      const pain = cur.includes(d.region) ? cur.filter((r) => r !== d.region) : [...cur, d.region];
+      c.ui.ci = { ...c.ui.ci, pain, painOpen: true };
+      c.render();
+    },
+    'signals-decline': (c) => {
+      const today = c.today();
+      c.update((data) => logDecision({ ...data, engine: { ...data.engine, signalsDeclined: today } },
+        { rule: 'signals:adjust', day: today, suggestion: c.ui.lastAdjust || [], decision: 'declined' }));
+    },
+    'signals-restore': (c) => c.update((data) => ({ ...data, engine: { ...data.engine, signalsDeclined: null } })),
+    'physio-ok': (c) => {
+      const today = c.today();
+      c.update((data) => logDecision({ ...data, engine: { ...data.engine, physioNoteShown: today } },
+        { rule: 'signals:physio', day: today, suggestion: 'physio_note', decision: 'shown' }));
     },
     'submit-ci': (c) => {
       const today = c.today();
@@ -179,9 +319,47 @@ export default {
         if (f.yesterdayMT !== 'none' && arenaOn(data.sessions, y) === 'none') {
           next = logArena(data, { day: y, intensity: f.yesterdayMT, minutes: 60 }).data;
         }
-        return { ...next, checkins: { ...next.checkins, [today]: { day: today, ...f } } };
+        if (f.elbow === 'yes') next = reportElbow(next, { day: today, source: 'checkin' });
+        if ((f.pain || []).length) next = reportPain(next, { day: today, regions: f.pain });
+        const { painOpen, ...answers } = f;
+        return { ...next, checkins: { ...next.checkins, [today]: { day: today, ...answers } } };
       });
       c.ui.ci = null;
+    },
+    spar: (c, d) => {
+      const today = c.today();
+      c.update((data) => ({ ...data, checkins: { ...data.checkins, [today]: { ...data.checkins[today], sparTomorrow: d.value === 'yes' } } }));
+    },
+    'start-rec': (c) => {
+      if (c.data.active) {
+        c.go('training');
+        return;
+      }
+      const r = c.ui.lastRec;
+      const today = c.today();
+      const plan = buildPlan({ missionId: r.missionId, profile: r.profile, data: c.data, today, compact: r.compact,
+        slot: r.slot, rotate: r.rotate, plyoCap: r.plyoCap });
+      const adjusted = plan.items?.filter((i) => i.adjust).map((i) => i.adjust) || [];
+      c.update((data) => {
+        let d = logDecision(data, { rule: `decide:${r.rule ?? 'manual'}`, day: today,
+          input: c.data.checkins[today], suggestion: r.missionId, decision: r.manual ? 'override' : 'accepted' });
+        if (adjusted.length) d = logDecision(d, { rule: 'signals:adjust', day: today, suggestion: adjusted, decision: 'accepted' });
+        return { ...d, active: createActive(plan, today) };
+      });
+      c.go('training');
+    },
+    'stag-accept': (c, d) => {
+      const today = c.today();
+      c.update((data) => logDecision({ ...data, engine: { ...data.engine,
+        slotVariant: { ...data.engine.slotVariant, [d.slot]: d.to } } },
+      { rule: 'stagnation:1', day: today, input: { slot: d.slot, exId: d.from }, suggestion: d.to, decision: 'accepted' }));
+      c.system('Variante gewechselt', `<p>${esc(getDef(d.to).name)} übernimmt ab der nächsten Einheit. Die Gewichte startet das System konservativ.</p>`);
+    },
+    'stag-decline': (c, d) => {
+      const today = c.today();
+      c.update((data) => logDecision({ ...data, engine: { ...data.engine,
+        stagnationDismissed: { ...data.engine.stagnationDismissed, [d.slot]: Number(d.n) } } },
+      { rule: 'stagnation:1', day: today, input: { slot: d.slot, exId: d.from }, suggestion: d.to, decision: 'declined' }));
     },
     'morning-yes': (c) => {
       const today = c.today();
@@ -205,7 +383,7 @@ export default {
     },
     swap: (c) => {
       const q = c.data.engine.queue;
-      const ids = [...q, 'D_LIGHT', 'EXPRESS', 'EXPRESS_BAG', 'FLOW'];
+      const ids = [...q, 'FORGE', 'NOR4X4', 'D_LIGHT', 'EXPRESS', 'EXPRESS_BAG', 'FLOW'];
       c.modal(sys('Andere Einheit', `<div class="swap-list">${ids.map((id) =>
         `<button class="swap" data-act="choose" data-id="${id}"><b>${esc(MISSIONS[id].name)}</b><small>${esc(MISSIONS[id].focus)}${id === q[0] ? ' · als Nächstes dran' : ''}</small></button>`).join('')}</div>
         <button class="btn ghost wide" data-act="close-modal">Abbrechen</button>`, { cls: 'pop' }));
@@ -214,7 +392,8 @@ export default {
       const today = c.today();
       c.modal(null);
       const extra = c.data.sessions.filter((s) => s.day === today && (s.kind === 'mission' || s.kind === 'express')).length;
-      c.update((data) => ({ ...data, checkins: { ...data.checkins, [today]: { ...data.checkins[today], choice: d.id, overrideRest: true, extra } } }));
+      c.update((data) => logDecision({ ...data, checkins: { ...data.checkins, [today]: { ...data.checkins[today], choice: d.id, overrideRest: true, extra } } },
+        { rule: 'swap', day: today, suggestion: c.ui.lastRec?.missionId, decision: 'override', input: { chosen: d.id } }));
     },
     'override-rest': (c) => {
       c.system('Warnung', '<p>Drei harte Tage am Stück. Die Anpassung passiert in der Pause, nicht im Training. Trotzdem trainieren?</p>',
@@ -223,7 +402,8 @@ export default {
     'override-yes': (c) => {
       const today = c.today();
       c.modal(null);
-      c.update((data) => ({ ...data, checkins: { ...data.checkins, [today]: { ...data.checkins[today], overrideRest: true } } }));
+      c.update((data) => logDecision({ ...data, checkins: { ...data.checkins, [today]: { ...data.checkins[today], overrideRest: true } } },
+        { rule: 'decide:2', day: today, suggestion: 'rest', decision: 'override' }));
     },
     start: (c, d) => {
       if (c.data.active) {
@@ -245,11 +425,14 @@ export default {
       c.modal(null);
       c.update((data) => ({ ...data, active: null }));
     },
-    'deload-yes': (c) => {
-      c.update((data) => ({ ...data, engine: startDeload(data.engine) }));
-      c.system('Deload aktiviert', '<p>Die nächsten 4 Missionen: halbe Sätze, gleiches Gewicht, kein Versagen.</p>');
+    'deload-yes': (c, d) => {
+      c.update((data) => logDecision({ ...data, engine: startDeload(data.engine) },
+        { rule: `deload:${d.rule || 'manual'}`, day: c.today(), suggestion: 'deload_week', decision: 'accepted' }));
+      c.system('Deload-Woche', '<p>Diese Arc-Woche wird zur Deload-Woche: halbe Sätze, gleiches Gewicht, 3 Wdh. im Tank. Wiederhole den Mobility-Check.</p>');
     },
-    'deload-no': (c) => c.update((data) => ({ ...data, engine: { ...data.engine, deloadSuggestDismissed: c.today() } })),
+    'deload-no': (c, d) => c.update((data) => logDecision({ ...data, engine: { ...data.engine,
+      deloadSuggestDismissed: c.today(), ...(d.rule === 'plateau' ? { plateauDismissed: c.today() } : {}) } },
+    { rule: `deload:${d.rule || 'manual'}`, day: c.today(), suggestion: 'deload_week', decision: 'declined' })),
     'backup-now': async (c) => {
       if (await exportFile(c.data, c.today())) {
         c.update((data) => ({ ...data, settings: { ...data.settings, lastBackupAt: new Date().toISOString() } }));

@@ -1,8 +1,14 @@
 // Profil: Rang, Verlauf, Bestleistungen, Einstellungen, Daten.
 import { esc, sys, stepper, loadText, kg } from './kit.js';
 import { hud } from './today.js';
-import { playerStats, RANKS } from '../engine/game.js';
-import { startDeload, DELOAD_AFTER } from '../engine/cycle.js';
+import { playerStats, RANKS, rankName } from '../engine/game.js';
+import { rankEmblem } from './emblem.js';
+import { titleStatus, equippedTitle } from '../engine/story.js';
+import { QUOTES } from '../data/story.js';
+import { startDeload } from '../engine/cycle.js';
+import { weekInfo, holidayActive, DEFAULT_HOLIDAY } from '../engine/arc.js';
+import { ARCS, ARC_WEEKS, WEEK_PLAN } from '../data/arcs.js';
+import { logDecision } from '../engine/rulelog.js';
 import { formatDay } from '../engine/dates.js';
 import { MISSIONS } from '../data/missions.js';
 import { getDef } from '../data/exercises.js';
@@ -12,12 +18,51 @@ import { defaultData } from '../state.js';
 import { scoreChart, historyList } from './check.js';
 import { latestTest } from '../engine/mobility.js';
 import { weekView, attributeRanks, ascensionGrid, RANK_LORE } from './week.js';
-import { ASCENSIONS } from '../engine/progress.js';
+import { ASCENSIONS, highestAscension } from '../engine/progress.js';
+import { guardianImage } from './lore.js';
+import { guardianTier, GUARDIANS } from '../data/lore.js';
+
+function holidayDate(h, key) {
+  const md = (h ?? DEFAULT_HOLIDAY)[key];
+  const y = new Date().getFullYear() + (key === 'to' && md < (h ?? DEFAULT_HOLIDAY).from ? 1 : 0);
+  return `${y}-${md}`;
+}
+
+function arcPanel(data, today) {
+  const arc = data.engine.arc;
+  if (!arc) return '';
+  const info = weekInfo(arc);
+  const steps = Array.from({ length: ARC_WEEKS }, (_, i) => `<i class="${i + 1 < arc.week ? 'on' : i + 1 === arc.week ? 'cur' : ''}"></i>`).join('');
+  const holiday = holidayActive(today, data.settings.holiday ?? DEFAULT_HOLIDAY);
+  return sys(`ARC ${info.arc.id} · ${info.arc.name}`, `<p class="muted">${esc(info.arc.focus)}. ${esc(info.arc.desc)}</p>
+    <div class="arc-steps">${steps}</div>
+    <dl class="facts">
+      <div><dt>Arc-Woche</dt><dd>${arc.week}/${ARC_WEEKS} · ${esc(WEEK_PLAN[arc.week].label)}</dd></div>
+      <div><dt>RIR-Ziel</dt><dd>${WEEK_PLAN[arc.week].rir}${WEEK_PLAN[arc.week].failLast ? ', letzter Satz darf ans Versagen' : ''}</dd></div>
+      <div><dt>Zyklus</dt><dd>${ARCS.map((a, i) => (i === arc.n % 4 ? `<b>${a.id}</b>` : a.id)).join(' → ')}</dd></div>
+    </dl>
+    <p class="muted small">Eine Woche zählt, sobald darin 2 volle Missionen stattfinden (Kompakt zählt, SHADOWSTEP nicht). Sonst wird sie wiederholt.${holiday ? ' Feiertagsmodus aktiv: Der Arc pausiert.' : ''}</p>
+    ${arc.week === ARC_WEEKS ? '' : '<button class="btn wide" data-act="p-deload">Ich brauche einen Deload</button>'}`);
+}
+
+function quoteSettings(s) {
+  const hidden = new Set(s.quotesHidden || []);
+  const all = [...QUOTES, ...(s.ownQuotes || [])];
+  return `<section class="card"><div class="label">Zitate</div>
+    <p class="muted small">Erscheinen im Arc-Intro, im Debrief und nach jeder dritten Mission. Antippen blendet aus.</p>
+    <div class="quote-list">${all.map((q) => `<div class="quote-row${hidden.has(q.id) ? ' off' : ''}">
+      <button class="quote-btn" data-act="q-hide" data-id="${q.id}"><span>„${esc(q.text)}“</span><small>${esc(q.person)} · ${esc(q.source)}</small></button>
+      ${q.own ? `<button class="x" data-act="q-del" data-id="${q.id}" aria-label="Löschen">×</button>` : ''}</div>`).join('')}</div>
+    <div class="label">Eigenes Zitat</div>
+    <input class="search" data-input="qText" placeholder="Text" autocomplete="off">
+    <input class="search" data-input="qPerson" placeholder="Person (optional)" autocomplete="off" style="margin-top:8px">
+    <button class="btn wide" data-act="q-add" style="margin-top:8px">Hinzufügen</button></section>`;
+}
 
 const setSettings = (c, patch) => c.update((data) => ({ ...data, settings: { ...data.settings, ...patch } }));
 
 function sessionLabel(s) {
-  if (s.kind === 'arena') return `Arena · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'} · ${s.minutes} min`;
+  if (s.kind === 'arena') return `ARENA${s.bmt ? ` · BMT W${s.bmt.week}` : ''} · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'} · ${s.minutes} min`;
   if (s.kind === 'check') return 'Mobility-Check';
   if (s.kind === 'quest') return 'Wochen-Quest erfüllt';
   if (s.kind === 'ascension') return `Ascension: ${ASCENSIONS.find((a) => a.id === s.ascension)?.name || ''}`;
@@ -37,25 +82,30 @@ export default {
 
     if (tab === 'status') {
       const next = st.rank.next;
-      out += sys(`Rang ${st.rank.name || st.rank.id}`, `
-        <div class="rank-row">${RANKS.map((r, i) => `<span class="${i <= st.rank.index ? 'on' : ''}">${r.id === 'U' ? '∞' : r.id}</span>`).join('')}</div>
+      const tier = guardianTier(st.rank.id);
+      const asc = highestAscension(data);
+      const title = equippedTitle(data);
+      out += guardianImage(tier, { aura: asc?.aura, caption: `Der Wächter${title ? ` · ${esc(title)}` : ''}${asc ? `<br><span class="cap-sub">${esc(asc.name)}</span>` : ''}` });
+      out += sys(`Rang · ${rankName(st.rank)}`, `
+        <div class="rank-row emblems">${RANKS.map((r, i) => `<span class="${i <= st.rank.index ? 'on' : ''}${i === st.rank.index ? ' cur' : ''}" title="${rankName(r)}">${rankEmblem(i, { size: i === st.rank.index ? 40 : 30 })}</span>`).join('')}</div>
         <div class="xpbar big"><i style="width:${Math.round(st.rank.progress * 100)}%"></i></div>
         <p class="lore">${RANK_LORE[st.rank.id]}</p>
-        <p class="muted">${st.xp.toLocaleString('de-DE')} XP${next ? ` · noch ${(next.xp - st.xp).toLocaleString('de-DE')} bis ${next.name || `Rang ${next.id}`}` : ''}</p>
+        <p class="muted">${st.xp.toLocaleString('de-DE')} XP${next ? ` · noch ${(next.xp - st.xp).toLocaleString('de-DE')} bis ${rankName(next)}` : ''}</p>
         <dl class="facts">
           <div><dt>Kampfkraft</dt><dd class="num">${st.kk.toLocaleString('de-DE')}</dd></div>
           <div><dt>Wochen-Streak</dt><dd class="num">${st.week.streak} (Rekord ${st.week.best})</dd></div>
           <div><dt>Diese Woche</dt><dd>${st.week.thisWeek} von 3 Einsätzen</dd></div>
           <div><dt>Schild</dt><dd>${st.week.shieldUsedThisMonth ? 'diesen Monat verbraucht' : 'bereit'}</dd></div>
         </dl>`);
+      out += sys('Titel', `<div class="titles">${titleStatus(data).map((t) => `<button class="title-chip${t.unlocked ? ' on' : ''}${data.settings.title === t.id ? ' eq' : ''}" ${t.unlocked ? `data-act="p-title" data-id="${t.id}"` : 'disabled'}>
+          <b>${esc(t.name)}</b><small>${esc(t.desc)}${data.settings.title === t.id ? ' · ausgerüstet' : ''}</small></button>`).join('')}</div>`);
       out += sys('Attribut-Ränge', attributeRanks(data));
       out += sys('Ascensions', ascensionGrid(data, c.today()));
       const e = data.engine;
-      out += sys('Belastungssteuerung', `<p>${e.deloadRemaining > 0 ? `Deload aktiv: noch ${e.deloadRemaining} Einheiten.` : `Nächster Deload in ${DELOAD_AFTER - e.fullSinceDeload} vollen Missionen.`}</p>
-        ${e.deloadRemaining > 0 ? '' : '<button class="btn wide" data-act="p-deload">Ich brauche einen Deload</button>'}`);
+      out += arcPanel(data, c.today());
       const recs = Object.entries(data.records).filter(([id]) => getDef(id) || id === 'EXPRESS');
       out += `<section class="card"><div class="label">Bestleistungen</div>${recs.length ? recs.map(([id, r]) => {
-        if (id === 'EXPRESS') return `<div class="done-row"><span>Kurzeinsatz</span><b>${r.value} Runden</b></div>`;
+        if (id === 'EXPRESS') return `<div class="done-row"><span>SHADOWSTEP</span><b>${r.value} Runden</b></div>`;
         const def = getDef(id);
         return `<div class="done-row"><span>${esc(def.name)}</span><b>${r.value}${def.mode === 'time' ? ' s' : ''}${r.load ? ` · ${esc(loadText(def, r.load))}` : ''}</b></div>`;
       }).join('') : '<p class="muted">Noch keine. Die erste Mission setzt die Messlatte.</p>'}</section>`;
@@ -67,7 +117,7 @@ export default {
     if (tab === 'mobility') {
       const tests = data.mobility || [];
       if (!latestTest(tests)) {
-        return out + sys('Noch kein Mobility-Check', '<p>8 Tests, 10 Minuten. Danach kennst du deine Scores pro Region und dein Fluss wird persönlich.</p><button class="btn primary wide" data-act="go" data-to="check">Check starten</button>');
+        return out + sys('Noch kein Mobility-Check', '<p>8 Tests, 10 Minuten. Danach kennst du deine Scores pro Region und dein FLOW wird persönlich.</p><button class="btn primary wide" data-act="go" data-to="check">Check starten</button>');
       }
       return out + sys('Mobility pro Region', scoreChart(tests))
         + `<section class="card"><div class="label">Alle Checks</div>${historyList(tests)}</section>
@@ -90,8 +140,18 @@ export default {
       <section class="card"><div class="label">Körpergewicht</div>${stepper('p-bw', kg(s.bodyweight), 'kg')}
         <div class="label">Pausenzeit zwischen Sätzen</div>
         <div class="chips">${[60, 75, 90, 120].map((v) => `<button class="chip${s.restSec === v ? ' on' : ''}" data-act="p-rest" data-v="${v}">${v} s</button>`).join('')}</div>
-        <div class="label">Ton bei Timer-Ende</div>
-        <div class="chips"><button class="chip${s.sound !== false ? ' on' : ''}" data-act="p-sound" data-v="1">An</button><button class="chip${s.sound === false ? ' on' : ''}" data-act="p-sound" data-v="0">Aus</button></div></section>
+        <div class="label">Ellbogen-Zähler: voll ab</div>
+        ${stepper('p-elbow', `${s.elbowThreshold || 3}`, 'Meldungen in 7 Tagen')}
+        <div class="label">Feiertagsmodus</div>
+        <div class="chips"><button class="chip${(s.holiday ?? DEFAULT_HOLIDAY).enabled ? ' on' : ''}" data-act="p-holiday" data-v="1">An</button><button class="chip${(s.holiday ?? DEFAULT_HOLIDAY).enabled ? '' : ' on'}" data-act="p-holiday" data-v="0">Aus</button></div>
+        <div class="row gap holiday-dates"><label>von <input type="date" data-change="holiday-from" value="${holidayDate(s.holiday, 'from')}"></label><label>bis <input type="date" data-change="holiday-to" value="${holidayDate(s.holiday, 'to')}"></label></div>
+        <p class="muted small">Jedes Jahr wiederkehrend. Im Zeitraum pausiert der Arc, das Wochenziel sinkt auf 2 Einsätze, SHADOWSTEP, Kompakt und FLOW zählen voll.</p>
+        <div class="label">Ton beim Pausenende</div>
+        <div class="chips"><button class="chip${s.sound !== false ? ' on' : ''}" data-act="p-sound" data-v="1">An</button><button class="chip${s.sound === false ? ' on' : ''}" data-act="p-sound" data-v="0">Aus</button></div>
+        <div class="label">Vibration</div>
+        <div class="chips"><button class="chip${s.vibration !== false ? ' on' : ''}" data-act="p-vib" data-v="1">An</button><button class="chip${s.vibration === false ? ' on' : ''}" data-act="p-vib" data-v="0">Aus</button></div>
+        <p class="muted small">Bei erledigtem Satz, Pausenende und Rang-Aufstieg. Auf dem iPhone geht Vibration nur beim Antippen (Satz erledigt, Aufstieg), nicht zeitgesteuert beim Pausenende. Dort hilft der Ton.</p></section>
+      ${quoteSettings(s)}
       <section class="card"><div class="label">Daten</div>
         <p class="muted small">Letzte Sicherung: ${s.lastBackupAt ? formatDay(s.lastBackupAt.slice(0, 10)) : 'noch nie'}</p>
         <div class="row gap"><button class="btn primary grow" data-act="p-export">Exportieren</button>
@@ -102,9 +162,16 @@ export default {
   actions: {
     ptab: (c, d) => c.setUi({ ptab: d.v }),
     'wk-tip': (c, d, el) => el.classList.toggle('open'),
-    'p-deload': (c) => {
-      c.update((data) => ({ ...data, engine: startDeload(data.engine) }));
-      c.system('Deload aktiviert', '<p>Die nächsten 4 Missionen: halbe Sätze, gleiches Gewicht, kein Versagen.</p>');
+    'p-deload': (c) => c.system('Deload-Woche jetzt?', '<p>Die laufende Arc-Woche wird zur Deload-Woche: halbe Sätze, gleiches Gewicht, 3 Wdh. im Tank. Danach beginnt der nächste Arc.</p>',
+      [['p-deload-yes', 'Deload-Woche starten', 'primary'], ['close-modal', 'Abbrechen']]),
+    'p-deload-yes': (c) => {
+      c.modal(null);
+      c.update((data) => logDecision({ ...data, engine: startDeload(data.engine) },
+        { rule: 'deload:manual', day: c.today(), suggestion: 'deload_week', decision: 'accepted' }));
+    },
+    'p-holiday': (c, d) => {
+      const h = c.data.settings.holiday ?? DEFAULT_HOLIDAY;
+      setSettings(c, { holiday: { ...h, enabled: d.v === '1' } });
     },
     'toggle-eq': (c, d) => {
       const eq = c.data.settings.equipment;
@@ -115,6 +182,23 @@ export default {
       if (w.length) setSettings(c, { kbWeights: w });
     },
     'p-bw': (c, d) => setSettings(c, { bodyweight: Math.max(40, Math.min(160, c.data.settings.bodyweight + Number(d.dir))) }),
+    'p-elbow': (c, d) => setSettings(c, { elbowThreshold: Math.max(1, Math.min(10, (c.data.settings.elbowThreshold || 3) + Number(d.dir))) }),
+    'p-vib': (c, d) => setSettings(c, { vibration: d.v === '1' }),
+    'p-title': (c, d) => setSettings(c, { title: c.data.settings.title === d.id ? null : d.id }),
+    'q-hide': (c, d) => {
+      const h = new Set(c.data.settings.quotesHidden || []);
+      if (h.has(d.id)) h.delete(d.id); else h.add(d.id);
+      setSettings(c, { quotesHidden: [...h] });
+    },
+    'q-add': (c) => {
+      const text = (c.ui.qText || '').trim();
+      if (!text) return;
+      const q = { id: `own-${Date.now()}`, text, person: (c.ui.qPerson || '').trim() || 'Eigenes Zitat', source: 'eigene Sammlung', own: true };
+      c.ui.qText = '';
+      c.ui.qPerson = '';
+      setSettings(c, { ownQuotes: [...(c.data.settings.ownQuotes || []), q] });
+    },
+    'q-del': (c, d) => setSettings(c, { ownQuotes: (c.data.settings.ownQuotes || []).filter((q) => q.id !== d.id) }),
     'p-rest': (c, d) => setSettings(c, { restSec: Number(d.v) }),
     'p-sound': (c, d) => setSettings(c, { sound: d.v === '1' }),
     'p-export': async (c) => {
@@ -135,7 +219,16 @@ export default {
       c.system('Import abgeschlossen', `<p>${data.sessions.length} Einträge wiederhergestellt.</p>`);
     },
   },
+  onInput(c, name, value) {
+    if (name === 'qText' || name === 'qPerson') c.ui[name] = value;
+  },
   async onChange(c, name, el) {
+    if (name === 'holiday-from' || name === 'holiday-to') {
+      if (!el.value) return;
+      const h = c.data.settings.holiday ?? DEFAULT_HOLIDAY;
+      setSettings(c, { holiday: { ...h, [name === 'holiday-from' ? 'from' : 'to']: el.value.slice(5) } });
+      return;
+    }
     if (name !== 'import' || !el.files?.[0]) return;
     try {
       const data = await readImportFile(el.files[0]);

@@ -45,8 +45,7 @@ export async function requestPersist() {
 }
 
 // true = gesichert, false = abgebrochen
-export async function exportFile(data, day) {
-  const name = `umbra-backup-${day}.json`;
+export async function exportFile(data, day, name = `umbra-backup-${day}.json`) {
   const json = JSON.stringify(data, null, 2);
   const file = new File([json], name, { type: 'application/json' });
   if (navigator.canShare?.({ files: [file] })) {
