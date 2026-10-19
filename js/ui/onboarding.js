@@ -3,6 +3,7 @@ import { sys, stepper, esc } from './kit.js';
 import { EQUIPMENT } from '../data/exercises.js';
 
 export const ROOM_EQUIPMENT = ['bag', 'bar', 'dipbars', 'box', 'kb', 'rope', 'harness', 'belt', 'band', 'rings', 'sandbag', 'abwheel'];
+export const TRAVEL_EQUIPMENT = ['dumbbells', 'treadmill', 'band', 'chair'];
 export const GYM_EQUIPMENT = ['barbell', 'rack', 'dumbbells', 'cable', 'rower', 'bar', 'dipbars', 'bench', 'kb', 'band'];
 export const KB_OPTIONS = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 32, 36, 40, 44, 48];
 const START_KEYS = [['pullups', 'Max. Klimmzüge'], ['dips', 'Max. Dips'], ['pushups', 'Max. Liegestütze']];

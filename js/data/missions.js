@@ -88,10 +88,26 @@ export const MISSIONS = {
       { ex: 'rower_4x4', sets: 1, arcOnly: 'III' },
     ],
   },
+  // Unterwegs: Zirkel ohne Geräte nach dem Muster von INFILTRATION. Belegt wie FORGE den nächsten Rotationsplatz.
+  HOTEL: {
+    id: 'HOTEL', name: 'HOTEL', focus: 'Zirkel ohne Geräte · 20–30 min', minutes: 25, format: 'circuit',
+    rounds: [3, 4], restBetween: 90,
+    items: [
+      { ex: 'broad_jump', value: 5 },
+      { ex: 'bear_crawl', value: 3 },
+      { ex: 'split_squat', value: 10 },
+      { ex: 'pushup_deficit', value: 12 },
+      { ex: 'squat_walk', value: 30 },
+      { ex: 'towel_row', value: 10 },
+      { ex: 'shadow_kicks', value: 60 },
+      { ex: 'hollow_body', value: 30 },
+    ],
+  },
   // Arc III: ersetzt einmal pro Woche die Infiltration.
   NOR4X4: {
-    id: 'NOR4X4', name: 'NORWEGIAN 4x4', focus: '4 × 4 min hart, 3 min locker', minutes: 35,
-    format: 'intervals', rounds: 4, work: 240, rest: 180, ex: 'norwegian_4x4', gymEx: 'rower_4x4',
+    id: 'NOR4X4', name: 'NORWEGIAN 4x4', focus: '3 min warm · 4 × 4 min hart, 3 min aktiv · 3 min aus', minutes: 31,
+    format: 'intervals', rounds: 4, work: 240, rest: 180, warmup: 180, cooldown: 180, ex: 'norwegian_4x4', gymEx: 'rower_4x4',
+    rpeLog: true,
   },
   EXPRESS: {
     id: 'EXPRESS', name: 'SHADOWSTEP', focus: '15 Minuten · so viele Runden wie möglich', minutes: 15,
@@ -124,4 +140,22 @@ export const MISSION_KIND = (id) =>
   id === 'FLOW' ? 'flow' : id === 'EXPRESS' || id === 'EXPRESS_BAG' ? 'express' : 'mission';
 
 // Missionen, die als volle Mission zählen (Rotation, Arc-Woche, Pausen). FORGE und 4x4 belegen einen Rotationsplatz.
-export const FULL_MISSIONS = ['A', 'B', 'C', 'D', 'FORGE', 'NOR4X4'];
+export const FULL_MISSIONS = ['A', 'B', 'C', 'D', 'FORGE', 'NOR4X4', 'HOTEL'];
+
+// Unterwegs: bevorzugter Ersatz mit gleichem Bewegungsmuster (vor den allgemeinen Alternativen).
+export const TRAVEL_SWAP = {
+  pullup: ['towel_row', 'bw_row_table'],
+  pullup_tactical: ['towel_row', 'bw_row_table'],
+  pullup_neutral: ['towel_row', 'bw_row_table'],
+  chinup: ['towel_row', 'bw_row_table'],
+  weighted_pullup: ['towel_row', 'bw_row_table'],
+  bw_row: ['towel_row', 'bw_row_table'],
+  dip: ['chair_dip', 'pushup_deficit'],
+  bulgarian_split_squat: ['bw_bulgarian', 'split_squat'],
+  kb_swing: ['broad_jump', 'sl_hip_thrust'],
+  atlas_swing: ['broad_jump', 'sl_hip_thrust'],
+  box_stepup: ['bw_bulgarian', 'split_squat'],
+  bag_kicks_knees: ['shadow_kicks'],
+  bag_rounds: ['shadow_boxing'],
+  jump_rope: ['shadow_boxing'],
+};

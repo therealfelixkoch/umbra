@@ -7,6 +7,8 @@ import { ringBell, clack, keepAwake } from './sound.js';
 import { footworkView, footworkActions, isRunning as footworkRunning } from './footwork.js';
 import { bmtView, bmtActions, bmtInput } from './bmt.js';
 import { BMT_NAME } from '../engine/bmt.js';
+import { ARENA_CONTENT } from '../engine/arenastats.js';
+import { arenaStatusView, arenaStatusActions, arenaStatusInput } from './arenastatus.js';
 
 const RPE_LABEL = { 1: 'sehr locker', 3: 'locker', 5: 'mittel', 7: 'hart', 9: 'sehr hart', 10: 'maximal' };
 const hours = (min) => `${(min / 60).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} h`;
@@ -106,10 +108,11 @@ const screen = {
   render(c) {
     ctxRef = c;
     const tab = c.ui.atab || (timer ? 'timer' : 'log');
-    const seg = `<div class="seg"><button class="${tab === 'log' ? 'on' : ''}" data-act="atab" data-v="log">Eintragen</button><button class="${tab === 'bmt' ? 'on' : ''}" data-act="atab" data-v="bmt">BMT</button><button class="${tab === 'timer' ? 'on' : ''}" data-act="atab" data-v="timer">Timer${timer && timer.st.phase !== 'done' ? ' ●' : ''}</button><button class="${tab === 'footwork' ? 'on' : ''}" data-act="atab" data-v="footwork">Footwork${footworkRunning() ? ' ●' : ''}</button></div>`;
+    const seg = `<div class="seg"><button class="${tab === 'log' ? 'on' : ''}" data-act="atab" data-v="log">Eintragen</button><button class="${tab === 'bmt' ? 'on' : ''}" data-act="atab" data-v="bmt">BMT</button><button class="${tab === 'timer' ? 'on' : ''}" data-act="atab" data-v="timer">Timer${timer && timer.st.phase !== 'done' ? ' ●' : ''}</button><button class="${tab === 'footwork' ? 'on' : ''}" data-act="atab" data-v="footwork">Footwork${footworkRunning() ? ' ●' : ''}</button><button class="${tab === 'status' ? 'on' : ''}" data-act="atab" data-v="status">Status</button></div>`;
     if (tab === 'timer') return `<h1 class="h">ARENA</h1>${seg}${timer ? timerView() : setupView(c)}`;
     if (tab === 'footwork') return `<h1 class="h">ARENA</h1>${seg}${footworkView(c)}`;
     if (tab === 'bmt') return `<h1 class="h">ARENA</h1>${seg}${bmtView(c)}`;
+    if (tab === 'status') return `<h1 class="h">ARENA</h1>${seg}${arenaStatusView(c)}`;
 
     const f = c.ui.arena || (c.ui.arena = { minutes: 60, when: 'today' });
     const recent = c.data.sessions.filter((s) => s.kind === 'arena').slice(-8).reverse();
@@ -122,6 +125,10 @@ const screen = {
         <p class="muted small">${f.rpe ? `${f.rpe} · ${RPE_LABEL[f.rpe] || RPE_LABEL[f.rpe - 1]}${f.rpe >= HARD_RPE ? ' · zählt als harte Einheit' : ''}` : `1 = locker Technik … 10 = Vollgas. Ab ${HARD_RPE} plant die App wie nach Sparring.`}</p>
         <div class="label">Dauer gesamt</div>
         <div class="field"><span class="muted">Zeit der Einheit</span>${stepper('a-dur', hours(f.minutes), '')}</div>
+        <div class="label">Inhalte <small class="muted">optional</small></div>
+        <div class="chips">${ARENA_CONTENT.map((k) => `<button class="chip${(f.content || []).includes(k) ? ' on' : ''}" data-act="a-content" data-v="${k}">${k}</button>`).join('')}</div>
+        ${(f.content || []).includes('Sparring') ? `<div class="field"><span class="muted">Sparringsrunden</span>${stepper('a-spar', `${f.sparRounds || 0}`, '')}</div>` : ''}
+        <input class="search" data-input="a-focus" placeholder="Fokus oder Notiz (optional)" value="${esc(f.focus || '')}" autocomplete="off">
         <div class="label">Wann</div>
         <div class="chips"><button class="chip${f.when === 'today' ? ' on' : ''}" data-act="a-when" data-v="today">Heute</button><button class="chip${f.when === 'yesterday' ? ' on' : ''}" data-act="a-when" data-v="yesterday">Gestern</button></div>
       </section>
@@ -131,10 +138,19 @@ const screen = {
   },
   onInput(c, name, value) {
     bmtInput(c, name, value);
+    arenaStatusInput(c, name, value);
+    if (name === 'a-focus' && c.ui.arena) c.ui.arena.focus = value.slice(0, 160);
   },
   actions: {
     ...footworkActions,
     ...bmtActions,
+    ...arenaStatusActions,
+    'a-content': (c, d) => {
+      const cur = c.ui.arena.content || [];
+      c.ui.arena.content = cur.includes(d.v) ? cur.filter((x) => x !== d.v) : [...cur, d.v];
+      c.render();
+    },
+    'a-spar': (c, d) => { c.ui.arena.sparRounds = Math.max(0, Math.min(30, (c.ui.arena.sparRounds || 0) + Number(d.dir))); c.render(); },
     // Block mit Zeitangabe → Rundentimer mit 1 min Pause
     'bmt-timer': (c, d) => {
       c.ui.rt = { work: Number(d.work), rest: 60, rounds: Number(d.rounds) };
@@ -160,7 +176,7 @@ const screen = {
     'a-save': (c) => {
       const f = c.ui.arena;
       const day = f.when === 'yesterday' ? addDays(c.today(), -1) : c.today();
-      save(c, day, f.rpe, f.minutes, f.bmt);
+      save(c, day, f);
       c.ui.arena = { minutes: 60, when: 'today' };
     },
     'a-unlink': (c) => { c.ui.arena.bmt = null; c.render(); },
@@ -210,10 +226,10 @@ const screen = {
 
 export default screen;
 
-function save(c, day, rpe, minutes, bmt = null) {
+function save(c, day, { rpe, minutes, bmt = null, content, sparRounds, focus }) {
   let xp = 0;
   c.update((data) => {
-    const r = logArena(data, { day, rpe, minutes, bmt });
+    const r = logArena(data, { day, rpe, minutes, bmt, content, sparRounds: (content || []).includes('Sparring') ? sparRounds : null, focus });
     xp = r.session.xp;
     return r.data;
   });

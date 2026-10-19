@@ -1,22 +1,85 @@
-// Ton, Vibration und Bildschirm-wach-halten. iOS-Safari kann nicht vibrieren, darum immer auch ein Ton.
+// Ton und Bildschirm-wach-halten.
+// iPhone-Web-Apps: Ton erst nach einem Tap. Darum wird beim ersten Tap freigeschaltet:
+// (1) Web Audio, (2) audioSession = "playback" (iOS 17+, Ton auch bei Stummschalter),
+// (3) ein HTML-Audio-Element als Fallback. Vibration gibt es auf dem iPhone nicht, dafür ein visuelles Signal.
 let audio = null;
 let soundOn = true;
+let fallback = null;
+let unlocked = false;
 
 export function setSound(on) {
   soundOn = on;
 }
 
+// Kurzer Signalton als WAV (für das HTML-Audio-Fallback), einmal erzeugt
+function beepWav(freq = 880, ms = 220) {
+  const rate = 22050;
+  const n = Math.floor((rate * ms) / 1000);
+  const buf = new ArrayBuffer(44 + n * 2);
+  const v = new DataView(buf);
+  const str = (o, t) => [...t].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+  str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    const env = Math.min(1, i / 200) * Math.min(1, (n - i) / 400);
+    v.setInt16(44 + i * 2, Math.sin((2 * Math.PI * freq * i) / rate) * 0.6 * env * 32767, true);
+  }
+  let bin = '';
+  new Uint8Array(buf).forEach((b) => { bin += String.fromCharCode(b); });
+  return `data:audio/wav;base64,${btoa(bin)}`;
+}
+
 // Muss in einem Tap-Handler laufen, sonst bleibt der Ton auf iOS stumm.
 export function unlockAudio() {
   try {
+    if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback';
+  } catch { /* nicht unterstützt */ }
+  try {
     audio ||= new (window.AudioContext || window.webkitAudioContext)();
     if (audio.state === 'suspended') audio.resume();
-  } catch { /* kein Ton verfügbar */ }
+  } catch { /* kein Web Audio */ }
+  if (!unlocked) {
+    unlocked = true;
+    try {
+      fallback = new Audio(beepWav());
+      fallback.preload = 'auto';
+      fallback.muted = true;
+      fallback.play().then(() => { fallback.pause(); fallback.currentTime = 0; fallback.muted = false; }).catch(() => { fallback.muted = false; });
+    } catch { fallback = null; }
+  }
+}
+
+// Visuelles Signal: Bildschirm pulsiert kurz violett (iPhone kann nicht vibrieren).
+export function pulse() {
+  const b = document.body;
+  b.classList.remove('signal-pulse');
+  void b.offsetWidth;
+  b.classList.add('signal-pulse');
+  setTimeout(() => b.classList.remove('signal-pulse'), 1600);
+}
+
+function htmlBeep(times) {
+  if (!fallback) return false;
+  for (let i = 0; i < times; i++) {
+    setTimeout(() => {
+      try {
+        const el = fallback.cloneNode();
+        el.play().catch(() => {});
+      } catch { /* nichts */ }
+    }, i * 280);
+  }
+  return true;
 }
 
 export function beep(times = 1, freq = 880) {
   navigator.vibrate?.(times > 1 ? [200, 100, 200, 100, 200] : 150);
-  if (!soundOn || !audio) return;
+  if (!soundOn) return;
+  if (!audio || audio.state !== 'running') {
+    if (audio?.state === 'suspended') audio.resume().catch(() => {});
+    htmlBeep(times);
+    return;
+  }
   for (let i = 0; i < times; i++) {
     const t = audio.currentTime + i * 0.28;
     const o = audio.createOscillator();
@@ -32,6 +95,28 @@ export function beep(times = 1, freq = 880) {
   }
 }
 
+// Signal am Ende eines Timers: Ton + violettes Pulsieren
+export function signal(times = 3) {
+  beep(times);
+  pulse();
+}
+
+// Für „Ton testen“: spielt den Signalton und meldet, was das Gerät kann.
+export function testSound() {
+  unlockAudio();
+  const was = soundOn;
+  soundOn = true;
+  signal(3);
+  soundOn = was;
+  return {
+    webAudio: audio ? audio.state : 'nicht verfügbar',
+    audioSession: navigator.audioSession ? navigator.audioSession.type : 'nicht verfügbar (iOS unter 17)',
+    fallback: fallback ? 'bereit' : 'nicht verfügbar',
+    wakeLock: 'wakeLock' in navigator ? 'verfügbar' : 'nicht verfügbar',
+    standalone: window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true,
+  };
+}
+
 function out() {
   // Kompressor macht Gong und Glocke laut, ohne zu verzerren.
   const comp = audio.createDynamicsCompressor();
@@ -45,7 +130,12 @@ function out() {
 // times = 3 → „Ding Ding Ding“ (Rundenende), times = 1 → Rundenstart. Ertönt auch bei „Ton aus“.
 export function ringBell(times = 1) {
   navigator.vibrate?.(times > 1 ? [150, 120, 150, 120, 150] : 200);
-  if (!audio) return;
+  pulse();
+  if (!audio || audio.state !== 'running') {
+    if (audio?.state === 'suspended') audio.resume().catch(() => {});
+    htmlBeep(times);
+    return;
+  }
   const dest = out();
   // Teiltöne einer kleinen Messingglocke (inharmonisch), jeweils mit eigener Abklingzeit.
   const partials = [[1, 1, 1.6], [2.76, 0.55, 1.1], [5.4, 0.3, 0.7], [8.93, 0.16, 0.45], [0.5, 0.25, 1.2]];

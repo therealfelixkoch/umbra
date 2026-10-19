@@ -1,42 +1,106 @@
 // XP, Ränge, Wochen-Streak mit Schild, Kampfkraft.
 import { weekStart, addDays, monthKey } from './dates.js';
 import { FULL_MISSIONS } from '../data/missions.js';
+import { XP_CONFIG } from '../data/xp-config.js';
+import { oathXpEntries } from './oaths.js';
+import { resetXpEntries } from './reset.js';
 import { isHolidayWeek } from './arc.js';
 
-// Gesamtränge. Index = Wächter-Stufe (guardian-0 … guardian-5).
-export const RANKS = [
-  { id: 'SHADE', xp: 0 },
-  { id: 'BLADE', xp: 1000 },
-  { id: 'WARDEN', xp: 3000 },
-  { id: 'PHANTOM', xp: 7000 },
-  { id: 'UMBRA', xp: 15000 },
-  { id: 'UNBREAKABLE', xp: 30000, name: 'Unzerbrechlich' },
-];
+// Gesamtränge und XP-Werte kommen aus js/data/xp-config.js (eine Stelle zum Anpassen).
+export const RANKS = XP_CONFIG.ranks;
 export const rankName = (r) => r.name || r.id;
+const SRC = XP_CONFIG.sources;
 
-export const XP = { mission: 100, compact: 70, missionBonus: 25, light: 60, express: 50, flow: 20, rest: 10,
-  arenaLight: 60, arenaHard: 80, record: 20, check: 50 };
-
-export function sessionXp(s) {
-  let xp = 0;
-  if (s.kind === 'mission' && FULL_MISSIONS.includes(s.missionId)) {
-    const c = Math.max(0.2, s.completion ?? 1);
-    const base = s.compact ? XP.compact : XP.mission;
-    xp = Math.round(base * c) + (c >= 0.999 ? XP.missionBonus : 0);
-  } else if (s.missionId === 'D_LIGHT') xp = Math.round(XP.light * Math.max(0.3, s.completion ?? 1));
-  else if (s.kind === 'express') xp = XP.express;
-  else if (s.kind === 'flow') xp = XP.flow;
-  else if (s.kind === 'rest') xp = XP.rest;
-  else if (s.kind === 'check') xp = XP.check;
-  else if (s.kind === 'arena') {
-    const base = s.rpe ? 40 + s.rpe * 5 : s.intensity === 'hard' ? XP.arenaHard : XP.arenaLight;
-    xp = Math.round(base * Math.min(1.5, Math.max(0.5, (s.minutes || 60) / 60)));
-  }
-  return xp + (s.records?.length || 0) * XP.record;
+/**
+ * XP-Gutschriften einer Session, aufgeteilt nach Quelle: [[quelle, xp], …].
+ * Bestleistungen sind eine eigene Quelle.
+ */
+export function sessionEntries(s) {
+  const out = [];
+  const c = Math.max(XP_CONFIG.partialMin, s.completion ?? 1);
+  if (s.kind === 'mission' && FULL_MISSIONS.includes(s.missionId)) out.push([s.compact ? 'compact' : 'mission', Math.round((s.compact ? SRC.compact : SRC.mission) * c)]);
+  else if (s.missionId === 'D_LIGHT') out.push(['light', Math.round(SRC.light * Math.max(0.3, s.completion ?? 1))]);
+  else if (s.kind === 'express') out.push(['express', SRC.express]);
+  else if (s.kind === 'flow') out.push(['flow', SRC.flow]);
+  else if (s.kind === 'rest') out.push(['rest', SRC.rest]);
+  else if (s.kind === 'check') out.push(['check', SRC.check]);
+  else if (s.kind === 'arena') out.push(['arena', SRC.arena]);
+  else if (s.kind === 'quest') out.push(['quest', SRC.quest]);
+  else if (s.kind === 'ascension') out.push(['ascension', SRC.ascension]);
+  else if (SRC[s.kind] != null) out.push([s.kind, SRC[s.kind]]); // surge, wimhof, cold, oath, sundayReset, oathSealed
+  if (s.records?.length) out.push(['record', s.records.length * SRC.record]);
+  return out;
 }
 
-export function totalXp(sessions) {
-  return sessions.reduce((sum, s) => sum + (s.xp ?? sessionXp(s)), 0);
+// Roh-XP einer Session (ohne Tagesdeckel). Wird beim Verbuchen in session.xp gespeichert.
+export function sessionXp(s) {
+  return sessionEntries(s).reduce((n, [, x]) => n + x, 0);
+}
+
+/**
+ * XP-Buch: alle Gutschriften mit Tag und Quelle, Tagesdeckel für Nebenquellen,
+ * plus berechnete Boni (Wochenziel, Boss besiegt). Grundlage für Rang, Kampfkraft und „XP pro Quelle“.
+ */
+export function xpLedger(data, today) {
+  const sessions = Array.isArray(data) ? data : data.sessions || [];
+  const holiday = Array.isArray(data) ? undefined : data.settings?.holiday;
+  const entries = [];
+  for (const s of sessions) for (const [source, xp] of sessionEntries(s)) entries.push({ day: s.day, source, xp, raw: xp, arc: s.arc?.n });
+  // Wochenziel erreicht (laufende Woche zählt, sobald das Ziel erreicht ist)
+  const counts = weekCounts(sessions, holiday);
+  for (const [ws, n] of counts) {
+    if (n >= (isHolidayWeek(ws, holiday) ? HOLIDAY_GOAL : WEEK_GOAL)) {
+      const arc = sessions.find((x) => x.day >= ws && x.day <= addDays(ws, 6) && x.arc?.n != null)?.arc.n;
+      entries.push({ day: addDays(ws, 6), source: 'weekGoal', xp: SRC.weekGoal, raw: SRC.weekGoal, arc });
+    }
+  }
+  // Boss besiegt
+  if (!Array.isArray(data)) {
+    for (const [n, e] of Object.entries(data.engine?.bossEvents || {})) {
+      if (e.defeated) entries.push({ day: e.defeated, source: 'boss', xp: SRC.boss, raw: SRC.boss, arc: Number(n) });
+    }
+  }
+  // Gehaltene Gelübde (Nebenquelle), besiegelte Gelübde, komplette SUNDAY RESETs
+  if (!Array.isArray(data)) {
+    entries.push(...oathXpEntries(data.oaths, SRC), ...resetXpEntries(data, SRC));
+  }
+  // Tagesdeckel für Nebenquellen
+  entries.sort((a, b) => a.day.localeCompare(b.day));
+  const sideUsed = new Map();
+  for (const e of entries) {
+    if (!XP_CONFIG.sideSources.includes(e.source)) continue;
+    const used = sideUsed.get(e.day) || 0;
+    e.xp = Math.max(0, Math.min(e.raw, XP_CONFIG.sideDailyCap - used));
+    sideUsed.set(e.day, used + e.xp);
+  }
+  const bySource = {};
+  let total = 0;
+  for (const e of entries) {
+    bySource[e.source] = (bySource[e.source] || 0) + e.xp;
+    total += e.xp;
+  }
+  return { total, bySource, entries };
+}
+
+// Gutschriften gruppiert: pro Woche oder pro Arc → { schlüssel: { quelle: xp } }
+export function xpBySource(ledger, by = 'week') {
+  const out = {};
+  for (const e of ledger.entries) {
+    const key = by === 'arc' ? (e.arc ?? 'ohne Arc') : weekStart(e.day);
+    out[key] ||= {};
+    out[key][e.source] = (out[key][e.source] || 0) + e.xp;
+  }
+  return out;
+}
+
+// Noch verfügbare Neben-XP an einem Tag (für die Anzeige „+15 XP“ beim Verbuchen)
+export function sideCapLeft(data, day) {
+  const used = xpLedger(data).entries.filter((e) => e.day === day && XP_CONFIG.sideSources.includes(e.source)).reduce((n, e) => n + e.xp, 0);
+  return Math.max(0, XP_CONFIG.sideDailyCap - used);
+}
+
+export function totalXp(data) {
+  return xpLedger(data).total;
 }
 
 export function rankFor(xp) {
@@ -52,6 +116,16 @@ export function rankFor(xp) {
 export const countsForWeek = (s) => s.kind === 'arena' || s.kind === 'mission' || s.kind === 'express';
 export const WEEK_GOAL = 3;
 export const HOLIDAY_GOAL = 2;
+
+export function weekCounts(sessions, holiday) {
+  const counts = new Map();
+  for (const s of sessions) {
+    const w = weekStart(s.day);
+    if (!countsForWeek(s) && !(s.kind === 'flow' && isHolidayWeek(w, holiday))) continue;
+    counts.set(w, (counts.get(w) || 0) + 1);
+  }
+  return counts;
+}
 
 /**
  * Wochen-Streak. Laufende Woche bricht nichts, ein Schild pro Monat rettet eine verpasste Woche.
@@ -97,7 +171,7 @@ export function kampfkraft({ xp, streak, records, mobility = 0 }) {
 }
 
 export function playerStats(data, today) {
-  const xp = totalXp(data.sessions);
+  const xp = totalXp(data);
   const rank = rankFor(xp);
   const week = weekStreak(data.sessions, today, data.settings?.holiday);
   const last = data.mobility?.[data.mobility.length - 1];

@@ -68,6 +68,7 @@ export const TREND = {
   variant_down: ['▼', 'Leichtere Variante'],
   reps_down: ['▼', 'Ziel angepasst'],
   top: ['■', 'Obergrenze erreicht'],
+  held_rir: ['=', 'gehalten · RIR 0'],
 };
 
 export function trendBadge(trend) {

@@ -10,6 +10,7 @@ import { victoryPanels, retreatPanels, nemesisPanels } from './engine/story.js';
 import { debriefStats } from './engine/debrief.js';
 import { comicPanels, bindPanels } from './ui/lore.js';
 import { setHaptics } from './ui/haptics.js';
+import { XP_CONFIG } from './data/xp-config.js';
 import today from './ui/today.js';
 import training from './ui/training.js';
 import arena from './ui/arena.js';
@@ -20,8 +21,10 @@ import check from './ui/check.js';
 import review from './ui/review.js';
 import debrief from './ui/debrief.js';
 import intro from './ui/intro.js';
+import surge from './ui/surge.js';
+import eid from './ui/oaths.js';
 
-const SCREENS = { heute: today, training, arena, kodex, profil: profile, onboarding, check, review, debrief, intro };
+const SCREENS = { heute: today, training, arena, kodex, profil: profile, onboarding, check, review, debrief, intro, surge, eid };
 const TABS = [['heute', 'Heute'], ['arena', 'Arena'], ['kodex', 'Kodex'], ['profil', 'Profil']];
 
 const app = {
@@ -91,7 +94,7 @@ function render() {
   let route = app.route;
   if (!app.data.settings.onboarded) route = 'onboarding';
   const screen = SCREENS[route];
-  const showTabs = !['onboarding', 'training', 'check', 'review', 'debrief', 'intro'].includes(route);
+  const showTabs = !['onboarding', 'training', 'check', 'review', 'debrief', 'intro', 'surge', 'eid'].includes(route);
   root.innerHTML = `<main class="screen screen-${route}">${screen.render(ctx)}</main>${showTabs ? tabbar(route) : ''}`;
   screen.mount?.(ctx, root);
   animateKK();
@@ -166,10 +169,10 @@ function flushEvents() {
   }
   if (ev.type === 'ascension') {
     const a = ev.ascension;
-    ctx.system('Ascension freigeschaltet', `<div class="asc-big" style="--aura:${a.aura}"><span>◆</span><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div><div class="xp-gain num">+150 XP</div>`,
+    ctx.system('Ascension freigeschaltet', `<div class="asc-big" style="--aura:${a.aura}"><span>◆</span><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div><div class="xp-gain num">+${XP_CONFIG.sources.ascension} XP</div>`,
       [['close-modal', 'Weiter', 'primary']], 'gold aura');
   } else if (ev.type === 'quest') {
-    ctx.system('Quest erfüllt', `<p class="reason">${esc(ev.quest.title)}: ${esc(ev.quest.desc)}.</p><div class="xp-gain num">+100 XP</div>`,
+    ctx.system('Quest erfüllt', `<p class="reason">${esc(ev.quest.title)}: ${esc(ev.quest.desc)}.</p><div class="xp-gain num">+${XP_CONFIG.sources.quest} XP</div>`,
       [['close-modal', 'Weiter', 'primary']], 'gold');
   }
 }

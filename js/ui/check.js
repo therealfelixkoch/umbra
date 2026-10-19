@@ -4,6 +4,7 @@ import { REGIONS, REGION, RETEST_DAYS } from '../data/mobility.js';
 import { levelToScore, latestTest, previousTest, priorities, selectStretches, averageScore } from '../engine/mobility.js';
 import { daysBetween, formatDay } from '../engine/dates.js';
 import { sessionXp } from '../engine/game.js';
+import { XP_CONFIG } from '../data/xp-config.js';
 import { getDef } from '../data/exercises.js';
 import { MISSIONS } from '../data/missions.js';
 
@@ -173,7 +174,7 @@ export default {
     'chk-done': (c) => {
       c.ui.chk = null;
       c.go('heute');
-      c.system('Mobility-Check verbucht.', `<div class="xp-gain num">+50 XP</div><p class="muted">Dein FLOW ist jetzt auf dich zugeschnitten.</p>`);
+      c.system('Mobility-Check verbucht.', `<div class="xp-gain num">+${XP_CONFIG.sources.check} XP</div><p class="muted">Dein FLOW ist jetzt auf dich zugeschnitten.</p>`);
     },
     'chart-row': (c, d, el) => el.classList.toggle('open'),
   },

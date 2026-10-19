@@ -3,10 +3,11 @@ import { esc, sys, stepper, loadText, kg } from './kit.js';
 import { hud } from './today.js';
 import { playerStats, RANKS, rankName } from '../engine/game.js';
 import { rankEmblem } from './emblem.js';
+import { testSound } from './sound.js';
 import { titleStatus, equippedTitle } from '../engine/story.js';
 import { QUOTES } from '../data/story.js';
 import { startDeload } from '../engine/cycle.js';
-import { weekInfo, holidayActive, DEFAULT_HOLIDAY } from '../engine/arc.js';
+import { weekInfo, holidayActive, DEFAULT_HOLIDAY, completeWeekManually } from '../engine/arc.js';
 import { ARCS, ARC_WEEKS, WEEK_PLAN } from '../data/arcs.js';
 import { logDecision } from '../engine/rulelog.js';
 import { formatDay } from '../engine/dates.js';
@@ -20,6 +21,8 @@ import { latestTest } from '../engine/mobility.js';
 import { weekView, attributeRanks, ascensionGrid, RANK_LORE } from './week.js';
 import { ASCENSIONS, highestAscension } from '../engine/progress.js';
 import { guardianImage } from './lore.js';
+import { PROTOCOLS } from '../engine/surge.js';
+import { journalView, xpSourceView, journalActions, journalChange } from './journal.js';
 import { guardianTier, GUARDIANS } from '../data/lore.js';
 
 function holidayDate(h, key) {
@@ -42,7 +45,8 @@ function arcPanel(data, today) {
       <div><dt>Zyklus</dt><dd>${ARCS.map((a, i) => (i === arc.n % 4 ? `<b>${a.id}</b>` : a.id)).join(' → ')}</dd></div>
     </dl>
     <p class="muted small">Eine Woche zählt, sobald darin 2 volle Missionen stattfinden (Kompakt zählt, SHADOWSTEP nicht). Sonst wird sie wiederholt.${holiday ? ' Feiertagsmodus aktiv: Der Arc pausiert.' : ''}</p>
-    ${arc.week === ARC_WEEKS ? '' : '<button class="btn wide" data-act="p-deload">Ich brauche einen Deload</button>'}`);
+    ${arc.week === ARC_WEEKS ? '' : '<button class="btn wide" data-act="p-deload">Ich brauche einen Deload</button>'}
+    <button class="btn ghost wide" data-act="p-week-manual">Arc-Woche manuell abschließen</button>`);
 }
 
 function quoteSettings(s) {
@@ -64,12 +68,15 @@ const setSettings = (c, patch) => c.update((data) => ({ ...data, settings: { ...
 function sessionLabel(s) {
   if (s.kind === 'arena') return `ARENA${s.bmt ? ` · BMT W${s.bmt.week}` : ''} · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'} · ${s.minutes} min`;
   if (s.kind === 'check') return 'Mobility-Check';
+  if (s.kind === 'surge') return `SURGE · ${PROTOCOLS[s.protocol]?.name || ''}${s.moodBefore != null && s.moodAfter != null ? ` · Stimmung ${s.moodBefore} → ${s.moodAfter}` : ''}`;
+  if (s.kind === 'wimhof') return `Wim Hof · ${s.rounds} ${s.rounds === 1 ? 'Runde' : 'Runden'}`;
+  if (s.kind === 'cold') return `Kälte · ${Math.round((s.seconds || 0) / 6) / 10} min`;
   if (s.kind === 'quest') return 'Wochen-Quest erfüllt';
   if (s.kind === 'ascension') return `Ascension: ${ASCENSIONS.find((a) => a.id === s.ascension)?.name || ''}`;
   const m = MISSIONS[s.missionId];
   const pct = s.kind === 'mission' && s.completion < 0.999 ? ` · ${Math.round(s.completion * 100)} %` : '';
   const mod = s.modifier === 'deload' ? ' · Deload' : s.modifier === 'comeback' ? ' · Wiedereinstieg' : '';
-  return `${m?.name || s.missionId}${s.profile === 'gym' && s.kind === 'mission' ? ' · Gym' : ''}${mod}${pct}`;
+  return `${m?.name || s.missionId}${s.profile === 'gym' && s.kind === 'mission' ? ' · Gym' : s.profile === 'travel' ? ' · Unterwegs' : ''}${mod}${pct}`;
 }
 
 export default {
@@ -77,7 +84,7 @@ export default {
     const data = c.data;
     const st = playerStats(data, c.today());
     const tab = c.ui.ptab || 'status';
-    const tabs = [['status', 'Status'], ['woche', 'Woche'], ['mobility', 'Mobil'], ['verlauf', 'Log'], ['setup', 'Setup']];
+    const tabs = [['status', 'Status'], ['woche', 'Woche'], ['mobility', 'Mobil'], ['verlauf', 'Verlauf'], ['setup', 'Setup']];
     let out = `${hud(c)}<div class="seg">${tabs.map(([k, v]) => `<button class="${tab === k ? 'on' : ''}" data-act="ptab" data-v="${k}">${v}</button>`).join('')}</div>`;
 
     if (tab === 'status') {
@@ -103,6 +110,7 @@ export default {
       out += sys('Ascensions', ascensionGrid(data, c.today()));
       const e = data.engine;
       out += arcPanel(data, c.today());
+      out += xpSourceView(c);
       const recs = Object.entries(data.records).filter(([id]) => getDef(id) || id === 'EXPRESS');
       out += `<section class="card"><div class="label">Bestleistungen</div>${recs.length ? recs.map(([id, r]) => {
         if (id === 'EXPRESS') return `<div class="done-row"><span>SHADOWSTEP</span><b>${r.value} Runden</b></div>`;
@@ -124,12 +132,7 @@ export default {
         <button class="btn primary wide" data-act="go" data-to="check">Neuen Check machen</button>`;
     }
 
-    if (tab === 'verlauf') {
-      const list = data.sessions.slice().reverse().slice(0, 60);
-      return out + `<section class="card">${list.length ? list.map((s) =>
-        `<div class="done-row"><span><small class="muted">${formatDay(s.day)}</small> ${esc(sessionLabel(s))}</span><b class="muted">+${s.xp} XP</b></div>`).join('')
-        : '<p class="muted">Noch nichts geloggt.</p>'}</section>`;
-    }
+    if (tab === 'verlauf') return out + journalView(c, sessionLabel);
 
     const s = data.settings;
     return out + `
@@ -148,9 +151,8 @@ export default {
         <p class="muted small">Jedes Jahr wiederkehrend. Im Zeitraum pausiert der Arc, das Wochenziel sinkt auf 2 Einsätze, SHADOWSTEP, Kompakt und FLOW zählen voll.</p>
         <div class="label">Ton beim Pausenende</div>
         <div class="chips"><button class="chip${s.sound !== false ? ' on' : ''}" data-act="p-sound" data-v="1">An</button><button class="chip${s.sound === false ? ' on' : ''}" data-act="p-sound" data-v="0">Aus</button></div>
-        <div class="label">Vibration</div>
-        <div class="chips"><button class="chip${s.vibration !== false ? ' on' : ''}" data-act="p-vib" data-v="1">An</button><button class="chip${s.vibration === false ? ' on' : ''}" data-act="p-vib" data-v="0">Aus</button></div>
-        <p class="muted small">Bei erledigtem Satz, Pausenende und Rang-Aufstieg. Auf dem iPhone geht Vibration nur beim Antippen (Satz erledigt, Aufstieg), nicht zeitgesteuert beim Pausenende. Dort hilft der Ton.</p></section>
+        <button class="btn wide" data-act="p-sound-test">Ton testen</button>
+        <p class="muted small">Ton kommt nur bei angeschaltetem Bildschirm. Ist das iPhone gesperrt, pausiert iOS die App. Beim Pausenende pulsiert zusätzlich der Bildschirm violett.</p></section>
       ${quoteSettings(s)}
       <section class="card"><div class="label">Daten</div>
         <p class="muted small">Letzte Sicherung: ${s.lastBackupAt ? formatDay(s.lastBackupAt.slice(0, 10)) : 'noch nie'}</p>
@@ -160,6 +162,7 @@ export default {
       <p class="foot muted">UMBRA · Daten nur auf diesem Gerät.</p>`;
   },
   actions: {
+    ...journalActions,
     ptab: (c, d) => c.setUi({ ptab: d.v }),
     'wk-tip': (c, d, el) => el.classList.toggle('open'),
     'p-deload': (c) => c.system('Deload-Woche jetzt?', '<p>Die laufende Arc-Woche wird zur Deload-Woche: halbe Sätze, gleiches Gewicht, 3 Wdh. im Tank. Danach beginnt der nächste Arc.</p>',
@@ -168,6 +171,15 @@ export default {
       c.modal(null);
       c.update((data) => logDecision({ ...data, engine: startDeload(data.engine) },
         { rule: 'deload:manual', day: c.today(), suggestion: 'deload_week', decision: 'accepted' }));
+    },
+    'p-week-manual': (c) => c.system('Arc-Woche abschließen?', `<p>Für Sonderfälle: Die laufende Arc-Woche ${c.data.engine.arc?.week}/${ARC_WEEKS} gilt sofort als abgeschlossen, egal wie viele Missionen darin waren. Die Korrektur wird im Regel-Protokoll vermerkt.</p>`,
+      [['p-week-manual-yes', 'Abschließen', 'primary'], ['close-modal', 'Abbrechen']]),
+    'p-week-manual-yes': (c) => {
+      c.modal(null);
+      const before = c.data.engine.arc;
+      const r = completeWeekManually(before, c.today());
+      c.update((data) => logDecision({ ...data, engine: { ...data.engine, arc: r.arc } },
+        { rule: 'arc:manual_week', day: c.today(), input: { n: before.n, week: before.week }, suggestion: r.event.type, decision: 'accepted' }));
     },
     'p-holiday': (c, d) => {
       const h = c.data.settings.holiday ?? DEFAULT_HOLIDAY;
@@ -183,7 +195,13 @@ export default {
     },
     'p-bw': (c, d) => setSettings(c, { bodyweight: Math.max(40, Math.min(160, c.data.settings.bodyweight + Number(d.dir))) }),
     'p-elbow': (c, d) => setSettings(c, { elbowThreshold: Math.max(1, Math.min(10, (c.data.settings.elbowThreshold || 3) + Number(d.dir))) }),
-    'p-vib': (c, d) => setSettings(c, { vibration: d.v === '1' }),
+    'p-sound-test': (c) => {
+      const r = testSound();
+      c.system('Ton-Test', `<p>Du solltest drei Töne hören und ein violettes Pulsieren sehen.</p>
+        <dl class="facts"><div><dt>Web Audio</dt><dd>${r.webAudio}</dd></div><div><dt>Audio-Sitzung</dt><dd>${r.audioSession}</dd></div>
+        <div><dt>Fallback</dt><dd>${r.fallback}</dd></div><div><dt>Bildschirm an</dt><dd>${r.wakeLock}</dd></div><div><dt>Als App gestartet</dt><dd>${r.standalone ? 'ja' : 'nein'}</dd></div></dl>
+        <p class="muted small">Kein Ton? Lautstärke hochdrehen. Steht „Audio-Sitzung“ auf „playback“, kommt der Ton auch bei Stummschalter.</p>`);
+    },
     'p-title': (c, d) => setSettings(c, { title: c.data.settings.title === d.id ? null : d.id }),
     'q-hide': (c, d) => {
       const h = new Set(c.data.settings.quotesHidden || []);
@@ -223,6 +241,7 @@ export default {
     if (name === 'qText' || name === 'qPerson') c.ui[name] = value;
   },
   async onChange(c, name, el) {
+    if (journalChange(c, name, el)) return;
     if (name === 'holiday-from' || name === 'holiday-to') {
       if (!el.value) return;
       const h = c.data.settings.holiday ?? DEFAULT_HOLIDAY;

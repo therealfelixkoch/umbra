@@ -1,5 +1,6 @@
 // Double Progression, Zeit-Progression, Varianten-Stufen und Rückschritt.
 // Eine Übung hat einen Zustand: { exId (aktuelle Variante), load (kg Zusatzlast), target, miss, lastChange }.
+import { rirOutcome } from './session.js';
 
 export const TIME_STEP = 5;
 
@@ -67,6 +68,19 @@ export function initialState(def, { settings, startValues = {}, getDef }) {
  */
 export function progress(def, st, sets, ctx) {
   if (!sets.length || def.mode === 'fixed') return { ...st, lastChange: null };
+  // Echtes RIR: RIR 0 bei geplantem RIR ≥ 2 → nicht steigern; deutlich zu leicht → früher steigern.
+  const feel = rirOutcome(sets, ctx.rir ?? null);
+  const next = baseProgress(def, st, sets, ctx, feel === 'easy');
+  if (feel === 'grind' && raised(st, next)) {
+    return { ...st, load: Math.max(...sets.map((s) => s.load || 0)), miss: 0, lastChange: 'held_rir' };
+  }
+  return feel === 'easy' && next.lastChange && next.lastChange !== 'top' ? { ...next, early: true } : next;
+}
+
+// Ziel, Last oder Variante gestiegen?
+const raised = (st, n) => (n.load || 0) > (st.load || 0) || n.target > st.target || (n.pendingVariant && n.lastChange === 'variant_ready');
+
+function baseProgress(def, st, sets, ctx, easy = false) {
   const values = sets.map((s) => s.value);
   const best = Math.max(...values);
 
@@ -85,8 +99,9 @@ export function progress(def, st, sets, ctx) {
   const harder = def.harder && ctx.getDef(def.harder);
   const easier = def.easier && ctx.getDef(def.easier);
 
-  const allHi = values.every((v) => v >= hi);
   const allTarget = values.every((v) => v >= st.target);
+  // Zu leicht (RIR deutlich über Ziel) und Ziel geschafft: wie oberes Ende behandeln, ab der Bereichsmitte.
+  const allHi = values.every((v) => v >= hi) || (easy && allTarget && st.target >= Math.floor((lo + hi) / 2));
   const missedLow = values.filter((v) => v < lo).length > values.length / 2;
 
   if (allHi) {
@@ -115,7 +130,7 @@ export function progress(def, st, sets, ctx) {
   }
 
   if (allTarget) {
-    return { ...st, load, target: Math.min(st.target + step, hi), miss: 0,
+    return { ...st, load, target: Math.min(st.target + step * (easy ? 2 : 1), hi), miss: 0,
       lastChange: def.mode === 'time' ? 'time_up' : 'reps_up' };
   }
   return { ...st, load, miss: 0, lastChange: null };

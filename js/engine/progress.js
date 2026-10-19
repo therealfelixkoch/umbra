@@ -4,6 +4,7 @@ import { PROFILES } from '../data/glyphs.js';
 import { weekStart, addDays, daysBetween } from './dates.js';
 import { weekStreak, countsForWeek } from './game.js';
 import { latestTest } from './mobility.js';
+import { XP_CONFIG } from '../data/xp-config.js';
 
 // Was ein Muay-Thai-Abend trainiert.
 export const ARENA_TAGS = [['strike', 'explosiv'], ['strike', 'proprio'], ['rotation', 'explosiv'], ['hip_rot', 'elastisch'],
@@ -192,8 +193,8 @@ export function attrRank(points) {
 }
 
 // ——— Belohnungen verbuchen ———
-export const QUEST_XP = 100;
-export const ASCENSION_XP = 150;
+export const QUEST_XP = XP_CONFIG.sources.quest;
+export const ASCENSION_XP = XP_CONFIG.sources.ascension;
 
 /** Prüft Quest und Ascensions; neue Erfolge werden als XP-Einträge ins Log geschrieben. */
 export function checkProgress(data, today, now = Date.now(), getDef = defaultGetDef) {

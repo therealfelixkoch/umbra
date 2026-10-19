@@ -1,5 +1,5 @@
 // Aus Mission + Profil + Log wird ein konkreter Plan; nach dem Training wird der Log verbucht.
-import { MISSIONS, MISSION_KIND, FULL_MISSIONS } from '../data/missions.js';
+import { MISSIONS, MISSION_KIND, FULL_MISSIONS, TRAVEL_SWAP } from '../data/missions.js';
 import { getDef as defaultGetDef, EXERCISES } from '../data/exercises.js';
 import { elbowStatus, activeRegions, adjustment } from './signals.js';
 import { PLYO, CONTRAST } from '../data/arcs.js';
@@ -12,12 +12,14 @@ import { daysBetween } from './dates.js';
 import { latestTest, selectStretches } from './mobility.js';
 import { weekCoverage, gapsFor } from './progress.js';
 import { weekStart } from './dates.js';
+import { activeMinutes, sessionIntensity, intensityFromRpe, trainingLoad } from './session.js';
 
 // Equipment und Einstellungen für ein Profil. Im Home Gym ersetzen Kurzhanteln die Kettlebells.
 export function profileContext(settings, profile) {
-  const equipment = [...(settings.equipment?.[profile] || [])];
+  // Unterwegs: nur, was im Check-in angehakt wurde (Kurzhanteln, Laufband, Band, Bank/Stuhl)
+  const equipment = [...(profile === 'travel' ? settings.travelGear || [] : settings.equipment?.[profile] || [])];
   let s = settings;
-  if (profile === 'gym' && !equipment.includes('kb') && equipment.includes('dumbbells')) {
+  if ((profile === 'gym' || profile === 'travel') && !equipment.includes('kb') && equipment.includes('dumbbells')) {
     equipment.push('kb');
     s = { ...settings, kbWeights: ladderFor('dumbbell', settings) };
   }
@@ -35,6 +37,29 @@ export function resolveExercise(id, equipment, getDef = defaultGetDef, seen = ne
     if (r) return r;
   }
   return null;
+}
+
+// Unterwegs-Prefix: eigene Progression, die Ankerübungen bleiben unberührt.
+export const stateKey = (profile, key) => (profile === 'travel' ? `travel:${key}` : key);
+
+/**
+ * Ersatz für unterwegs: bevorzugter Ersatz, dann die Alternativen-Kette, dann eine Übung mit
+ * gleichem Bewegungsmuster (geteilte Attribute, gleiche Kategorie) aus dem Vorhandenen.
+ */
+export function travelExercise(id, equipment, getDef = defaultGetDef, all = EXERCISES) {
+  const has = (d) => d && (d.equipment || []).every((e) => equipment.includes(e));
+  for (const alt of TRAVEL_SWAP[id] || []) if (has(getDef(alt))) return alt;
+  const r = resolveExercise(id, equipment, getDef);
+  if (r) return r;
+  const def = getDef(id);
+  if (!def) return null;
+  const attrs = new Set(def.tags.map(([a]) => a));
+  const best = Object.values(all)
+    .filter((d) => d.id !== id && d.cat !== 'mobility' && d.mode === def.mode && has(d))
+    .map((d) => ({ id: d.id, score: d.tags.filter(([a]) => attrs.has(a)).length * 3 + (d.cat === def.cat ? 2 : 0) }))
+    .filter((x) => x.score >= 3)
+    .sort((a, b) => b.score - a.score)[0];
+  return best?.id || null;
 }
 
 function applyModifier(item, mod, def) {
@@ -118,17 +143,19 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
       if (isCompact && !s.main) return;
       if (s.plyo && contrastOn) return; // In Arc II übernehmen die Kontrastpaare die Sprünge.
       const slotKey = `${missionId}:${i}`;
-      let id = data.engine.slotVariant?.[slotKey] || s.ex;
+      // Tausch „für den Rest des Arcs“ gilt nur im Arc, in dem er gewählt wurde.
+      const arcSwap = data.engine.arcSwaps?.[slotKey];
+      let id = (arcSwap && arcSwap.arc === arc.n && arcSwap.id) || data.engine.slotVariant?.[slotKey] || s.ex;
       let sets = s.sets;
       if (s.plyo) id = plyo.exId;
-      else if (profile === 'gym' && s.gym && !data.engine.slotVariant?.[slotKey]) {
+      else if (profile === 'gym' && s.gym && !data.engine.slotVariant?.[slotKey] && !(arcSwap && arcSwap.arc === arc.n)) {
         if (Array.isArray(s.gym)) {
           const n = data.sessions.filter((x) => x.missionId === missionId && x.profile === 'gym').length;
           id = s.gym[n % s.gym.length];
         } else id = s.gym;
         sets = s.gymSets ?? s.sets;
       }
-      const key = resolveExercise(id, equipment, getDef);
+      const key = profile === 'travel' ? travelExercise(id, equipment, getDef) : resolveExercise(id, equipment, getDef);
       if (!key) return;
       const def0 = getDef(key);
       if (isCompact) sets = 2;
@@ -185,12 +212,13 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
 
   if (mission.format === 'circuit') {
     const src = mission.base ? MISSIONS[mission.base] : mission;
-    const rounds = mission.light ? mission.rounds[0] : (data.exState['circuit:D']?.target ?? src.rounds[0]);
+    const rounds = mission.light ? mission.rounds[0] : (data.exState[stateKey(profile, `circuit:${src.id}`)]?.target ?? src.rounds[0]);
     const items = src.items.map((it) => {
-      const id = resolveExercise(profile === 'gym' && it.gym ? it.gym : it.ex, equipment, getDef);
+      const wanted = profile === 'gym' && it.gym ? it.gym : it.ex;
+      const id = profile === 'travel' ? travelExercise(wanted, equipment, getDef) : resolveExercise(wanted, equipment, getDef);
       if (!id) return null;
       const def = getDef(id);
-      const { load } = loadFor(def, data.exState[id]);
+      const { load } = loadFor(def, data.exState[stateKey(profile, id)]);
       return { exId: id, value: def.id === it.ex || def.mode === getDef(it.ex).mode ? it.value : def.range[0], load };
     }).filter(Boolean);
     return { ...base, items, rounds, restBetween: src.restBetween, light: !!mission.light };
@@ -198,18 +226,19 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
 
   if (mission.format === 'amrap') {
     const items = mission.items.map((it) => {
-      const id = resolveExercise(it.ex, equipment, getDef);
+      const id = profile === 'travel' ? travelExercise(it.ex, equipment, getDef) : resolveExercise(it.ex, equipment, getDef);
       if (!id) return null;
       const def = getDef(id);
       return { exId: id, value: def.mode === getDef(it.ex).mode ? it.value : def.range[0],
-        load: loadFor(def, data.exState[id]).load };
+        load: loadFor(def, data.exState[stateKey(profile, id)]).load };
     }).filter(Boolean);
     return { ...base, items };
   }
 
   if (mission.format === 'intervals') {
     const exId = profile === 'gym' && mission.gymEx ? mission.gymEx : mission.ex;
-    return { ...base, rounds: mission.rounds, work: mission.work, rest: mission.rest, exId };
+    return { ...base, rounds: mission.rounds, work: mission.work, rest: mission.rest, exId,
+      warmup: mission.warmup || 0, cooldown: mission.cooldown || 0, rpeLog: !!mission.rpeLog };
   }
 
   // flow
@@ -222,7 +251,7 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
 export function itemFor(key, { data, profile, sets, getDef = defaultGetDef, arcN = null, range }) {
   const { equipment, settings } = profileContext(data.settings, profile);
   const baseDef = getDef(key);
-  let st = data.exState[key] || initialState(baseDef, { settings, startValues: data.settings.startValues, getDef });
+  let st = data.exState[stateKey(profile, key)] || initialState(baseDef, { settings, startValues: data.settings.startValues, getDef });
   // Neuer Arc (oder anderer Wiederholungsbereich): Ziel startet am unteren Ende, die Last bleibt.
   const r = range || (getDef(st.exId) || baseDef).range;
   if (arcN != null && st.arc != null && st.arc !== arcN) st = { ...st, target: r[0], lastChange: null };
@@ -277,7 +306,7 @@ export function swapOptions(exId, { data, profile, today, getDef = defaultGetDef
 
 // Laufendes Training aus einem Plan. Sätze sind mit dem Ziel vorausgefüllt.
 export function createActive(plan, today, now = Date.now()) {
-  const active = { plan, day: today, startedAt: now, index: 0, roundsDone: 0 };
+  const active = { plan, day: today, startedAt: now, index: 0, roundsDone: 0, marks: [now] };
   if (plan.format === 'sets') {
     active.log = plan.items.map((it) => ({
       key: it.key, exId: it.exId,
@@ -318,14 +347,19 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
   const session = { id: id || `s${now}`, day, kind: p.kind, missionId: p.missionId, profile: p.profile,
     compact: p.compact || undefined, slot: p.slot || undefined, arc: p.arc,
     afterPause: p.gap != null && p.gap >= 8 ? true : undefined, gap: p.gap ?? undefined,
-    modifier: p.modifier?.type || 'none', completion, minutes: Math.round((now - active.startedAt) / 60000),
+    modifier: p.modifier?.type || 'none', completion,
+    minutes: activeMinutes([active.startedAt, ...(active.marks || []), now], { countGaps: !!active.countGaps }).minutes,
     exercises: [], roundsDone: active.roundsDone,
     items: p.format === 'sets' ? undefined : p.items ? p.items.map((i) => i.exId) : p.exId ? [p.exId] : [] };
 
   if (p.format === 'sets') {
     active.log.forEach((entry, i) => {
       const done = entry.sets.filter((s) => s.done);
-      session.exercises.push({ exId: entry.exId, key: entry.key, sets: entry.sets });
+      const it = p.items[i];
+      session.exercises.push({ exId: entry.exId, key: entry.key, sets: entry.sets, effort: entry.effort ?? undefined,
+        swappedFrom: it.swappedFrom || undefined, swapScope: it.swapScope || undefined,
+        elbow: entry.elbowReported || undefined, adjust: it.adjust || undefined, note: entry.note || undefined,
+        intervals: entry.intervals || undefined });
       if (!done.length) return;
       const def = getDef(entry.exId);
       // Rekorde
@@ -341,22 +375,24 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
       if (item.explosive) return;
       if (p.modifier?.type && p.modifier.type !== 'none') return;
       const base = getDef(entry.key);
-      const st = exState[entry.key] ||
+      const sk = stateKey(p.profile, entry.key);
+      const st = exState[sk] ||
         initialState(base, { settings, startValues: data.settings.startValues, getDef });
       const cur = st.exId === entry.exId ? { ...st, target: item.target } : { ...st, exId: entry.exId, target: item.target };
       // Arc II: Progression nur über den Top-Satz
       const counted = item.topSet ? done.filter((s) => s.label === 'Top-Satz') : done;
       if (!counted.length) return;
       const ranged = item.range ? { ...def, range: item.range } : def;
-      exState[entry.key] = { ...progress(ranged, cur, counted.map((s) => ({ value: s.value, load: s.load })),
-        { settings, equipment, getDef }), arc: p.arc?.n };
+      exState[sk] = { ...progress(ranged, cur, counted.map((s) => ({ value: s.value, load: s.load, rir: s.rir })),
+        { settings, equipment, getDef, rir: item.rir ?? null }), arc: p.arc?.n };
     });
   }
 
-  if (p.missionId === 'D' && p.modifier?.type === 'none') {
-    const c = exState['circuit:D'] || { target: 3, streak: 0 };
+  if ((p.missionId === 'D' || p.missionId === 'HOTEL') && p.modifier?.type === 'none') {
+    const ck = stateKey(p.profile, `circuit:${p.missionId}`);
+    const c = exState[ck] || { target: 3, streak: 0 };
     const streak = active.roundsDone >= c.target ? c.streak + 1 : 0;
-    exState['circuit:D'] = streak >= 2 && c.target < 4 ? { target: c.target + 1, streak: 0 } : { ...c, streak };
+    exState[ck] = streak >= 2 && c.target < 4 ? { target: c.target + 1, streak: 0 } : { ...c, streak };
   }
   if (p.format === 'amrap' && active.roundsDone > 0) {
     const prev = records.EXPRESS;
@@ -366,6 +402,15 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
     }
   }
 
+  if (p.format === 'intervals' && active.ivLog) {
+    session.intervals = { rpe: active.ivLog.rpe || [], meters: active.ivLog.meters || undefined, note: active.ivLog.note || undefined };
+  }
+  // Intensität 1–5 und Trainingslast (nur Anzeige)
+  session.intensity = p.format === 'sets' ? sessionIntensity(session.exercises)
+    : session.intervals ? intensityFromRpe(session.intervals.rpe) : (active.effort ?? null);
+  if (session.intensity == null) delete session.intensity;
+  const load = trainingLoad(session.intensity, session.minutes);
+  if (load) session.load = load;
   session.records = newRecords;
   session.xp = sessionXp(session);
 
@@ -384,12 +429,14 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
 // Ab diesem Gefühlswert zählt eine Arena-Einheit als hart (wie Sparring).
 export const HARD_RPE = 7;
 
-export function logArena(data, { day, intensity, rpe, minutes = 60, bmt = null, now = Date.now() }) {
+export function logArena(data, { day, intensity, rpe, minutes = 60, bmt = null, content = null, sparRounds = null,
+  focus = null, now = Date.now() }) {
   const r = rpe ?? (intensity === 'hard' ? 8 : 4);
   const arc = data.engine?.arc;
   const session = { id: `a${now}`, day, kind: 'arena', missionId: 'ARENA', rpe: r,
     intensity: r >= HARD_RPE ? 'hard' : 'light', minutes, arc: arc ? { n: arc.n, week: arc.week } : undefined,
-    bmt: bmt || undefined };
+    bmt: bmt || undefined, content: content?.length ? content : undefined, sparRounds: sparRounds || undefined,
+    focus: focus?.trim() || undefined, load: Math.round((r / 2) * minutes) };
   session.xp = sessionXp(session);
   return { data: { ...data, sessions: [...data.sessions, session] }, session };
 }

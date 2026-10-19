@@ -16,19 +16,26 @@ import { BOSSES } from '../data/lore.js';
 import { REGIONS, elbowStatus, reportElbow, reportPain, physioNoteDue, activeRegions } from '../engine/signals.js';
 import { reviewDue, debriefDue } from '../engine/debrief.js';
 import { buildPlan, createActive, logArena } from '../engine/plan.js';
+import { TRAVEL_EQUIPMENT } from './onboarding.js';
+import { whyDue } from '../engine/surge.js';
+import { arcReviewDue, chooseDue } from '../engine/oaths.js';
+import { eveningCard, oathActions } from './oaths.js';
+import { resetCard, resetActions, planNote } from './reset.js';
 import { playerStats, WEEK_GOAL, rankName } from '../engine/game.js';
 import { addDays, daysBetween, weekStart } from '../engine/dates.js';
 import { MISSIONS } from '../data/missions.js';
-import { getDef } from '../data/exercises.js';
+import { getDef, EQUIPMENT } from '../data/exercises.js';
 import { exportFile } from '../store.js';
+import { XP_CONFIG } from '../data/xp-config.js';
 import { isDue, latestTest } from '../engine/mobility.js';
 import { questStatus, highestAscension, ASCENSIONS } from '../engine/progress.js';
 
 const Q = {
   yesterdayMT: ['Gestern Muay Thai?', [['none', 'Nein'], ['light', 'Locker-Technik'], ['hard', 'Hartes Sparring']]],
+  sleep: ['Wie hast du geschlafen?', [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']]],
   feeling: ['Wie fühlst du dich?', [['frisch', 'Frisch'], ['normal', 'Normal'], ['platt', 'Platt']]],
   tonightMT: ['Heute Abend Muay Thai?', [['yes', 'Ja'], ['no', 'Nein'], ['maybe', 'Vielleicht']]],
-  where: ['Wo und wie viel Zeit?', [['room', 'Eigener Raum · 45 min'], ['gym', 'Home Gym · 60 min'], ['kompakt', 'Nur 30 Minuten'], ['express', 'Nur 15 Minuten'], ['mobility', 'Nur Mobility']]],
+  where: ['Wo und wie viel Zeit?', [['room', 'Eigener Raum · 45 min'], ['gym', 'Home Gym · 60 min'], ['travel', 'Unterwegs / Hotel'], ['kompakt', 'Nur 30 Minuten'], ['express', 'Nur 15 Minuten'], ['mobility', 'Nur Mobility']]],
 };
 
 // Kleiner Status unter der Mission: Rang, Kampfkraft, Boss-Lebensbalken, Arc-Woche (x/6), Wochenziel.
@@ -127,7 +134,7 @@ function checkinForm(c) {
   const today = c.today();
   const f = c.ui.ci || (c.ui.ci = { yesterdayMT: arenaOn(c.data.sessions, addDays(today, -1)) });
   const askWhere = f.tonightMT !== 'yes' || f.morning;
-  const ready = f.feeling && f.tonightMT && (!askWhere || f.where);
+  const ready = f.sleep && f.feeling && f.tonightMT && (!askWhere || f.where);
   const q = (k) => `<div class="q"><div class="q-label">${Q[k][0]}</div>${chips(k, Q[k][1], f[k])}</div>`;
   const morning = f.tonightMT === 'yes'
     ? `<div class="q"><div class="q-label">Zusätzlich Morgeneinheit?</div>${chips('morning', [['no', 'Nein, ARENA reicht'], ['yes', 'Ja, zusätzlich']], f.morning ? 'yes' : 'no')}</div>`
@@ -136,14 +143,18 @@ function checkinForm(c) {
   const painOpen = f.painOpen || (f.pain || []).length > 0;
   const pain = `<div class="q"><div class="q-label">Zwickt sonst etwas?</div>${chips('painOpen', [['no', 'Alles okay'], ['yes', 'Ja']], painOpen ? 'yes' : 'no')}
     ${painOpen ? bodyMap(f.pain || []) : ''}</div>`;
-  return sys('Tages-Check-in', `${q('yesterdayMT')}${q('feeling')}${elbow}${pain}${q('tonightMT')}${morning}${askWhere ? q('where') : ''}
+  const gear = f.travelGear ?? c.data.settings.travelGear ?? [];
+  const travel = askWhere && f.where === 'travel' ? `<div class="q"><div class="q-label">Was ist da? (optional)</div>
+    <div class="chips">${TRAVEL_EQUIPMENT.map((id) => `<button class="chip${gear.includes(id) ? ' on' : ''}" data-act="travel-gear" data-id="${id}">${esc(EQUIPMENT[id])}</button>`).join('')}</div>
+    <p class="muted small">Nichts angehakt = nur Körpergewicht. Jede Übung wird durch eine mit gleichem Muster ersetzt, Fortschritt zählt getrennt.</p></div>` : '';
+  return sys('Tages-Check-in', `${q('yesterdayMT')}${q('sleep')}${q('feeling')}${elbow}${pain}${q('tonightMT')}${morning}${askWhere ? q('where') : ''}${travel}
     <button class="btn primary wide" data-act="submit-ci" ${ready ? '' : 'disabled'}>Mission anfordern</button>`);
 }
 
 export function questCard(c) {
   const q = questStatus(c.data, c.today());
   const pips = Array.from({ length: q.target }, (_, i) => `<i class="${i < q.progress ? 'on' : ''}"></i>`).join('');
-  return `<section class="card quest${q.done ? ' done' : ''}"><div class="quest-head"><div><div class="label">Side Quest</div><b>${esc(q.quest.title)}</b><small>${esc(q.quest.desc)}${q.done ? ' · erfüllt' : ' · +100 XP'}</small></div>
+  return `<section class="card quest${q.done ? ' done' : ''}"><div class="quest-head"><div><div class="label">Side Quest</div><b>${esc(q.quest.title)}</b><small>${esc(q.quest.desc)}${q.done ? ' · erfüllt' : ` · +${XP_CONFIG.sources.quest} XP`}</small></div>
     <span class="num">${q.progress}/${q.target}</span></div><div class="wdots quest-pips">${pips}</div></section>`;
 }
 
@@ -204,7 +215,19 @@ export default {
     const today = c.today();
     // Ganz oben: Status (Rang, Kampfkraft, Boss, Arc-Woche). Darunter Check-in bzw. Mission, dann Hinweise.
     let out = statusStrip(c);
+    out += `<div class="surge-entry"><button class="surge-btn" data-act="go" data-to="surge"><b>Ich bin im Nebel.</b><small>SURGE · ein paar Minuten zurückholen</small></button>
+      <div class="row gap"><button class="chip" data-act="go" data-to="surge" data-param="wimhof">Wim Hof</button><button class="chip" data-act="go" data-to="surge" data-param="cold">Kälte</button><button class="chip" data-act="go" data-to="eid">Der Eid</button></div></div>`;
+    out += eveningCard(c);
     let notes = '';
+    const arcN = data.engine.arc?.n;
+    if (arcN != null && (arcReviewDue(data.oaths, arcN) || chooseDue(data.oaths, arcN))) {
+      notes += `<section class="card flow-card"><div><b>Der Eid · Arc ${arcN + 1}</b><small>${arcReviewDue(data.oaths, arcN) ? 'Gelübde behalten, umformulieren oder ersetzen' : 'Drei Wenn-dann-Gelübde für diesen Arc'}</small></div>
+        <div class="row gap"><button class="btn primary" data-act="go" data-to="eid">Öffnen</button>${arcReviewDue(data.oaths, arcN) ? '' : '<button class="btn ghost small" data-act="oath-later">Später</button>'}</div></section>`;
+    }
+    if (whyDue(data)) {
+      notes += `<section class="card flow-card"><div><b>DAS WARUM · Arc ${data.engine.arc.n + 1}</b><small>Für wen machst du das? Wer willst du in einem Jahr sein?</small></div>
+        <div class="row gap"><button class="btn primary" data-act="why-open">Schreiben</button><button class="btn ghost small" data-act="why-later">Später</button></div></section>`;
+    }
     if (data.active) {
       out += sys('Mission läuft', `<p><b>${esc(data.active.plan.name)}</b> · begonnen ${data.active.day === today ? 'heute' : 'am ' + data.active.day}</p>
         <div class="row gap"><button class="btn primary grow" data-act="go" data-to="training">Fortsetzen</button><button class="btn" data-act="discard-active">Verwerfen</button></div>`, { tone: 'gold' });
@@ -228,8 +251,10 @@ export default {
         <p class="muted small">Der Ellbogen-Zähler war drei Wochen in Folge voll.</p>
         <div class="row gap"><button class="btn" data-act="physio-ok">Verstanden</button></div>`, { tone: 'calm' });
     }
+    const reset = resetCard(c);
+    notes = reset + notes;
     const rv = reviewDue(data, today);
-    if (rv) notes += `<section class="card flow-card"><div><b>Wochenrückblick</b><small>Unter 2 Minuten · 2 Taps</small></div><button class="btn primary" data-act="go" data-to="review">Öffnen</button></section>`;
+    if (rv && !reset) notes += `<section class="card flow-card"><div><b>Wochenrückblick</b><small>Unter 2 Minuten · 2 Taps</small></div><button class="btn primary" data-act="go" data-to="review">Öffnen</button></section>`;
     const db = debriefDue(data, today);
     if (db != null) notes += `<section class="card flow-card"><div><b>Arc-Debrief</b><small>3 Fragen und Export für deinen Coach</small></div><button class="btn primary" data-act="go" data-to="debrief">Öffnen</button></section>`;
 
@@ -260,10 +285,10 @@ export default {
       c.ui.lastRec = { ...rec, plyoCap: ci.sparTomorrow === true };
       const sparQ = plan.plyo && plan.plyo.wanted >= 4 && ci.sparTomorrow == null
         ? `<div class="q"><div class="q-label">Morgen hartes Sparring geplant?</div>${chips('sparTomorrow', [['no', 'Nein'], ['yes', 'Ja']], null).replace(/data-act="pick"/g, 'data-act="spar"')}<p class="muted small">Heute steht Plyo-Stufe ${plan.plyo.wanted} an. Vor hartem Sparring bleibt es bei Stufe 3.</p></div>` : '';
-      out += sys('Mission verfügbar', `<div class="mission-title"><span class="mid">${rec.missionId.length === 1 ? rec.missionId : '◆'}</span><div><h2>${esc(plan.name)}</h2><small>${esc(plan.focus)} · ca. ${plan.minutes} min${rec.profile === 'gym' && plan.kind === 'mission' && rec.missionId !== 'FORGE' ? ' · Home Gym' : ''}</small></div></div>
+      out += sys('Mission verfügbar', `<div class="mission-title"><span class="mid">${rec.missionId.length === 1 ? rec.missionId : '◆'}</span><div><h2>${esc(plan.name)}</h2><small>${esc(plan.focus)} · ca. ${plan.minutes} min${rec.profile === 'gym' && plan.kind === 'mission' && rec.missionId !== 'FORGE' ? ' · Home Gym' : rec.profile === 'travel' ? ' · Unterwegs' : ''}</small></div></div>
         ${plan.kind === 'mission' ? arcLine(data, today, plan) : ''}
         <p class="reason">${esc(rec.reason)}</p>${rec.walk ? '<p class="note">Danach 20–30 Minuten spazieren.</p>' : ''}${modifierNote(plan)}
-        ${sparQ}${adjustNote(c, plan)}${planPreview(plan)}
+        ${sparQ}${adjustNote(c, plan)}${planNote(c)}${planPreview(plan)}
         <button class="btn primary wide" data-act="start-rec">Mission starten</button>`);
     }
     if (trained <= (ci.extra || 0)) {
@@ -291,6 +316,11 @@ export default {
     pick: (c, d) => {
       const v = d.name === 'morning' ? d.value === 'yes' : d.name === 'painOpen' ? d.value === 'yes' : d.value;
       c.ui.ci = { ...c.ui.ci, [d.name]: v, ...(d.name === 'painOpen' && !v ? { pain: [] } : {}) };
+      c.render();
+    },
+    'travel-gear': (c, d) => {
+      const cur = c.ui.ci?.travelGear ?? c.data.settings.travelGear ?? [];
+      c.ui.ci = { ...c.ui.ci, travelGear: cur.includes(d.id) ? cur.filter((x) => x !== d.id) : [...cur, d.id] };
       c.render();
     },
     'pain-toggle': (c, d) => {
@@ -322,6 +352,11 @@ export default {
         if (f.elbow === 'yes') next = reportElbow(next, { day: today, source: 'checkin' });
         if ((f.pain || []).length) next = reportPain(next, { day: today, regions: f.pain });
         const { painOpen, ...answers } = f;
+        if (answers.sleep) answers.sleep = Number(answers.sleep);
+        if (f.where === 'travel') {
+          answers.travelGear = f.travelGear ?? data.settings.travelGear ?? [];
+          next = { ...next, settings: { ...next.settings, travelGear: answers.travelGear } };
+        }
         return { ...next, checkins: { ...next.checkins, [today]: { day: today, ...answers } } };
       });
       c.ui.ci = null;
@@ -374,7 +409,7 @@ export default {
     'redo-ci': (c) => {
       const today = c.today();
       const { day, choice, overrideRest, extra, ...answers } = c.data.checkins[today] || {};
-      c.ui.ci = answers;
+      c.ui.ci = { ...answers, sleep: answers.sleep != null ? String(answers.sleep) : undefined };
       c.update((data) => {
         const checkins = { ...data.checkins };
         delete checkins[today];
@@ -417,6 +452,11 @@ export default {
       c.update((data) => ({ ...data, active: createActive(plan, today) }));
       c.go('training');
     },
+    ...resetActions,
+    ...oathActions,
+    'oath-later': (c) => c.update((data) => ({ ...data, oaths: { ...data.oaths, askedArc: data.engine.arc.n } })),
+    'why-open': (c) => { c.ui.whyBack = 'heute'; c.go('surge', 'warum'); },
+    'why-later': (c) => c.update((data) => ({ ...data, engine: { ...data.engine, whyAsked: data.engine.arc.n } })),
     'discard-active': (c) => {
       c.system('Mission verwerfen?', '<p>Die bisher geloggten Sätze dieser Einheit gehen verloren.</p>',
         [['discard-yes', 'Verwerfen'], ['close-modal', 'Behalten', 'primary']], 'warn');

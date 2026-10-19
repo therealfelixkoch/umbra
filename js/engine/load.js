@@ -9,7 +9,7 @@ export function loadClass({ kind, missionId, compact, intensity, rpe }) {
   if (kind !== 'mission') return 'low';
   if (compact) return 'low';
   if (['B', 'FORGE', 'NOR4X4'].includes(missionId)) return 'high';
-  if (['A', 'C', 'D'].includes(missionId)) return 'normal';
+  if (['A', 'C', 'D', 'HOTEL'].includes(missionId)) return 'normal';
   return 'low'; // D leicht
 }
 

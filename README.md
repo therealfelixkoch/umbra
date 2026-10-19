@@ -56,6 +56,33 @@ Stufe 1–5 → Score 0/25/50/75/100. Priorität = (100 − Score) × Gewicht. F
 - In der Ansicht: Fortschritt über alle Wochen (trainiert ×, abgeschlossen ✓, aktuell in Gold), der Plan der aktuellen Woche zum Abhaken, „Einheit eintragen“ (ARENA-Eintrag mit Intensität und Dauer, verknüpft mit der Woche), „Woche abschließen“ (dann wird die nächste offene Woche aktuell).
 - Pauschal per Zeit eintragen geht weiterhin unter ARENA → Eintragen.
 
+### Update v3 · Paket 3: OATHS, SUNDAY RESET und Schlaf
+
+- **Der Eid (OATHS):** 3 Wenn-dann-Gelübde pro Arc, mit Baukasten (Situation → Handlung) und Vorlagen. Ab 20 Uhr eine Karte auf Heute, ein Tap pro gehaltenem Gelübde (bis mittags für gestern nachholbar). Gezählt wird nur, was gehalten wurde: keine Markierung für Gebrochenes, keine Serien. Sonntags „Wie automatisch? 1–5“, drei Wochen in Folge ≥ 4 → besiegelt (goldenes Siegel, Chronik-Eintrag, +100 XP), danach ist Platz für ein neues. Zum Arc-Start: behalten, umformulieren oder ersetzen. „Ausrutscher“: Auslöser und neuer Wortlaut, ohne Vorwurf. Info-Karte Alkohol (Parr et al., PLOS ONE 2014). Jedes gehaltene Gelübde: +10 XP (im Tagesdeckel) und 0,1 Schaden am Arc-Boss. Debrief: „In X Nächten hast du Wort gehalten.“
+- **SUNDAY RESET:** ab Sonntag 16 Uhr (Montag nachholbar) eine Karte mit 5 Häkchen: Rückblick, Spaziergang im Tageslicht, Essen vorbereitet, Woche grob geplant (Wochenansicht zum Antippen, nur Hinweis), Gelübde bestätigt. Komplett +50 XP.
+- **Schlaf:** „Wie hast du geschlafen?“ 1–5 im Check-in. Ab 3 Wochen Daten im Rückblick und Debrief deine eigenen Zusammenhänge (Ankerübungen nach Nächten ≤ 2 vs. ≥ 4, Schlaf nach gehaltenem Getränke-Gelübde, Schlaf nach SURGE/Kälte), jeweils nur mit mindestens 5 Datenpunkten pro Gruppe und als „deine Daten, keine Diagnose“ markiert.
+
+### Update v3 · Paket 2: SURGE und DAS WARUM
+
+- **„Ich bin im Nebel.“** auf Heute: Stimmung vorher (1–5) → dein Warum → „Was zieht gerade?“ → Protokoll → Stimmung nachher. **Die Welle** (90 s + 5 physiologische Seufzer), **Glut** (5 min Cyclic Sighing, kalte Dusche, 2 min Tageslicht), **NSDR** (10/20 min Body-Scan, Text Schritt für Schritt, sanfter Ton), **Flamme** (Sack-Runden oder Spaziergang, kalte Dusche). Ab 3 Durchgängen pro Protokoll schlägt SURGE das vor, was bei dir im Schnitt am meisten bringt. Jeder Durchgang ist im Debrief eine Rückeroberung. Kalte Duschen aus Glut/Flamme landen automatisch im Kälte-Log.
+- **Wim Hof:** Sicherheitsbestätigung beim ersten Mal und alle 30 Tage, 1–5 Runden, optional leiser Zähl-Ton bis 30, Tippen irgendwo startet/stoppt das Halten, 15 s Erholungsatem, fast schwarzer Bildschirm mit Wake Lock. Verlauf als ruhige Kurve und Wochenschnitt, **keine XP, Rekorde oder Ränge für die Retentionszeit**.
+- **Kälte-Log:** Art und Dauer (Timer oder Eingabe), Minuten pro Woche ohne Zielwert, einmaliger Sicherheitshinweis.
+- **DAS WARUM:** zu Beginn jedes Arcs (und jederzeit über SURGE): Für wen? Wer in einem Jahr? Erscheint in SURGE vor der Protokollwahl und im Debrief. Alte Fassungen in Kodex → Chronik. Nur Text: Eine Sprachaufnahme braucht in der installierten iPhone-Web-App eine Mikrofonfreigabe, die iOS bei jedem Start erneut abfragen kann, und Audio in IndexedDB ist im Export unhandlich. Darum bewusst weggelassen.
+- **XP:** SURGE 15, Wim Hof 15, Kälte 10, zusammen mit FLOW im Tagesdeckel von 60.
+
+### Update v3 · Paket 1: Feedback V5
+
+- **Arc-Woche anteilig:** Startet der Arc mitten in der Woche (oder endet der Feiertagsmodus), zählt die angebrochene Woche mit 5+ verfügbaren Tagen 2 Missionen, sonst 1. Arc I wurde per Migration auf den Tag deiner ersten Mission gelegt. Im Profil gibt es „Arc-Woche manuell abschließen“ (wird im Regel-Protokoll vermerkt).
+- **Ton auf dem iPhone:** Audio wird beim ersten Tap freigeschaltet, `audioSession = playback` (Signal auch bei Stummschalter, wo iOS es erlaubt), Fallback über ein HTML-Audio-Element, dazu ein violetter Bildschirm-Puls. Vibration gibt es in iPhone-Web-Apps nicht. „Ton testen“ in Profil → Setup zeigt, was auf deinem Gerät geht.
+- **Satz-Logging:** „Letztes Mal“ pro Satz (Gewicht × Wdh.), RIR-Chips 0 · 1 · 2 · 3 · 4+ nach jedem Satz (vorausgewählt mit dem Ziel der Arc-Woche), Belastung 1–5 nach der letzten Serie. Die Progression nutzt das echte RIR: deutlich zu leicht → früher steigern, RIR 0 statt 2 → nicht steigern.
+- **Tauschen:** „Nur für heute“ (Arc-Plan und Progression der Originalübung bleiben unberührt) oder „Für den Rest des Arcs“.
+- **Timer in der Karte:** Zeit- und Runden-Übungen (Holds, Carries, Seil, Sack) mit Start/Stopp, Countdown, Signal; die echte Zeit wird geloggt. **Norwegian 4x4:** 3 min warm → 4 × (4 hart · 3 aktiv) → 3 min aus, Signal bei jedem Phasenwechsel, danach RPE pro Intervall und optional Meter/Notiz. Alle Uhren laufen über Zeitstempel und stimmen auch nach dem Hintergrund.
+- **Session-Auswertung:** Dauer (Lücken über 30 min werden einmal nachgefragt), Intensität (Belastung gewichtet nach Sätzen), Trainingslast = Intensität × Minuten. Wochensumme im Wochenrückblick, Arc-Summe im Debrief. Nur Anzeige, keine Regeln.
+- **Verlauf** (Profil): alle Einheiten mit Details (Sätze, RIR, Belastung, Tausch, Ellbogen), Filter nach Mission, Arc und Übung, Kurve pro Übung.
+- **Unterwegs / Hotel:** Check-in-Option mit Häkchen für Kurzhanteln, Laufband, Widerstandsband, Bank/Stuhl. Jede Übung wird durch eine mit gleichem Muster ersetzt, zählt voll für die Rotation, Progression getrennt (`travel:`). Der Zirkel-Platz wird zum **HOTEL**-Zirkel ohne Geräte.
+- **ARENA:** Inhalte (Technik, Pratzen, Sack, Clinch, Sparring, Kondition), Sparringsrunden, Fokus/Notiz. Neuer Tab **Status**: Einheiten, Stunden, Sparringsrunden, Inhalte, pro Monat und Arc, Technik-Radar (monatlicher Technik-Check, aktueller vs. vorheriger Monat). Auch im Debrief.
+- **XP neu** (zentral in `js/data/xp-config.js`): Mission 100, QUICK STRIKE 70, SHADOWSTEP 40, ARENA 80, FLOW 20, Wochenziel +100, Bestleistung +25, Boss +500. Nebenquellen zusammen max. 60 XP pro Tag. Ränge: BLADE 3.000 · WARDEN 9.000 · PHANTOM 21.000 · UMBRA 45.000 · Unzerbrechlich 90.000. Alte XP wurden per Migration neu berechnet (der alte Wert bleibt als `xpV2` im Export). „XP pro Quelle“ pro Woche und Arc im Profil und im Debrief-Export.
+
 ### Update v2 · Paket 3: Lore, UI und Gamification
 
 - **Namen:** Missionen ASCENT (A), BEDROCK (B), IMPACT (C), INFILTRATION (D), QUICK STRIKE (Kompakt), SHADOWSTEP (15 min), FLOW (Mobility), ARENA (Muay Thai), FORGE (Home Gym). Arcs: IRONROOT, IGNITION, ENDLESS NIGHT, STILL WATER. Titel und Eigennamen englisch, alle Texte deutsch. Erzähler ist das System, ernst und knapp.

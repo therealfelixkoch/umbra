@@ -7,7 +7,7 @@ const NAMES = { A: 'Ziehen', B: 'Beine', C: 'Drücken', D: 'Zirkel' };
 /**
  * @param {object} p
  * @param {{yesterdayMT:'none'|'light'|'hard', feeling:'frisch'|'normal'|'platt', tonightMT:'yes'|'no'|'maybe', morning?:boolean,
- *          where?:'room'|'gym'|'kompakt'|'express'|'mobility'}} p.checkin
+ *          where?:'room'|'gym'|'travel'|'kompakt'|'express'|'mobility'}} p.checkin
  * @param {number} p.hardStreak  harte Tage am Stück bis gestern
  * @param {string[]} p.queue     Rotations-Queue, z. B. ['B','C','D','A']
  * @param {boolean} [p.overrideRest] Ruhetag wurde bewusst überstimmt
@@ -20,7 +20,7 @@ const NAMES = { A: 'Ziehen', B: 'Beine', C: 'Drücken', D: 'Zirkel' };
 export function decide({ checkin, hardStreak, queue, overrideRest = false, yesterday = null, gap = null,
   lastDone = {}, holiday = false, fourByFourDue = false }) {
   const { yesterdayMT, feeling, tonightMT, where } = checkin;
-  const profile = where === 'gym' ? 'gym' : 'room';
+  const profile = where === 'gym' ? 'gym' : where === 'travel' ? 'travel' : 'room';
   const platt = feeling === 'platt';
   const sparred = yesterdayMT === 'hard';
 
@@ -89,6 +89,9 @@ export function decide({ checkin, hardStreak, queue, overrideRest = false, yeste
   } else if (next === 'D' && fourByFourDue && !compact) {
     missionId = 'NOR4X4';
     slot = 'D';
+  } else if (next === 'D' && profile === 'travel') {
+    missionId = 'HOTEL';
+    slot = 'D';
   }
 
   // Nicht zwei High-Tage in Folge (Kompakt ist Low und fällt nicht darunter).
@@ -108,6 +111,8 @@ export function decide({ checkin, hardStreak, queue, overrideRest = false, yeste
     reasons.push(tonightMT === 'yes'
       ? 'Nächste Mission in der Rotation, sie verträgt sich mit der ARENA heute Abend.'
       : missionId === 'FORGE' ? 'Home Gym: FORGE übernimmt den nächsten Platz in der Rotation.'
+        : missionId === 'HOTEL' ? 'Unterwegs: Der Hotel-Zirkel übernimmt den Zirkel-Platz.'
+        : profile === 'travel' ? 'Unterwegs: gleiche Mission, jede Übung mit gleichem Muster und dem, was da ist. Zählt voll.'
         : missionId === 'NOR4X4' ? 'Arc-Fokus Ausdauer: Heute 4x4 statt Zirkel.'
           : 'Nächste Mission in der Rotation.');
   }

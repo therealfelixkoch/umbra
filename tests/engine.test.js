@@ -341,7 +341,7 @@ describe('Verbuchen', () => {
     expect(session.completion).toBe(1);
     expect(data.engine.queue).toEqual(['B', 'C', 'D', 'A']);
     expect(data.exState.pullup_tactical.target).toBe(6);
-    expect(session.xp).toBe(125);
+    expect(session.xp).toBe(100); // v3: volle Mission pauschal 100
   });
   it('unvollständige Mission zählt anteilig', () => {
     const { session, data } = run(defaultData(), 'C', (a) => { a.log[1].sets[0].done = true; });
@@ -366,13 +366,13 @@ describe('Verbuchen', () => {
     const { session } = logArena(defaultData(), { day: T, intensity: 'hard', minutes: 60 });
     expect(session.xp).toBe(80);
   });
-  it('Arena mit Gefühl 1–10: ab 7 hart, XP nach Intensität und Dauer', () => {
+  it('Arena mit Gefühl 1–10: ab 7 hart, XP pauschal 80 (v3)', () => {
     const hard = logArena(defaultData(), { day: T, rpe: 7, minutes: 90 }).session;
     expect(hard.intensity).toBe('hard');
-    expect(hard.xp).toBe(113);
+    expect(hard.xp).toBe(80);
     const light = logArena(defaultData(), { day: T, rpe: 4, minutes: 60 }).session;
     expect(light.intensity).toBe('light');
-    expect(light.xp).toBe(60);
+    expect(light.xp).toBe(80);
   });
   it('Sparring per Gefühl ≥ 7 löst Regel 4 am nächsten Tag aus', () => {
     const d = logArena(defaultData(), { day: addDays(T, -1), rpe: 8, minutes: 60 }).data;
@@ -405,13 +405,16 @@ describe('Gamification', () => {
   });
   it('Ränge', () => {
     expect(rankFor(0).id).toBe('SHADE');
-    expect(rankFor(1000).id).toBe('BLADE');
-    expect(rankFor(3500).id).toBe('WARDEN');
-    expect(rankFor(16000).id).toBe('UMBRA');
+    expect(rankFor(2999).id).toBe('SHADE');
+    expect(rankFor(3000).id).toBe('BLADE');
+    expect(rankFor(9000).id).toBe('WARDEN');
+    expect(rankFor(21000).id).toBe('PHANTOM');
+    expect(rankFor(45000).id).toBe('UMBRA');
+    expect(rankFor(89999).id).toBe('UMBRA');
     expect(rankFor(99999).name).toBe('Unzerbrechlich');
   });
   it('XP: Express zählt, Fluss klein', () => {
-    expect(sessionXp({ kind: 'express', missionId: 'EXPRESS' })).toBe(50);
+    expect(sessionXp({ kind: 'express', missionId: 'EXPRESS' })).toBe(40);
     expect(sessionXp({ kind: 'flow', missionId: 'FLOW' })).toBe(20);
   });
 });
@@ -1015,15 +1018,16 @@ describe('Migration v1 → v2', () => {
     expect(m.engine.queue).toEqual(['C', 'D', 'A', 'B']);
     expect(m.engine.fullSinceDeload).toBe(undefined);
     expect(m.settings.holiday.enabled).toBe(true);
-    expect(m.ruleLog).toEqual([]);
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3']);
     expect(m.mobility.length).toBe(1);
   });
-  it('nach der Migration startet Arc I in der laufenden Woche', () => {
+  it('nach der Migration startet Arc I am Tag der ersten Mission (v3)', () => {
     const m = normalize(JSON.parse(JSON.stringify(v1)));
     const r = syncData(m, T);
     expect(r.data.engine.arc.n).toBe(0);
-    expect(r.data.engine.arc.week).toBe(1);
-    expect(r.data.engine.arc.startedWeek).toBe(weekStart(T));
+    expect(r.data.engine.arc.startedDay).toBe('2026-10-10');
+    // Sa/So der Startwoche: Ziel 1 Mission, B am 10.10. erfüllt → am 16.10. läuft Woche 2
+    expect(r.data.engine.arc.week).toBe(2);
   });
   it('Migration ist wiederholbar (v2 bleibt v2)', () => {
     const once = migrate(JSON.parse(JSON.stringify(v1)));
@@ -1507,5 +1511,649 @@ describe('Bang Muay Thai', () => {
   });
   it('alte Daten bekommen ein leeres Programm', () => {
     expect(normalize({ schemaVersion: 2, sessions: [], settings: {}, engine: {} }).bmt.weeks).toEqual([]);
+  });
+});
+
+// ——— Update v3 ———
+import { weekTarget, rebaseFirstArc as rebaseV3, completeWeekManually } from '../js/engine/arc.js';
+import { rirOutcome, activeMinutes, sessionIntensity, trainingLoad, intervalPhases, phaseAt, workDone, timerState, weekLoad } from '../js/engine/session.js';
+import { itemFor, travelExercise, stateKey } from '../js/engine/plan.js';
+import { xpLedger, xpBySource, totalXp, sideCapLeft } from '../js/engine/game.js';
+import { XP_CONFIG } from '../js/data/xp-config.js';
+import { arenaStats, techCheckDue, techCompare, arenaRange } from '../js/engine/arenastats.js';
+import { filterSessions, exerciseCurve, filterOptions } from '../js/engine/journal.js';
+
+const doneAll = (active, rir) => { active.log.forEach((e) => e.sets.forEach((s) => { s.done = true; if (rir != null) s.rir = rir; })); return active; };
+
+describe('v3 · Angebrochene Arc-Woche', () => {
+  const H = { enabled: true, from: '12-21', to: '01-03' };
+  it('Start am Donnerstag → Ziel 1 Mission', () => {
+    expect(weekTarget('2026-10-12', { startedDay: '2026-10-15' }, H)).toBe(1);
+  });
+  it('Start Mo/Di/Mi → Ziel 2 Missionen', () => {
+    for (const d of ['2026-10-12', '2026-10-13', '2026-10-14']) expect(weekTarget('2026-10-12', { startedDay: d }, H)).toBe(2);
+  });
+  it('volle Woche → 2, Feiertagswoche → pausiert', () => {
+    expect(weekTarget('2026-10-19', { startedDay: '2026-10-15' }, H)).toBe(2);
+    expect(weekTarget('2026-12-28', { startedDay: '2026-10-15' }, H)).toBe(null);
+  });
+  it('Feiertagsende mitten in der Woche: anteiliges Ziel', () => {
+    expect(weekTarget('2027-01-04', { startedDay: '2026-10-01' }, { enabled: true, from: '12-21', to: '01-06' })).toBe(1);
+    expect(weekTarget('2027-01-04', { startedDay: '2026-10-01' }, { enabled: true, from: '12-21', to: '01-05' })).toBe(2);
+  });
+  it('Donnerstag-Start mit 1 Mission wird nicht wiederholt', () => {
+    const arc = { n: 0, week: 1, startedDay: '2026-10-15', startedWeek: '2026-10-12', through: '2026-10-05' };
+    const r = syncArc(arc, [mission('2026-10-15', 'A')], '2026-10-19', { holiday: H });
+    expect(r.arc.week).toBe(2);
+  });
+  it('Rebase des laufenden Arcs: Start am Tag der ersten Mission, Sessions bekommen die richtige Woche', () => {
+    const ss = [mission('2026-10-15', 'A', { arc: { n: 0, week: 1 } }), mission('2026-10-20', 'B', { arc: { n: 0, week: 1 } }),
+      mission('2026-10-22', 'C', { arc: { n: 0, week: 1 } })];
+    const r = rebaseV3(ss, '2026-10-23', H);
+    expect(r.arc.startedDay).toBe('2026-10-15');
+    expect(r.arc.week).toBe(2);
+    expect(r.sessions.map((s) => s.arc.week)).toEqual([1, 2, 2]);
+  });
+  it('Arc-Woche manuell abschließen', () => {
+    const r = completeWeekManually({ n: 0, week: 2, through: '2026-10-05' }, '2026-10-16');
+    expect(r.arc.week).toBe(3);
+    expect(r.event.manual).toBe(true);
+    const last = completeWeekManually({ n: 1, week: 6, through: '2026-10-05' }, '2026-10-16');
+    expect(last.arc.n).toBe(2);
+    expect(last.arc.week).toBe(1);
+  });
+});
+
+describe('v3 · RIR', () => {
+  const st0 = { exId: 'pushup_deficit', load: 0, target: 12, miss: 0 };
+  const ctx = (rir) => ({ settings: defaultData().settings, equipment: [], getDef, rir });
+  const sets = (rirs) => rirs.map((r) => ({ value: 12, load: 0, rir: r }));
+  it('rirOutcome: RIR 0 bei Ziel 2 = grind, deutlich darüber = easy', () => {
+    expect(rirOutcome(sets([2, 1, 0]), 2)).toBe('grind');
+    expect(rirOutcome(sets([4, 4, 4]), 2)).toBe('easy');
+    expect(rirOutcome(sets([2, 2, 3]), 2)).toBe(null);
+    expect(rirOutcome(sets([0, 0]), 1)).toBe(null);
+  });
+  it('normal: +1 Wdh.', () => {
+    expect(progress(getDef('pushup_deficit'), st0, sets([2, 2, 2]), ctx(2)).target).toBe(13);
+  });
+  it('zu leicht → früher steigern (+2)', () => {
+    const r = progress(getDef('pushup_deficit'), st0, sets([4, 4, 4]), ctx(2));
+    expect(r.target).toBe(14);
+    expect(r.early).toBe(true);
+  });
+  it('RIR 0 statt 2 → nicht steigern', () => {
+    const r = progress(getDef('pushup_deficit'), st0, sets([2, 1, 0]), ctx(2));
+    expect(r.target).toBe(12);
+    expect(r.lastChange).toBe('held_rir');
+  });
+  it('zu leicht mit Last ab Bereichsmitte → Gewicht hoch', () => {
+    const def = getDef('goblet_curl');
+    const st = { exId: 'goblet_curl', load: 12, target: 17, miss: 0 };
+    const c = { settings: { ...defaultData().settings, kbWeights: [8, 12, 16, 20] }, equipment: ['kb'], getDef, rir: 2 };
+    const r = progress(def, st, [17, 17, 17].map((v) => ({ value: v, load: 12, rir: 4 })), c);
+    expect(r.load).toBe(16);
+    expect(r.lastChange).toBe('load_up');
+  });
+  it('finishSession nutzt das geloggte RIR', () => {
+    const data = { ...defaultData(), settings: { ...defaultData().settings, onboarded: true } };
+    const plan = buildPlan({ missionId: 'C', profile: 'room', data, today: T });
+    const a = doneAll(createActive(plan, T), 0);
+    const r = finishSession(data, a, { now: Date.now() });
+    const dip = r.data.exState.dip;
+    expect(dip.lastChange).toBe('held_rir');
+  });
+});
+
+describe('v3 · Übung tauschen', () => {
+  const data = { ...defaultData(), settings: { ...defaultData().settings, onboarded: true } };
+  const base = buildPlan({ missionId: 'A', profile: 'room', data, today: T });
+  const idx = base.items.findIndex((i) => i.key === 'pullup_tactical');
+  const slotKey = base.items[idx].slotKey;
+  it('„Für den Rest des Arcs“ gilt im selben Arc', () => {
+    const n = data.engine.arc?.n ?? 0;
+    const d = { ...data, engine: { ...data.engine, arcSwaps: { [slotKey]: { id: 'bw_row_table', arc: n } } } };
+    expect(buildPlan({ missionId: 'A', profile: 'room', data: d, today: T }).items[idx].exId).toBe('bw_row_table');
+  });
+  it('… und endet mit dem Arc', () => {
+    const n = data.engine.arc?.n ?? 0;
+    const d = { ...data, engine: { ...data.engine, arcSwaps: { [slotKey]: { id: 'bw_row_table', arc: n - 1 } } } };
+    expect(buildPlan({ missionId: 'A', profile: 'room', data: d, today: T }).items[idx].exId).toBe(base.items[idx].exId);
+  });
+  it('„Nur heute“ lässt die Progression der ursprünglichen Übung unberührt', () => {
+    const d = { ...data, exState: { pullup_tactical: { exId: 'pullup_tactical', load: 0, target: 7, miss: 0 } } };
+    const plan = buildPlan({ missionId: 'A', profile: 'room', data: d, today: T });
+    const old = plan.items[idx];
+    plan.items[idx] = { ...itemFor('bw_row_table', { data: d, profile: 'room', sets: old.sets }), slotKey: old.slotKey, swappedFrom: old.exId, swapScope: 'today', rir: old.rir };
+    const a = createActive(plan, T);
+    doneAll(a, 2);
+    const r = finishSession(d, a);
+    expect(r.data.exState.pullup_tactical).toEqual({ exId: 'pullup_tactical', load: 0, target: 7, miss: 0 });
+    expect(r.data.engine.arcSwaps).toBe(undefined);
+    expect(r.session.exercises[idx].swapScope).toBe('today');
+  });
+});
+
+describe('v3 · Session-Auswertung', () => {
+  const m = 60000;
+  it('Dauer ohne Lücken über 30 min', () => {
+    const r = activeMinutes([0, 10 * m, 20 * m, 80 * m, 90 * m]);
+    expect(r.minutes).toBe(30);
+    expect(r.gaps.length).toBe(1);
+    expect(r.gaps[0].minutes).toBe(60);
+    expect(activeMinutes([0, 10 * m, 20 * m, 80 * m, 90 * m], { countGaps: true }).minutes).toBe(90);
+  });
+  it('Intensität gewichtet nach Sätzen, Last = Intensität × Minuten', () => {
+    const ex = [{ effort: 4, sets: [{ done: true }, { done: true }, { done: true }] }, { effort: 2, sets: [{ done: true }] }, { sets: [{ done: true }] }];
+    expect(sessionIntensity(ex)).toBe(3.5);
+    expect(trainingLoad(3.5, 40)).toBe(140);
+    expect(sessionIntensity([])).toBe(null);
+  });
+  it('finishSession speichert Dauer, Intensität und Last', () => {
+    const data = { ...defaultData(), settings: { ...defaultData().settings, onboarded: true } };
+    const plan = buildPlan({ missionId: 'C', profile: 'room', data, today: T });
+    const a = createActive(plan, T, 0);
+    doneAll(a, 2);
+    a.log.forEach((e) => { e.effort = 3; });
+    a.marks = [5 * m, 20 * m, 40 * m];
+    const r = finishSession(data, a, { now: 45 * m });
+    expect(r.session.minutes).toBe(45);
+    expect(r.session.intensity).toBe(3);
+    expect(r.session.load).toBe(135);
+    expect(r.session.exercises[0].effort).toBe(3);
+  });
+  it('Wochensumme der Trainingslast', () => {
+    expect(weekLoad([{ day: '2026-10-12', load: 100 }, { day: '2026-10-18', load: 50 }, { day: '2026-10-19', load: 9 }], '2026-10-12', '2026-10-18')).toBe(150);
+  });
+});
+
+describe('v3 · Timer', () => {
+  const p = { warmup: 180, rounds: 4, work: 240, rest: 180, cooldown: 180 };
+  it('4x4: Phasenfolge und Zeiten', () => {
+    const ph = intervalPhases(p);
+    expect(ph.map((x) => x.phase)).toEqual(['warmup', 'work', 'rest', 'work', 'rest', 'work', 'rest', 'work', 'cooldown']);
+    expect(ph.reduce((n, x) => n + x.sec, 0)).toBe(31 * 60); // 3 + 4×4 + 3×3 + 3
+  });
+  it('Sack-Runden ohne Auf-/Abwärmen: keine Pause nach der letzten Runde', () => {
+    expect(intervalPhases({ rounds: 3, work: 120, rest: 60 }).map((x) => x.phase)).toEqual(['work', 'rest', 'work', 'rest', 'work']);
+  });
+  it('Stand nur aus Zeitstempeln: korrekt nach Hintergrund', () => {
+    const ph = intervalPhases(p);
+    const t0 = 1_000_000;
+    expect(phaseAt(ph, t0, t0 + 10_000).phase).toBe('warmup');
+    const s = phaseAt(ph, t0, t0 + (180 + 240 + 60) * 1000); // 1 min in der ersten Pause
+    expect(s.phase).toBe('rest');
+    expect(Math.round(s.left)).toBe(120);
+    expect(workDone(ph, s.index)).toBe(1);
+    expect(phaseAt(ph, t0, t0 + 3 * 3600_000).phase).toBe('done');
+  });
+  it('Pause hält die Uhr an', () => {
+    const ph = intervalPhases(p);
+    const t0 = 0;
+    const paused = phaseAt(ph, t0, 500_000, { pausedMs: 0, pausedAt: 100_000 });
+    expect(Math.round(paused.left)).toBe(80);
+    expect(Math.round(phaseAt(ph, t0, 500_000, { pausedMs: 400_000 }).left)).toBe(80);
+  });
+  it('Karten-Timer: Countdown und Überzeit', () => {
+    expect(timerState({ startAt: 0, target: 30 }, 10_000).left).toBe(20);
+    const o = timerState({ startAt: 0, target: 30 }, 45_000);
+    expect(o.over).toBe(true);
+    expect(o.elapsed).toBe(45);
+    expect(timerState({ startAt: 0, target: 30, stoppedAt: 20_000 }, 99_000).elapsed).toBe(20);
+  });
+});
+
+describe('v3 · Unterwegs', () => {
+  const data = { ...defaultData(), settings: { ...defaultData().settings, onboarded: true, travelGear: [] } };
+  it('Check-in „Unterwegs“ → Profil travel, Zirkel-Platz = HOTEL', () => {
+    const r = decide({ checkin: ci({ where: 'travel' }), hardStreak: 0, queue: ['D', 'A', 'B', 'C'] });
+    expect(r.profile).toBe('travel');
+    expect(r.missionId).toBe('HOTEL');
+    expect(r.slot).toBe('D');
+    expect(decide({ checkin: ci({ where: 'travel' }), hardStreak: 0, queue: Q }).missionId).toBe('A');
+  });
+  it('jeder Platz wird mit gleichem Muster ersetzt, nur mit Vorhandenem', () => {
+    for (const id of ['A', 'B', 'C']) {
+      const plan = buildPlan({ missionId: id, profile: 'travel', data, today: T });
+      expect(plan.items.length > 0).toBe(true);
+      for (const it of plan.items) expect((getDef(it.exId).equipment || []).filter((e) => e !== 'chair')).toEqual([]);
+    }
+    expect(travelExercise('pullup', [])).toBe('towel_row');
+    expect(travelExercise('dip', ['chair'])).toBe('chair_dip');
+    expect(travelExercise('dip', [])).toBe('pushup_deficit');
+    expect(travelExercise('kb_swing', [])).toBe('broad_jump');
+    expect(travelExercise('bulgarian_split_squat', [])).toBe('split_squat');
+  });
+  it('Kurzhanteln angehakt → werden genutzt', () => {
+    const d = { ...data, settings: { ...data.settings, travelGear: ['dumbbells'] } };
+    const plan = buildPlan({ missionId: 'A', profile: 'travel', data: d, today: T });
+    expect(plan.items.some((i) => (getDef(i.exId).equipment || []).some((e) => e === 'dumbbells' || e === 'kb'))).toBe(true);
+  });
+  it('getrennte Progression, Ankerübungen bleiben unberührt, Rotation läuft', () => {
+    const d = { ...data, exState: { pullup_tactical: { exId: 'pullup_tactical', load: 0, target: 7, miss: 0 } } };
+    const plan = buildPlan({ missionId: 'A', profile: 'travel', data: d, today: T });
+    const r = finishSession(d, doneAll(createActive(plan, T), 2));
+    expect(r.data.exState.pullup_tactical).toEqual({ exId: 'pullup_tactical', load: 0, target: 7, miss: 0 });
+    const keys = Object.keys(r.data.exState).filter((k) => k !== 'pullup_tactical');
+    expect(keys.length > 0 && keys.every((k) => k.startsWith('travel:'))).toBe(true);
+    expect(r.session.xp).toBe(100);
+    expect(r.data.engine.queue[0] !== 'A').toBe(true);
+    expect(stateKey('travel', 'x')).toBe('travel:x');
+  });
+  it('Hotel-Zirkel: ohne Geräte, zählt voll', () => {
+    const plan = buildPlan({ missionId: 'HOTEL', profile: 'travel', data, today: T });
+    expect(plan.format).toBe('circuit');
+    for (const it of plan.items) expect(getDef(it.exId).equipment).toEqual([]);
+    expect(sessionXp({ kind: 'mission', missionId: 'HOTEL', completion: 1 })).toBe(100);
+  });
+});
+
+describe('v3 · XP', () => {
+  it('Werte aus der zentralen Konfiguration', () => {
+    expect(sessionXp({ kind: 'mission', missionId: 'A', completion: 1 })).toBe(100);
+    expect(sessionXp({ kind: 'mission', missionId: 'A', compact: true, completion: 1 })).toBe(70);
+    expect(sessionXp({ kind: 'mission', missionId: 'A', completion: 0.5 })).toBe(50);
+    expect(sessionXp({ kind: 'mission', missionId: 'A', completion: 1, records: [{}, {}] })).toBe(150);
+    expect(sessionXp({ kind: 'arena', rpe: 10, minutes: 180 })).toBe(80);
+  });
+  it('Tagesdeckel 60 für Nebenquellen, Training ungedeckelt', () => {
+    const day = '2026-10-14';
+    const ss = [{ day, kind: 'flow' }, { day, kind: 'surge' }, { day, kind: 'surge' }, { day, kind: 'wimhof' }, { day, kind: 'cold' },
+      { day, kind: 'mission', missionId: 'A', completion: 1 }];
+    const l = xpLedger({ sessions: ss, settings: {}, engine: {} });
+    const side = l.entries.filter((e) => XP_CONFIG.sideSources.includes(e.source)).reduce((n, e) => n + e.xp, 0);
+    expect(side).toBe(60);
+    expect(l.total).toBe(160);
+    expect(sideCapLeft({ sessions: ss, settings: {}, engine: {} }, day)).toBe(0);
+  });
+  it('keine XP für Retentionszeit (Wim Hof pauschal)', () => {
+    expect(sessionXp({ kind: 'wimhof', retention: [30, 60, 90] })).toBe(sessionXp({ kind: 'wimhof', retention: [200, 240, 300] }));
+  });
+  it('Wochenziel +100 und Boss +500 im XP-Buch', () => {
+    const ss = ['2026-10-12', '2026-10-13', '2026-10-14'].map((d) => ({ ...mission(d, 'A', { completion: 1 }), arc: { n: 0, week: 1 } }));
+    const l = xpLedger({ sessions: ss, settings: {}, engine: { bossEvents: { 0: { defeated: '2026-10-15' } } } });
+    expect(l.total).toBe(300 + 100 + 500);
+    const by = xpBySource(l, 'arc');
+    expect(by[0].weekGoal).toBe(100);
+    expect(by[0].boss).toBe(500);
+    expect(totalXp(ss)).toBe(400);
+  });
+});
+
+describe('v3 · Migration v2 → v3', () => {
+  const v2 = {
+    schemaVersion: 2, settings: { onboarded: true, bodyweight: 82, equipment: { room: ['bar'] } },
+    engine: { queue: ['B', 'C', 'D', 'A'], arc: { n: 0, week: 2, startedWeek: '2026-10-12', through: '2026-10-12' } },
+    exState: { pullup: { exId: 'pullup', load: 0, target: 6 } }, records: {},
+    sessions: [{ day: '2026-10-15', kind: 'mission', missionId: 'A', completion: 1, xp: 125, arc: { n: 0, week: 1 } },
+      { day: '2026-10-15', kind: 'arena', rpe: 8, minutes: 90, xp: 120 }],
+    checkins: {}, mobility: [],
+  };
+  it('XP neu berechnet, alter Wert bleibt als xpV2', () => {
+    const m = normalize(JSON.parse(JSON.stringify(v2)));
+    expect(m.schemaVersion).toBe(3);
+    expect(m.sessions.map((s) => s.xp)).toEqual([100, 80]);
+    expect(m.sessions.map((s) => s.xpV2)).toEqual([125, 120]);
+  });
+  it('Daten bleiben erhalten, Arc I neu ab erster Mission', () => {
+    const m = normalize(JSON.parse(JSON.stringify(v2)));
+    expect(m.exState.pullup.target).toBe(6);
+    expect(m.engine.queue).toEqual(['B', 'C', 'D', 'A']);
+    expect(m.engine.arc.startedDay).toBe('2026-10-15');
+    expect(m.ruleLog.at(-1).rule).toBe('migration:v3');
+    expect(m.techChecks).toEqual({});
+  });
+  it('v3 bleibt v3', () => {
+    const once = migrate(JSON.parse(JSON.stringify(v2)));
+    expect(JSON.stringify(migrate(once))).toBe(JSON.stringify(once));
+  });
+});
+
+describe('v3 · ARENA-Status und Verlauf', () => {
+  it('ARENA-Log mit Inhalten, Sparringsrunden, Fokus', () => {
+    const s = logArena(defaultData(), { day: T, rpe: 8, minutes: 90, content: ['Sparring', 'Clinch'], sparRounds: 5, focus: ' Teep halten ' }).session;
+    expect(s.content).toEqual(['Sparring', 'Clinch']);
+    expect(s.sparRounds).toBe(5);
+    expect(s.focus).toBe('Teep halten');
+    expect(s.load).toBe(360);
+  });
+  it('Statistik gesamt, pro Monat und pro Arc', () => {
+    const ss = [{ day: '2026-09-30', kind: 'arena', minutes: 60, arc: { n: 0 }, content: ['Technik'] },
+      { day: '2026-10-02', kind: 'arena', minutes: 90, arc: { n: 0 }, content: ['Sparring'], sparRounds: 4 },
+      { day: '2026-10-03', kind: 'arena', minutes: 60, arc: { n: 1 } }, mission('2026-10-03', 'A')];
+    const st = arenaStats(ss);
+    expect(st.total.sessions).toBe(3);
+    expect(st.total.hours).toBe(3.5);
+    expect(st.total.sparRounds).toBe(4);
+    expect(st.total.content.Sparring).toBe(1);
+    expect(st.months.map((m) => [m.key, m.sessions])).toEqual([['2026-10', 2], ['2026-09', 1]]);
+    expect(st.arcs.map((a) => a.n)).toEqual([1, 0]);
+    expect(arenaRange(ss, '2026-10-01', '2026-10-31').sessions).toBe(2);
+  });
+  it('Technik-Check einmal pro Monat, Vergleich mit dem vorherigen', () => {
+    const checks = { '2026-09': { scores: { teep: 2 } }, '2026-10': { scores: { teep: 3 } } };
+    expect(techCheckDue(checks, '2026-10-19')).toBe(false);
+    expect(techCheckDue(checks, '2026-11-01')).toBe(true);
+    const c = techCompare(checks);
+    expect(c.current.key).toBe('2026-10');
+    expect(c.previous.scores.teep).toBe(2);
+  });
+  it('Verlauf: Filter und Kurve pro Übung', () => {
+    const ss = [
+      { id: 's1', day: '2026-10-01', missionId: 'A', arc: { n: 0 }, exercises: [{ exId: 'pushup_deficit', sets: [{ value: 10, done: true }, { value: 12, done: true }] }] },
+      { id: 's2', day: '2026-10-05', missionId: 'C', arc: { n: 1 }, exercises: [{ exId: 'pushup_deficit', sets: [{ value: 14, done: true }] }] },
+      { id: 's3', day: '2026-10-06', missionId: 'A', arc: { n: 1 }, exercises: [] }];
+    expect(filterSessions(ss).map((s) => s.id)).toEqual(['s3', 's2', 's1']);
+    expect(filterSessions(ss, { mission: 'A' }).map((s) => s.id)).toEqual(['s3', 's1']);
+    expect(filterSessions(ss, { arc: 1, exId: 'pushup_deficit' }).map((s) => s.id)).toEqual(['s2']);
+    expect(exerciseCurve(ss, 'pushup_deficit', getDef).map((p) => p.value)).toEqual([12, 14]);
+    expect(filterOptions(ss).arcs).toEqual([0, 1]);
+  });
+});
+
+// ——— Update v3 · Paket 2 ———
+import { breathAt, SIGH_CYCLE, protocolSteps, roundsAt, cueAt, surgeEffect, recommendProtocol, logSurge, whSafetyDue, whStart, whTap, whTick,
+  logWimhof, wimhofStats, logCold, coldWeeks, whyDue, addWhy, currentWhy, reclaims } from '../js/engine/surge.js';
+
+describe('v3 · SURGE', () => {
+  it('Cyclic Sighing: 2 s ein, 1 s nachfüllen, 6 s aus', () => {
+    expect(SIGH_CYCLE).toBe(9);
+    expect(breathAt(0, 1000).phase).toBe('in');
+    expect(breathAt(0, 2500).phase).toBe('in2');
+    const out = breathAt(0, 6000);
+    expect(out.phase).toBe('out');
+    expect(Math.round(out.left)).toBe(3);
+    expect(breathAt(0, 9500).cycle).toBe(1);
+  });
+  it('Protokolle: Schritte und Dauern', () => {
+    const w = protocolSteps('welle');
+    expect(w.map((s) => s.type)).toEqual(['wave', 'breath']);
+    expect(w[0].sec).toBe(90);
+    expect(w[1].sec).toBe(45); // 5 Seufzer
+    expect(protocolSteps('glut', { coldSec: 180 }).map((s) => [s.type, s.sec])).toEqual([['breath', 300], ['cold', 180], ['timer', 120]]);
+    expect(protocolSteps('nsdr', { nsdrMin: 20 })[0].sec).toBe(1200);
+    expect(protocolSteps('nsdr')[0].sec).toBe(600);
+    expect(protocolSteps('flamme', { rounds: 4 })[0].sec).toBe(4 * 240 - 60);
+    expect(protocolSteps('flamme', { flame: 'walk' })[0].sec).toBe(1200);
+  });
+  it('Runden und NSDR-Hinweise nach Zeit', () => {
+    const st = { rounds: 3, work: 180, rest: 60 };
+    expect(roundsAt(st, 10)).toEqual({ round: 1, phase: 'work', left: 170 });
+    expect(roundsAt(st, 200).phase).toBe('rest');
+    expect(roundsAt(st, 250).round).toBe(2);
+    expect(cueAt(['a', 'b', 'c'], 30, 0)).toBe('a');
+    expect(cueAt(['a', 'b', 'c'], 30, 29)).toBe('c');
+  });
+  it('Wirksamkeit: Empfehlung erst ab 3 Durchgängen', () => {
+    let d = defaultData();
+    const add = (p, b, a) => { d = logSurge(d, { day: T, protocol: p, moodBefore: b, moodAfter: a, now: Math.random() }).data; };
+    add('glut', 2, 4); add('glut', 1, 3);
+    expect(recommendProtocol(d.sessions)).toBe(null);
+    add('glut', 2, 3);
+    add('welle', 2, 5); add('welle', 3, 3);
+    const r = recommendProtocol(d.sessions);
+    expect(r.id).toBe('glut');
+    expect(r.text).toBe('Glut hebt deine Stimmung im Schnitt um 1,7.');
+    expect(surgeEffect(d.sessions).welle.n).toBe(2);
+    expect(d.sessions[0].xp).toBe(15);
+  });
+  it('Rückeroberungen zählen', () => {
+    const d = logSurge(defaultData(), { day: '2026-10-14', protocol: 'welle', moodBefore: 2, moodAfter: 3 }).data;
+    expect(reclaims(d.sessions, '2026-10-12', '2026-10-18')).toBe(1);
+  });
+});
+
+describe('v3 · Wim Hof', () => {
+  it('Sicherheitsbestätigung beim ersten Mal und alle 30 Tage', () => {
+    expect(whSafetyDue(null, T)).toBe(true);
+    expect(whSafetyDue('2026-10-01', T)).toBe(false);
+    expect(whSafetyDue(addDays(T, -30), T)).toBe(true);
+  });
+  it('Ablauf: Atmen → Tipp → Halten → Tipp → 15 s Erholung → nächste Runde', () => {
+    let s = whStart(2, 0);
+    s = whTap(s, 60_000);
+    expect(s.phase).toBe('hold');
+    s = whTap(s, 150_000);
+    expect(s.phase).toBe('recover');
+    expect(s.holds).toEqual([90]);
+    expect(whTick(s, 160_000).phase).toBe('recover');
+    s = whTick(s, 165_000);
+    expect(s.phase).toBe('breathe');
+    expect(s.round).toBe(2);
+    s = whTick(whTap(whTap(s, 200_000), 300_000), 315_000);
+    expect(s.phase).toBe('done');
+    expect(s.holds).toEqual([90, 100]);
+    expect(whTap(s, 400_000)).toBe(s);
+  });
+  it('XP pauschal, Statistik ohne Rekord', () => {
+    const a = logWimhof(defaultData(), { day: '2026-10-13', holds: [60, 90] }).data;
+    const b = logWimhof(a, { day: '2026-10-14', holds: [80, 120, 150], now: 5 }).data;
+    expect(b.sessions.map((s) => s.xp)).toEqual([15, 15]);
+    const st = wimhofStats(b.sessions, '2026-10-16');
+    expect(st.sessions.map((x) => x.avg)).toEqual([75, 117]);
+    expect(st.weekAvg).toBe(100);
+    expect(b.records).toEqual({});
+  });
+});
+
+describe('v3 · Kälte und Warum', () => {
+  it('Kälte-Log: Wochensumme in Minuten, ohne Ziel', () => {
+    let d = logCold(defaultData(), { day: '2026-10-13', seconds: 120 }).data;
+    d = logCold(d, { day: '2026-10-15', seconds: 90, type: 'bad', now: 7 }).data;
+    const w = coldWeeks(d.sessions, '2026-10-16', 2);
+    expect(w).toEqual([{ ws: '2026-10-05', minutes: 0 }, { ws: '2026-10-12', minutes: 3.5 }]);
+    expect(d.sessions[0].xp).toBe(10);
+  });
+  it('Neben-XP aus SURGE, Wim Hof und Kälte teilen sich den Tagesdeckel', () => {
+    let d = defaultData();
+    for (let i = 0; i < 3; i++) d = logSurge(d, { day: T, protocol: 'welle', moodBefore: 2, moodAfter: 3, now: i }).data;
+    d = logWimhof(d, { day: T, holds: [60], now: 9 }).data;
+    d = logCold(d, { day: T, seconds: 60, now: 10 }).data;
+    expect(totalXp(d)).toBe(60);
+  });
+  it('Warum: einmal pro Arc fragen, alte Fassungen bleiben', () => {
+    const d0 = { ...defaultData(), engine: { ...defaultData().engine, arc: { n: 0, week: 1 } } };
+    expect(whyDue(d0)).toBe(true);
+    const d1 = addWhy(d0, { day: T, forWhom: ' Für meine Tochter ', oneYear: 'Ruhig und stark' });
+    expect(whyDue(d1)).toBe(false);
+    expect(currentWhy(d1.whys).forWhom).toBe('Für meine Tochter');
+    const d2 = { ...d1, engine: { ...d1.engine, arc: { n: 1, week: 1 } } };
+    expect(whyDue(d2)).toBe(true);
+    const d3 = addWhy(d2, { day: addDays(T, 42), forWhom: 'Neu', oneYear: '' });
+    expect(d3.whys.length).toBe(2);
+    expect(currentWhy(d3.whys).forWhom).toBe('Neu');
+    expect(whyDue({ ...d2, engine: { ...d2.engine, whyAsked: 1 } })).toBe(false);
+  });
+  it('Debrief zeigt Rückeroberungen und Warum', () => {
+    let d = { ...defaultData(), settings: { ...defaultData().settings, onboarded: true } };
+    const day = d.engine.arc.startedDay;
+    d = addWhy(d, { day, forWhom: 'X', oneYear: 'Y' });
+    d = logSurge(d, { day, protocol: 'glut', moodBefore: 1, moodAfter: 3 }).data;
+    const st = debriefStats(d, d.engine.arc.n, day);
+    expect(st.reclaims).toBe(1);
+    expect(st.why.forWhom).toBe('X');
+    expect(normalize(JSON.parse(JSON.stringify(d))).whys.length).toBe(1);
+  });
+});
+
+// ——— Update v3 · Paket 3 ———
+import { emptyOaths, addOath, activeOaths, toggleKept, keptOn, rateAutomaticity, rephraseOath, retireOath, logSlip, nightsKept, oathDamage,
+  arcReviewDue, chooseDue, eveningDay, isAlcohol, oathText, TEMPLATES } from '../js/engine/oaths.js';
+import { resetDue, resetState, toggleReset, settleReset, cyclePlan, planHint } from '../js/engine/reset.js';
+import { sleepInsights, sleepDataReady } from '../js/engine/sleep.js';
+import { bossStatus as bossV3 } from '../js/engine/boss.js';
+
+const three = () => {
+  let o = emptyOaths();
+  TEMPLATES.slice(0, 3).forEach((t, i) => { o = addOath(o, { ...t, day: '2026-10-12', arc: 0, now: i + 1 }); });
+  return o;
+};
+
+describe('v3 · OATHS', () => {
+  it('drei Wenn-dann-Gelübde, nicht mehr', () => {
+    const o = three();
+    expect(activeOaths(o).length).toBe(3);
+    expect(oathText(o.list[0])).toBe('Wenn ich ins Bett gehe, dann bleibt das Handy in der Küche.');
+    let threw = false;
+    try { addOath(o, { when: 'x', then: 'y', day: T }); } catch { threw = true; }
+    expect(threw).toBe(true);
+    expect(addOath(emptyOaths(), { when: 'Wenn ich heimkomme,', then: 'dann Wasser.', day: T }).list[0].when).toBe('ich heimkomme');
+  });
+  it('Alkohol-Gelübde erkannt', () => {
+    expect(isAlcohol(TEMPLATES[2])).toBe(true);
+    expect(isAlcohol({ when: 'ich ein Bier aufmache', then: 'trinke ich langsam' })).toBe(true);
+    expect(isAlcohol(TEMPLATES[0])).toBe(false);
+  });
+  it('nur Gehaltenes zählt: Tap an/aus, keine Markierung für Gebrochenes', () => {
+    let o = three();
+    const id = o.list[0].id;
+    o = toggleKept(o, T, id, { n: 0, week: 1 });
+    expect(keptOn(o, T)).toEqual([id]);
+    o = toggleKept(o, T, id);
+    expect(keptOn(o, T)).toEqual([]);
+    expect(o.kept[T]).toBe(undefined);
+    expect(JSON.stringify(o).includes('broken')).toBe(false);
+  });
+  it('Abendkarte ab 20 Uhr, bis mittags für gestern', () => {
+    expect(eveningDay(T, 20)).toBe(T);
+    expect(eveningDay(T, 8)).toBe(addDays(T, -1));
+    expect(eveningDay(T, 15)).toBe(null);
+  });
+  it('besiegelt nach 3 Wochen in Folge ≥ 4', () => {
+    let o = three();
+    const id = o.list[1].id;
+    o = rateAutomaticity(o, '2026-10-05', id, 4, T).oaths;
+    o = rateAutomaticity(o, '2026-10-12', id, 3, T).oaths;
+    let r = rateAutomaticity(o, '2026-10-19', id, 5, T);
+    expect(r.sealed).toEqual([]);
+    r = rateAutomaticity(rateAutomaticity(r.oaths, '2026-10-26', id, 4, T).oaths, '2026-11-02', id, 5, '2026-11-08');
+    expect(r.sealed).toEqual([id]);
+    expect(activeOaths(r.oaths).length).toBe(2);
+    expect(addOath(r.oaths, { when: 'a', then: 'b', day: T }).list.length).toBe(4);
+  });
+  it('umformulieren, ersetzen, Ausrutscher', () => {
+    let o = three();
+    const id = o.list[0].id;
+    o = rephraseOath(o, id, { when: 'ich ins Schlafzimmer gehe', then: 'bleibt das Handy draußen', day: T });
+    expect(o.list[0].history.length).toBe(1);
+    o = logSlip(o, { day: T, id, trigger: ' Serie ', rewrite: '' });
+    expect(o.slips[0].trigger).toBe('Serie');
+    o = retireOath(o, id, T);
+    expect(o.list[0].status).toBe('retired');
+    expect(activeOaths(o).length).toBe(2);
+  });
+  it('Arc-Start: neu schwören oder wählen', () => {
+    const o = three();
+    expect(arcReviewDue(o, 0)).toBe(false);
+    expect(arcReviewDue(o, 1)).toBe(true);
+    expect(arcReviewDue({ ...o, reviewedArc: 1 }, 1)).toBe(false);
+    expect(chooseDue(emptyOaths(), 0)).toBe(true);
+    expect(chooseDue({ ...emptyOaths(), askedArc: 0 }, 0)).toBe(false);
+    expect(chooseDue(o, 0)).toBe(false);
+  });
+  it('Boss-Schaden 0,1 pro gehaltenem Gelübde und Tag, Nächte gezählt', () => {
+    let o = three();
+    for (const d of ['2026-10-13', '2026-10-14']) for (const x of o.list) o = toggleKept(o, d, x.id, { n: 0, week: 1 });
+    o = toggleKept(o, '2026-10-15', o.list[0].id, { n: 0, week: 6 });
+    expect(oathDamage(o, 0)).toBe(0.6);
+    expect(nightsKept(o, '2026-10-12', '2026-10-18')).toBe(3);
+    const data = { ...defaultData(), oaths: o, engine: { ...defaultData().engine, arc: { n: 0, week: 2 } } };
+    expect(bossV3(data).damage).toBe(0.6);
+  });
+  it('XP: 10 pro gehaltenem Gelübde im Tagesdeckel, Siegel 100', () => {
+    let o = three();
+    for (const x of o.list) o = toggleKept(o, T, x.id);
+    const d = { ...defaultData(), oaths: o, sessions: [{ day: T, kind: 'surge' }, { day: T, kind: 'surge' }, { day: T, kind: 'wimhof' }] };
+    expect(totalXp(d)).toBe(60);
+    const sealed = { ...o, list: o.list.map((x, i) => (i ? x : { ...x, status: 'sealed', sealedDay: T })) };
+    expect(totalXp({ ...d, oaths: sealed })).toBe(160);
+  });
+});
+
+describe('v3 · SUNDAY RESET', () => {
+  const sun = '2026-10-18';
+  it('ab Sonntag 16 Uhr, Montag nachholbar', () => {
+    const d = defaultData();
+    expect(resetDue(d, sun, 15)).toBe(null);
+    expect(resetDue(d, sun, 16)).toBe('2026-10-12');
+    expect(resetDue(d, '2026-10-19', 9)).toBe('2026-10-12');
+    expect(resetDue(d, '2026-10-20', 9)).toBe(null);
+  });
+  it('5 Häkchen → komplett, +50 XP; Rückblick und Plan haken sich selbst ab', () => {
+    let d = defaultData();
+    d = { ...d, reviews: { '2026-10-12': { day: sun } } };
+    expect(resetState(d, '2026-10-12').review).toBe(true);
+    d = cyclePlan(d, '2026-10-19', 0);
+    expect(resetState(d, '2026-10-12').plan).toBe(true);
+    expect(d.weekPlans['2026-10-19'][0]).toBe('arena');
+    for (const k of ['walk', 'meals']) d = toggleReset(d, '2026-10-12', k, sun);
+    expect(d.resets['2026-10-12'].done).toBe(undefined);
+    d = toggleReset(d, '2026-10-12', 'oaths', sun);
+    expect(d.resets['2026-10-12'].done).toBe(sun);
+    expect(resetDue(d, sun, 18)).toBe(null);
+    expect(totalXp(d)).toBe(50);
+  });
+  it('settleReset schließt ab, wenn der Rückblick das letzte Häkchen war', () => {
+    let d = defaultData();
+    for (const k of ['walk', 'meals', 'plan', 'oaths']) d = toggleReset(d, '2026-10-12', k, sun);
+    d = settleReset({ ...d, reviews: { '2026-10-12': {} } }, '2026-10-12', sun);
+    expect(d.resets['2026-10-12'].done).toBe(sun);
+  });
+  it('Wochenplan schaltet durch und gibt nur einen Hinweis', () => {
+    let d = defaultData();
+    for (let k = 0; k < 2; k++) d = cyclePlan(d, '2026-10-19', 2);
+    expect(planHint(d, '2026-10-21')).toBe('mission');
+    d = cyclePlan(cyclePlan(d, '2026-10-19', 2), '2026-10-19', 2);
+    expect(planHint(d, '2026-10-21')).toBe(null);
+  });
+});
+
+describe('v3 · Schlaf', () => {
+  const start = '2026-09-01';
+  const build = (n, fn) => {
+    const checkins = {};
+    const sessions = [];
+    for (let i = 0; i < n; i++) {
+      const day = addDays(start, i);
+      const r = fn(i, day);
+      checkins[day] = { day, sleep: r.sleep };
+      if (r.session) sessions.push(r.session);
+    }
+    return { ...defaultData(), checkins, sessions };
+  };
+  it('erst nach 3 Wochen Daten', () => {
+    const d = build(10, () => ({ sleep: 3 }));
+    expect(sleepDataReady(d.checkins, addDays(start, 10))).toBe(false);
+    expect(sleepDataReady(d.checkins, addDays(start, 21))).toBe(true);
+    expect(sleepInsights(d, addDays(start, 10))).toEqual([]);
+  });
+  it('Ankerübungen nach Nächten ≤ 2 vs. ≥ 4, je mindestens 5 Punkte', () => {
+    const mk = (day, reps) => ({ day, kind: 'mission', missionId: 'C', exercises: [{ exId: 'dip', sets: [{ value: reps, load: 0, done: true }] }] });
+    const d = build(30, (i, day) => ({ sleep: i % 2 ? 1 : 5, session: mk(day, i % 2 ? 8 : 10) }));
+    const ins = sleepInsights(d, addDays(start, 30));
+    const a = ins.find((x) => x.id === 'anchor');
+    expect(a.a.n).toBe(15);
+    expect(a.a.value < 0 && a.b.value > 0).toBe(true);
+    const few = build(30, (i, day) => ({ sleep: i % 2 ? 1 : 5, session: i < 6 ? mk(day, 8) : null }));
+    expect(sleepInsights(few, addDays(start, 30)).some((x) => x.id === 'anchor')).toBe(false);
+  });
+  it('Schlaf nach SURGE/Kälte und nach Getränke-Gelübde', () => {
+    let d = build(30, (i, day) => ({ sleep: i % 2 ? 4 : 2, session: i % 2 === 0 ? { day, kind: 'surge' } : null }));
+    let o = addOath(emptyOaths(), { ...TEMPLATES[2], day: start, now: 1 });
+    for (let i = 0; i < 30; i += 2) o = toggleKept(o, addDays(start, i), o.list[0].id);
+    d = { ...d, oaths: o };
+    const ins = sleepInsights(d, addDays(start, 30));
+    const s = ins.find((x) => x.id === 'surge');
+    expect(s.a.value).toBe(4);
+    expect(s.b.value).toBe(2);
+    const alc = ins.find((x) => x.id === 'alcohol');
+    expect(alc.a.value).toBe(4);
+    expect(alc.text.includes('Getränke-Gelübde')).toBe(true);
+  });
+  it('Migration ergänzt Gelübde, Resets, Wochenpläne', () => {
+    const m = normalize({ schemaVersion: 3, settings: {}, sessions: [], engine: {} });
+    expect(m.oaths.list).toEqual([]);
+    expect(m.resets).toEqual({});
+    expect(m.weekPlans).toEqual({});
   });
 });

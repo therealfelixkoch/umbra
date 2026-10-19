@@ -1,5 +1,6 @@
 // Arc-Debrief: Zahlen des Arcs, 3 Fragen, Export als JSON-Datei für den Coach.
 // Die Comic-Panels (Erzählung durch das System) kommen in Paket 3 dazu.
+import { SOURCE_LABELS } from '../data/xp-config.js';
 import { sys, esc } from './kit.js';
 import { debriefDue, debriefStats, debriefExport } from '../engine/debrief.js';
 import { REGION } from '../data/mobility.js';
@@ -28,6 +29,9 @@ export default {
       ${comicPanels(debriefPanels(c.data, st), 'debrief-panels')}
       ${(() => { const ps = playerStats(c.data, today); const asc = highestAscension(c.data);
         return guardianImage(guardianTier(ps.rank.id), { aura: asc?.aura, caption: `Der Wächter · ${esc(rankName(ps.rank))}` }); })()}
+      ${st.why ? sys('Dein Warum', `${st.why.forWhom ? `<p>${esc(st.why.forWhom)}</p>` : ''}${st.why.oneYear ? `<p class="muted">${esc(st.why.oneYear)}</p>` : ''}`, { tone: 'gold' }) : ''}
+      ${st.nightsKept ? `<p class="lore center">In ${st.nightsKept} ${st.nightsKept === 1 ? 'Nacht' : 'Nächten'} hast du Wort gehalten.</p>` : ''}
+      ${st.sleep.length ? sys('Schlaf · deine Zusammenhänge', `${st.sleep.map((x) => `<p class="small">${esc(x.text)}</p>`).join('')}<p class="muted small">Deine Daten, keine Diagnose.</p>`, { tone: 'calm' }) : ''}
       <details class="raw"><summary>Alle Zahlen</summary>
       ${sys('Konstanz', `<dl class="facts">
         <div><dt>Missionen</dt><dd class="num">${st.missions}${st.compact ? ` (${st.compact} Kompakt)` : ''}</dd></div>
@@ -35,8 +39,16 @@ export default {
         <div><dt>FLOW-Tage</dt><dd class="num">${st.flowDays}</dd></div>
         <div><dt>Längste Serie</dt><dd class="num">${st.longestStreak} W</dd></div>
         <div><dt>Bestleistungen</dt><dd class="num">${st.records}</dd></div>
+        <div><dt>Rückeroberungen</dt><dd class="num">${st.reclaims}</dd></div>
         ${st.boss ? `<div><dt>Boss</dt><dd>${st.boss.defeated ? 'besiegt' : `${num(st.boss.hp)}/${st.boss.max} LP übrig`}</dd></div>` : ''}
       </dl>`)}
+      ${sys('ARENA', `<dl class="facts">
+        <div><dt>Einheiten</dt><dd class="num">${st.arenaDetail.sessions} · ${st.arenaDetail.hours.toLocaleString('de-DE')} h</dd></div>
+        <div><dt>Sparringsrunden</dt><dd class="num">${st.arenaDetail.sparRounds}</dd></div>
+        <div><dt>Inhalte</dt><dd>${Object.entries(st.arenaDetail.content).filter(([, v]) => v).map(([k, v]) => `${esc(k)} ${v}×`).join(', ') || '–'}</dd></div>
+        ${st.arenaDetail.tech.current ? `<div><dt>Technik-Check</dt><dd>${(Object.values(st.arenaDetail.tech.current.scores).reduce((a, b) => a + b, 0) / Object.keys(st.arenaDetail.tech.current.scores).length).toLocaleString('de-DE', { maximumFractionDigits: 1 })} Ø${st.arenaDetail.tech.previous ? ` (vorher ${(Object.values(st.arenaDetail.tech.previous.scores).reduce((a, b) => a + b, 0) / Object.keys(st.arenaDetail.tech.previous.scores).length).toLocaleString('de-DE', { maximumFractionDigits: 1 })})` : ''}</dd></div>` : ''}
+        <div><dt>Trainingslast gesamt</dt><dd class="num">${st.trainingLoad || '–'}</dd></div></dl>`)}
+      ${sys('XP pro Quelle', `${Object.entries(st.xpBySource).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="done-row"><span>${esc(SOURCE_LABELS[k] || k)}</span><span class="num">${v}</span></div>`).join('') || '<p class="muted">Keine XP in diesem Arc.</p>'}`)}
       ${st.strength.length ? sys('Kraft', `<ul class="cues">${st.strength.map((x) => `<li>${esc(x.name)}: ${num(x.first)} → ${num(x.best)} ${esc(x.unit)}${x.gain > 0 ? ` (+${num(x.gain)})` : ''}</li>`).join('')}</ul>`) : ''}
       ${st.mobility.length ? sys('Mobility', `<ul class="cues">${st.mobility.map((m) => `<li>${esc(REGION[m.region]?.name || m.region)}: ${m.before ?? '–'} → ${m.after}</li>`).join('')}</ul>`) : ''}
       ${sys('Körpersignale', `<dl class="facts">

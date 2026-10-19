@@ -1,9 +1,10 @@
 // Datenmodell: ein Dokument, das komplett in IndexedDB liegt und so auch exportiert wird.
 import { initialEngine } from './engine/cycle.js';
-import { DEFAULT_HOLIDAY } from './engine/arc.js';
+import { DEFAULT_HOLIDAY, rebaseFirstArc } from './engine/arc.js';
+import { sessionXp } from './engine/game.js';
 import { toDay } from './engine/dates.js';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export function defaultData() {
   return {
@@ -37,6 +38,11 @@ export function defaultData() {
     debriefs: {}, // Arc-Debriefs je Arc-Nummer
     sideQuests: {}, // gewählte Side Quest je Woche
     bmt: { name: 'Bang Muay Thai', program: 'Jahr 1', weeks: [], current: null }, // eigenes Muay-Thai-Programm
+    techChecks: {}, // Technik-Check je Monat (YYYY-MM)
+    whys: [], // DAS WARUM, alle Fassungen (neueste zuletzt)
+    oaths: { list: [], kept: {}, slips: [], alcoholInfoSeen: false, reviewedArc: null, askedArc: null }, // OATHS
+    resets: {}, // SUNDAY RESET je Woche (Montag)
+    weekPlans: {}, // grober Wochenplan je Woche (Montag) → { Tagesindex: 'arena'|'mission'|'frei' }
     active: null,
   };
 }
@@ -57,6 +63,23 @@ const MIGRATIONS = {
       ruleLog: raw.ruleLog || [],
     };
   },
+};
+
+MIGRATIONS[2] = (raw) => {
+  // v2 → v3: (1) Arc I startet am Tag der ersten Mission, angebrochene Wochen werden anteilig neu bewertet.
+  //          (2) XP aller Einträge mit der zentralen XP-Konfiguration neu berechnet.
+  const today = toDay();
+  const holiday = raw.settings?.holiday || DEFAULT_HOLIDAY;
+  let engine = { ...(raw.engine || {}) };
+  let sessions = raw.sessions || [];
+  if (!engine.arc || engine.arc.n === 0) {
+    const r = rebaseFirstArc(sessions, today, holiday);
+    engine = { ...engine, arc: r.arc };
+    sessions = r.sessions;
+  }
+  sessions = sessions.map((s) => ({ ...s, xpV2: s.xp, xp: sessionXp(s) }));
+  return { ...raw, schemaVersion: 3, engine, sessions,
+    ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v3', day: today, suggestion: 'arc_rebase_xp_recalc', decision: 'applied' }] };
 };
 
 export function migrate(raw) {
@@ -91,5 +114,10 @@ export function normalize(input) {
     debriefs: raw.debriefs || {},
     sideQuests: raw.sideQuests || {},
     bmt: raw.bmt?.weeks ? raw.bmt : { name: 'Bang Muay Thai', program: 'Jahr 1', weeks: [], current: null },
+    techChecks: raw.techChecks && typeof raw.techChecks === 'object' ? raw.techChecks : {},
+    whys: Array.isArray(raw.whys) ? raw.whys : [],
+    oaths: { ...d.oaths, ...(raw.oaths || {}) },
+    resets: raw.resets || {},
+    weekPlans: raw.weekPlans || {},
   };
 }

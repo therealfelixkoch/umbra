@@ -2,7 +2,11 @@
 import { weekStart, addDays } from './dates.js';
 import { FULL_MISSIONS } from '../data/missions.js';
 import { arcOf } from '../data/arcs.js';
-import { countsForWeek } from './game.js';
+import { countsForWeek, xpLedger, xpBySource } from './game.js';
+import { arenaRange, techCompare } from './arenastats.js';
+import { reclaims, currentWhy } from './surge.js';
+import { nightsKept } from './oaths.js';
+import { sleepInsights } from './sleep.js';
 import { loadClass } from './load.js';
 import { elbowStatus, painPatterns, REGIONS } from './signals.js';
 import { stagnationStatus, performance, mainSlots } from './stagnation.js';
@@ -109,6 +113,13 @@ export function debriefStats(data, n, today, getDef = defaultGetDef) {
     compact: missions.filter((s) => s.compact).length,
     arena: arena.length,
     arenaHours: Math.round(arena.reduce((m, s) => m + (s.minutes || 0), 0) / 6) / 10,
+    arenaDetail: { ...arenaRange(ss, from, to), tech: techCompare(Object.fromEntries(Object.entries(data.techChecks || {}).filter(([k]) => k <= to.slice(0, 7)))) },
+    trainingLoad: ss.reduce((m, s) => m + (s.load || 0), 0),
+    reclaims: reclaims(data.sessions, from, to),
+    nightsKept: nightsKept(data.oaths, from, to),
+    sleep: sleepInsights(data, today, { getDef, from, to }).map(({ id, text, a, b }) => ({ id, text, a, b })),
+    why: currentWhy((data.whys || []).filter((w) => w.day <= to)),
+    xpBySource: xpBySource(xpLedger(data, today), 'arc')[n] || {},
     flowDays,
     longestStreak: best,
     records: ss.reduce((k, s) => k + (s.records?.length || 0), 0),
@@ -150,6 +161,11 @@ export function debriefExport(data, n, today, getDef = defaultGetDef) {
     records: data.records,
     settings: { bodyweight: data.settings.bodyweight, equipment: data.settings.equipment, kbWeights: data.settings.kbWeights,
       holiday: data.settings.holiday, elbowThreshold: data.settings.elbowThreshold },
-    engine: { arc: data.engine.arc, slotVariant: data.engine.slotVariant, queue: data.engine.queue },
+    engine: { arc: data.engine.arc, slotVariant: data.engine.slotVariant, arcSwaps: data.engine.arcSwaps, queue: data.engine.queue },
+    techChecks: data.techChecks || {},
+    whys: data.whys || [],
+    oaths: data.oaths || {},
+    resets: pick(data.resets),
+    weekPlans: pick(data.weekPlans),
   };
 }
