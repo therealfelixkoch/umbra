@@ -45,8 +45,7 @@ export function statusStrip(c) {
   const dots = Array.from({ length: s.week.goal || WEEK_GOAL }, (_, i) => `<i class="${i < s.week.thisWeek ? 'on' : ''}"></i>`).join('');
   const asc = highestAscension(c.data);
   return `<section class="strip" data-act="go" data-to="profil">
-    <div class="strip-rank${asc ? ' aura' : ''}" style="${asc ? `--aura:${asc.aura}` : ''}">${rankEmblem(s.rank.index, { size: 40 })}</div>
-    <span class="strip-blade" title="Klinge">${bladeEmblem(bladeTier(c.data), 20)}</span>
+    <div class="strip-rank${asc ? ' aura' : ''}" style="${asc ? `--aura:${asc.aura}` : ''}">${rankEmblem(s.rank.index, { size: 40 })}<span class="strip-blade" title="Klinge">${bladeEmblem(bladeTier(c.data), 22)}</span></div>
     <div class="strip-main">
       <div class="strip-top"><b>${esc(rankName(s.rank))}</b><span class="num" data-kk="${s.kk}">${s.kk.toLocaleString('de-DE')}</span><small>Kampfkraft</small></div>
       ${b ? `<div class="strip-boss"><span>${BOSSES[b.id].name}</span><div class="hpbar"><i style="width:${(b.hp / b.max) * 100}%"></i></div><span class="num">${b.hp.toLocaleString('de-DE')}</span></div>` : ''}

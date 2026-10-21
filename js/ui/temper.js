@@ -19,12 +19,16 @@ const fmt = (sec) => {
 
 // ——— Klingen-Emblem: wird mit jeder Stufe schärfer ———
 export function bladeEmblem(tier, size = 28) {
-  const glow = ['#5a5470', '#8b7dff', '#a99cff', '#c9c0ff', '#e6e1ff', '#ffcf5a'][Math.min(5, tier)];
-  const tip = 4 + tier * 3; // längere, feinere Spitze
-  return `<svg class="blade" width="${size}" height="${size}" viewBox="0 0 32 32" aria-label="Klinge Stufe ${tier}">
-    <path d="M16 ${tip}L${19 - tier * 0.3} 20H${13 + tier * 0.3}Z" fill="${glow}" opacity="${0.55 + tier * 0.09}"/>
-    <path d="M10 21h12M16 21v6" stroke="${glow}" stroke-width="2" stroke-linecap="round"/>
-    ${tier >= 3 ? `<path d="M16 ${tip + 2}V19" stroke="#fff" stroke-opacity=".6" stroke-width=".8"/>` : ''}</svg>`;
+  const t = Math.max(0, Math.min(5, tier));
+  const glow = ['#9a93bd', '#8b7dff', '#a99cff', '#c9c0ff', '#e6e1ff', '#ffcf5a'][t];
+  const half = 3.2 - t * 0.35; // die Klinge wird mit jeder Stufe schmaler, also schärfer
+  // Kontur-Ring hebt das Emblem vom dunklen Grund ab
+  return `<svg class="blade" width="${size}" height="${size}" viewBox="0 0 32 32" aria-label="Klinge Stufe ${t}">
+    <circle cx="16" cy="16" r="14.6" fill="#14111f" stroke="${glow}" stroke-width="1.6" stroke-opacity="${0.75 + t * 0.05}"/>
+    ${t >= 4 ? `<circle cx="16" cy="16" r="14.6" fill="none" stroke="${glow}" stroke-width="3.5" stroke-opacity=".18"/>` : ''}
+    <path d="M16 6.5L${(16 + half).toFixed(2)} 19.5H${(16 - half).toFixed(2)}Z" fill="${glow}"/>
+    ${t >= 2 ? '<path d="M16 8.5V18.5" stroke="#fff" stroke-opacity=".7" stroke-width=".7"/>' : ''}
+    <path d="M11 21h10M16 21v5" stroke="${glow}" stroke-width="2" stroke-linecap="round"/></svg>`;
 }
 
 // ——— Laufzeit ———
@@ -456,13 +460,12 @@ export default screen;
 export function temperCard(c) {
   const sug = suggestion(c.data, c.today());
   const tier = bladeTier(c.data);
-  if (sug.kind === 'mission') {
-    return `<section class="card temper-card"><div class="quest-head"><div class="row gap">${bladeEmblem(tier, 30)}<div><div class="label">TEMPER</div><b>${esc(sug.mission.name)}</b><small>${esc(sug.reason)}</small></div></div>
-      <button class="btn primary small" data-act="go" data-to="temper">Öffnen</button></div></section>`;
-  }
+  const card = (title, sub, btn, primary, done = false) => `<section class="card temper-card${done ? ' done' : ''}">
+    <span class="temper-emblem">${bladeEmblem(tier, 40)}</span>
+    <div class="temper-text"><div class="label">TEMPER${done ? ' · heute erledigt' : ''}</div><b>${title}</b><small>${sub}</small></div>
+    <button class="btn ${primary ? 'primary' : 'ghost'}" data-act="go" data-to="temper">${btn}</button></section>`;
+  if (sug.kind === 'mission') return card(esc(sug.mission.name), esc(sug.reason), 'Öffnen', true);
   if (sug.kind !== 'episode') return '';
   const today = c.data.sessions.some((s) => s.kind === 'temper' && s.day === c.today());
-  return `<section class="card temper-card${today ? ' done' : ''}"><div class="quest-head"><div class="row gap">${bladeEmblem(tier, 30)}<div><div class="label">TEMPER${today ? ' · heute erledigt' : ''}</div>
-    <b>Episode ${sug.ep.n} · ${esc(sug.ep.title)}</b><small>${esc(sug.ep.dur)}${sug.co2 ? ' · mit CO2-Test' : ''}</small></div></div>
-    <button class="btn ${today ? 'ghost' : 'primary'} small" data-act="go" data-to="temper">${today ? 'Mehr' : 'Start'}</button></div></section>`;
+  return card(`Episode ${sug.ep.n} · ${esc(sug.ep.title)}`, `${esc(sug.ep.dur)}${sug.co2 ? ' · mit CO2-Test' : ''}`, today ? 'Mehr' : 'Start', !today, today);
 }

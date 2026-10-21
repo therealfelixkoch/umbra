@@ -1,4 +1,4 @@
-:root { --app-version: "umbra-v17"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
+:root { --app-version: "umbra-v20"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
 @font-face {
   font-family: 'Oxanium';
   src: url('../fonts/oxanium.woff2') format('woff2');
@@ -819,7 +819,11 @@ body.signal-pulse .clock, body.signal-pulse .rest-inner b, body.signal-pulse .bi
 /* ——— v4 Paket 2: TEMPER ——— */
 .temper-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .temper-head .h { margin: 0; }
-.temper-card .row.gap { align-items: center; }
+.temper-card { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; }
+.temper-emblem { display: flex; }
+.temper-text { min-width: 0; }
+.temper-text b { display: block; font: 700 16px/1.25 var(--display); }
+.temper-text small { display: block; color: var(--muted); font-size: 13px; margin-top: 2px; }
 .temper-card.done { opacity: 0.75; }
 .ep-dots { display: grid; grid-template-columns: repeat(15, 1fr); gap: 4px; margin-top: 12px; }
 .ep-dots i { aspect-ratio: 1; border-radius: 50%; border: 1px solid var(--line); }
@@ -868,4 +872,4 @@ body.signal-pulse .clock, body.signal-pulse .rest-inner b, body.signal-pulse .bi
 @media (prefers-reduced-motion: reduce) { .wave-box svg, .wave-lift, .echo-dot { animation: none; } .wave-lift { transform: translateY(40%); } }
 .rest-reset { margin: 4px auto 8px; display: block; }
 .blade-row { align-items: center; margin-bottom: 6px; }
-.strip-blade { display: inline-flex; align-self: center; margin-left: -6px; }
+.strip-blade { position: absolute; right: -9px; bottom: -7px; display: flex; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface); }

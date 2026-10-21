@@ -721,7 +721,7 @@ const E = [
     cues: ['Breiter Griff, eine Seite zieht, der andere Arm bleibt gestreckt', 'Brust zur ziehenden Hand', 'Seiten abwechseln'],
     mistakes: ['Gestreckter Arm zieht heimlich mit'] },
   { id: 'one_arm_row_assisted', rest: 'heavy', elbowLoad: 2, elbowAlt: 'archer_row', name: 'Assisted One-Arm Rows', cat: 'ziehen', equipment: ['dipbars'], mode: 'reps',
-    range: [4, 8], bodyweight: true, perSide: true, tags: [['h_pull', 'kraft'], ['anti_rot', 'stabil']],
+    range: [4, 8], bodyweight: true, perSide: true, tags: [['h_pull', 'kraft'], ['rotation', 'stabil']],
     cues: ['Eine Hand an der Stange, die andere nur mit zwei Fingern als Hilfe', 'Rumpf dreht nicht weg', 'Langsam ablassen'],
     mistakes: ['Körper kippt zur Seite'] },
   { id: 'pushup', rest: 'medium', elbowLoad: 1, name: 'Push-ups', cat: 'druecken', equipment: [], mode: 'reps',
