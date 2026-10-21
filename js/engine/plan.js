@@ -251,7 +251,7 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
 export function itemFor(key, { data, profile, sets, getDef = defaultGetDef, arcN = null, range }) {
   const { equipment, settings } = profileContext(data.settings, profile);
   const baseDef = getDef(key);
-  let st = data.exState[stateKey(profile, key)] || initialState(baseDef, { settings, startValues: data.settings.startValues, getDef });
+  let st = data.exState[stateKey(profile, key)] || initialState(baseDef, { settings, startValues: data.settings.startValues, getDef, equipment });
   // Neuer Arc (oder anderer Wiederholungsbereich): Ziel startet am unteren Ende, die Last bleibt.
   const r = range || (getDef(st.exId) || baseDef).range;
   if (arcN != null && st.arc != null && st.arc !== arcN) st = { ...st, target: r[0], lastChange: null };
@@ -265,8 +265,12 @@ export function itemFor(key, { data, profile, sets, getDef = defaultGetDef, arcN
     load = snap(ladder, st?.load ?? def.startKg ?? ladder[0]);
   }
   const target = def.mode === 'fixed' ? def.range[0] : (def.id === st.exId ? st.target : def.range[0]);
-  return { key, exId: def.id, sets, target, load, ladder, optional: false, range: range || def.range,
-    trend: st.lastChange, lastTime: lastSetsFor(data.sessions, def.id), noFailure: false };
+  // Fixes Gewicht: Zusatzsatz und langsameres Tempo statt mehr Last
+  const fixed = !!data.settings.fixedLoad?.[stateKey(profile, key)];
+  const same = def.id === st.exId;
+  return { key, exId: def.id, sets: sets + (fixed && same && st.extraSet ? 1 : 0), target, load, ladder, optional: false, range: range || def.range,
+    trend: st.lastChange, lastTime: lastSetsFor(data.sessions, def.id), noFailure: false,
+    fixed: fixed || undefined, tempo: (fixed && same && st.tempo) || undefined };
 }
 
 // Sprungübung für die Plyo-Stufe des Arcs. Vor hartem Sparring maximal Stufe 3.
@@ -291,7 +295,7 @@ export function swapOptions(exId, { data, profile, today, getDef = defaultGetDef
   const gaps = new Set([...gapsFor(cov, 'muaythai').attrs, ...gapsFor(cov, 'vater').attrs]);
   const direct = new Set([...(def.alternatives || []), def.easier, def.harder].filter(Boolean));
   return Object.values(all)
-    .filter((d) => d.id !== exId && d.cat !== 'mobility' && d.mode !== 'fixed')
+    .filter((d) => d.id !== exId && d.cat !== 'mobility' && (d.mode !== 'fixed') === (def.mode !== 'fixed'))
     .filter((d) => (d.equipment || []).every((e) => equipment.includes(e)))
     .map((d) => {
       const shared = d.tags.filter(([a]) => attrs.has(a)).length;
@@ -302,6 +306,28 @@ export function swapOptions(exId, { data, profile, today, getDef = defaultGetDef
     .filter((o) => o.related || o.fills.length)
     .sort((a, b) => b.score - a.score)
     .slice(0, 8);
+}
+
+// Kondition und Aufwärmen gelten beim Tauschen als eine Kategorie (Seil ↔ Rudern ↔ Sack ↔ Lauf).
+const swapCat = (cat) => (cat === 'aufwaermen' ? 'kondition' : cat);
+
+/**
+ * Tausch-Liste in drei Gruppen: empfohlen (gleiches Muster, passendes Equipment),
+ * gleiche Kategorie, alle übrigen. Jede Übung ist wählbar; fehlendes Equipment wird nur markiert.
+ */
+export function swapGroups(exId, { data, profile, today, getDef = defaultGetDef, all }) {
+  const { equipment } = profileContext(data.settings, profile);
+  const def = getDef(exId);
+  const has = (d) => (d.equipment || []).every((e) => equipment.includes(e));
+  const recommended = swapOptions(exId, { data, profile, today, getDef, all });
+  const seen = new Set([exId, ...recommended.map((o) => o.id)]);
+  const rest = Object.values(all).filter((d) => !seen.has(d.id));
+  const byName = (a, b) => (a.has === b.has ? a.name.localeCompare(b.name) : a.has ? -1 : 1);
+  const item = (d) => ({ id: d.id, name: d.name, cat: d.cat, has: has(d) });
+  const category = rest.filter((d) => swapCat(d.cat) === swapCat(def.cat) && d.cat !== 'mobility').map(item).sort(byName);
+  const catIds = new Set(category.map((o) => o.id));
+  const others = rest.filter((d) => !catIds.has(d.id)).map(item).sort(byName);
+  return { recommended: recommended.map((o) => ({ ...o, name: getDef(o.id).name, has: true })), category, all: others };
 }
 
 // Laufendes Training aus einem Plan. Sätze sind mit dem Ziel vorausgefüllt.
@@ -356,7 +382,7 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
     active.log.forEach((entry, i) => {
       const done = entry.sets.filter((s) => s.done);
       const it = p.items[i];
-      session.exercises.push({ exId: entry.exId, key: entry.key, sets: entry.sets, effort: entry.effort ?? undefined,
+      session.exercises.push({ exId: entry.exId, key: entry.key, sets: entry.sets, rpe: entry.rpe ?? undefined,
         swappedFrom: it.swappedFrom || undefined, swapScope: it.swapScope || undefined,
         elbow: entry.elbowReported || undefined, adjust: it.adjust || undefined, note: entry.note || undefined,
         intervals: entry.intervals || undefined });
@@ -377,14 +403,18 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
       const base = getDef(entry.key);
       const sk = stateKey(p.profile, entry.key);
       const st = exState[sk] ||
-        initialState(base, { settings, startValues: data.settings.startValues, getDef });
+        initialState(base, { settings, startValues: data.settings.startValues, getDef, equipment });
       const cur = st.exId === entry.exId ? { ...st, target: item.target } : { ...st, exId: entry.exId, target: item.target };
       // Arc II: Progression nur über den Top-Satz
       const counted = item.topSet ? done.filter((s) => s.label === 'Top-Satz') : done;
       if (!counted.length) return;
       const ranged = item.range ? { ...def, range: item.range } : def;
-      exState[sk] = { ...progress(ranged, cur, counted.map((s) => ({ value: s.value, load: s.load, rir: s.rir })),
-        { settings, equipment, getDef, rir: item.rir ?? null }), arc: p.arc?.n };
+      const nx = { ...progress(ranged, cur, counted.map((s) => ({ value: s.value, load: s.load, rir: s.rir })),
+        { settings, equipment, getDef, rir: item.rir ?? null, fixed: !!data.settings.fixedLoad?.[sk] }), arc: p.arc?.n };
+      // Stufen-Vorschlag gehört zu einem Platz der Rotation (unterwegs nicht)
+      if (nx.suggest && (!item.slotKey || p.profile === 'travel')) delete nx.suggest;
+      else if (nx.suggest) nx.suggest = { ...nx.suggest, slotKey: item.slotKey };
+      exState[sk] = nx;
     });
   }
 
@@ -407,7 +437,7 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
   }
   // Intensität 1–5 und Trainingslast (nur Anzeige)
   session.intensity = p.format === 'sets' ? sessionIntensity(session.exercises)
-    : session.intervals ? intensityFromRpe(session.intervals.rpe) : (active.effort ?? null);
+    : session.intervals ? intensityFromRpe(session.intervals.rpe) : (active.rpe ?? null);
   if (session.intensity == null) delete session.intensity;
   const load = trainingLoad(session.intensity, session.minutes);
   if (load) session.load = load;
@@ -436,7 +466,7 @@ export function logArena(data, { day, intensity, rpe, minutes = 60, bmt = null, 
   const session = { id: `a${now}`, day, kind: 'arena', missionId: 'ARENA', rpe: r,
     intensity: r >= HARD_RPE ? 'hard' : 'light', minutes, arc: arc ? { n: arc.n, week: arc.week } : undefined,
     bmt: bmt || undefined, content: content?.length ? content : undefined, sparRounds: sparRounds || undefined,
-    focus: focus?.trim() || undefined, load: Math.round((r / 2) * minutes) };
+    focus: focus?.trim() || undefined, load: Math.round(r * minutes) };
   session.xp = sessionXp(session);
   return { data: { ...data, sessions: [...data.sessions, session] }, session };
 }

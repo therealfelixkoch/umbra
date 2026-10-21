@@ -17,10 +17,9 @@ import { REGIONS, elbowStatus, reportElbow, reportPain, physioNoteDue, activeReg
 import { reviewDue, debriefDue } from '../engine/debrief.js';
 import { buildPlan, createActive, logArena } from '../engine/plan.js';
 import { TRAVEL_EQUIPMENT } from './onboarding.js';
-import { whyDue } from '../engine/surge.js';
-import { arcReviewDue, chooseDue } from '../engine/oaths.js';
-import { eveningCard, oathActions } from './oaths.js';
-import { resetCard, resetActions, planNote } from './reset.js';
+import { ladderCard, ladderActions } from './ladder.js';
+import { temperCard, bladeEmblem } from './temper.js';
+import { bladeTier } from '../engine/temper.js';
 import { playerStats, WEEK_GOAL, rankName } from '../engine/game.js';
 import { addDays, daysBetween, weekStart } from '../engine/dates.js';
 import { MISSIONS } from '../data/missions.js';
@@ -47,6 +46,7 @@ export function statusStrip(c) {
   const asc = highestAscension(c.data);
   return `<section class="strip" data-act="go" data-to="profil">
     <div class="strip-rank${asc ? ' aura' : ''}" style="${asc ? `--aura:${asc.aura}` : ''}">${rankEmblem(s.rank.index, { size: 40 })}</div>
+    <span class="strip-blade" title="Klinge">${bladeEmblem(bladeTier(c.data), 20)}</span>
     <div class="strip-main">
       <div class="strip-top"><b>${esc(rankName(s.rank))}</b><span class="num" data-kk="${s.kk}">${s.kk.toLocaleString('de-DE')}</span><small>Kampfkraft</small></div>
       ${b ? `<div class="strip-boss"><span>${BOSSES[b.id].name}</span><div class="hpbar"><i style="width:${(b.hp / b.max) * 100}%"></i></div><span class="num">${b.hp.toLocaleString('de-DE')}</span></div>` : ''}
@@ -215,24 +215,7 @@ export default {
     const today = c.today();
     // Ganz oben: Status (Rang, Kampfkraft, Boss, Arc-Woche). Darunter Check-in bzw. Mission, dann Hinweise.
     let out = statusStrip(c);
-    out += `<div class="surge-entry"><button class="surge-btn" data-act="go" data-to="surge"><b>Ich bin im Nebel.</b><small>SURGE · ein paar Minuten zurückholen</small></button>
-      <div class="row gap"><button class="chip" data-act="go" data-to="surge" data-param="wimhof">Wim Hof</button><button class="chip" data-act="go" data-to="surge" data-param="cold">Kälte</button><button class="chip" data-act="go" data-to="eid">Der Eid</button></div></div>`;
-    out += eveningCard(c);
     let notes = '';
-    const arcN = data.engine.arc?.n;
-    if (arcN != null && (arcReviewDue(data.oaths, arcN) || chooseDue(data.oaths, arcN))) {
-      notes += `<section class="card flow-card"><div><b>Der Eid · Arc ${arcN + 1}</b><small>${arcReviewDue(data.oaths, arcN) ? 'Gelübde behalten, umformulieren oder ersetzen' : 'Drei Wenn-dann-Gelübde für diesen Arc'}</small></div>
-        <div class="row gap"><button class="btn primary" data-act="go" data-to="eid">Öffnen</button>${arcReviewDue(data.oaths, arcN) ? '' : '<button class="btn ghost small" data-act="oath-later">Später</button>'}</div></section>`;
-    }
-    if (whyDue(data)) {
-      notes += `<section class="card flow-card"><div><b>DAS WARUM · Arc ${data.engine.arc.n + 1}</b><small>Für wen machst du das? Wer willst du in einem Jahr sein?</small></div>
-        <div class="row gap"><button class="btn primary" data-act="why-open">Schreiben</button><button class="btn ghost small" data-act="why-later">Später</button></div></section>`;
-    }
-    if (data.active) {
-      out += sys('Mission läuft', `<p><b>${esc(data.active.plan.name)}</b> · begonnen ${data.active.day === today ? 'heute' : 'am ' + data.active.day}</p>
-        <div class="row gap"><button class="btn primary grow" data-act="go" data-to="training">Fortsetzen</button><button class="btn" data-act="discard-active">Verwerfen</button></div>`, { tone: 'gold' });
-    }
-
     if (introDue(data)) {
       const a = arcOf(data.engine.arc.n);
       notes += `<section class="card intro-card"><div><b>ARC ${a.id} · ${esc(a.name)}</b><small>Das Intro wartet. Wer der Gegner ist und was dieser Arc trainiert.</small></div><button class="btn primary" data-act="go" data-to="intro">Öffnen</button></section>`;
@@ -246,15 +229,14 @@ export default {
         <div class="row gap"><button class="btn primary grow" data-act="deload-yes" data-rule="platt">In die Deload-Woche</button><button class="btn" data-act="deload-no" data-rule="platt">Nicht jetzt</button></div>`);
     }
     notes += stagnationPanel(c);
+    notes += ladderCard(c);
     if (physioNoteDue(data, today)) {
       notes += sys('Hinweis', `<p class="reason">Wenn das anhält, lass es von einem Physio anschauen.</p>
         <p class="muted small">Der Ellbogen-Zähler war drei Wochen in Folge voll.</p>
         <div class="row gap"><button class="btn" data-act="physio-ok">Verstanden</button></div>`, { tone: 'calm' });
     }
-    const reset = resetCard(c);
-    notes = reset + notes;
     const rv = reviewDue(data, today);
-    if (rv && !reset) notes += `<section class="card flow-card"><div><b>Wochenrückblick</b><small>Unter 2 Minuten · 2 Taps</small></div><button class="btn primary" data-act="go" data-to="review">Öffnen</button></section>`;
+    if (rv) notes += `<section class="card flow-card"><div><b>Wochenrückblick</b><small>Unter 2 Minuten · 2 Taps</small></div><button class="btn primary" data-act="go" data-to="review">Öffnen</button></section>`;
     const db = debriefDue(data, today);
     if (db != null) notes += `<section class="card flow-card"><div><b>Arc-Debrief</b><small>3 Fragen und Export für deinen Coach</small></div><button class="btn primary" data-act="go" data-to="debrief">Öffnen</button></section>`;
 
@@ -264,7 +246,7 @@ export default {
     }
 
     const rec = recommendation(c);
-    if (!rec) return out + checkinForm(c) + notes;
+    if (!rec) return out + checkinForm(c) + temperCard(c) + notes;
 
     const doneToday = data.sessions.filter((s) => s.day === today);
     const trained = doneToday.filter((s) => s.kind === 'mission' || s.kind === 'express').length;
@@ -288,12 +270,13 @@ export default {
       out += sys('Mission verfügbar', `<div class="mission-title"><span class="mid">${rec.missionId.length === 1 ? rec.missionId : '◆'}</span><div><h2>${esc(plan.name)}</h2><small>${esc(plan.focus)} · ca. ${plan.minutes} min${rec.profile === 'gym' && plan.kind === 'mission' && rec.missionId !== 'FORGE' ? ' · Home Gym' : rec.profile === 'travel' ? ' · Unterwegs' : ''}</small></div></div>
         ${plan.kind === 'mission' ? arcLine(data, today, plan) : ''}
         <p class="reason">${esc(rec.reason)}</p>${rec.walk ? '<p class="note">Danach 20–30 Minuten spazieren.</p>' : ''}${modifierNote(plan)}
-        ${sparQ}${adjustNote(c, plan)}${planNote(c)}${planPreview(plan)}
+        ${sparQ}${adjustNote(c, plan)}${planPreview(plan)}
         <button class="btn primary wide" data-act="start-rec">Mission starten</button>`);
     }
     if (trained <= (ci.extra || 0)) {
       out += `<div class="row gap center"><button class="btn ghost" data-act="swap">Andere Einheit</button><button class="btn ghost" data-act="redo-ci">Check-in ändern</button></div>`;
     }
+    out += temperCard(c);
     out += notes;
 
     out += questCard(c);
@@ -452,11 +435,7 @@ export default {
       c.update((data) => ({ ...data, active: createActive(plan, today) }));
       c.go('training');
     },
-    ...resetActions,
-    ...oathActions,
-    'oath-later': (c) => c.update((data) => ({ ...data, oaths: { ...data.oaths, askedArc: data.engine.arc.n } })),
-    'why-open': (c) => { c.ui.whyBack = 'heute'; c.go('surge', 'warum'); },
-    'why-later': (c) => c.update((data) => ({ ...data, engine: { ...data.engine, whyAsked: data.engine.arc.n } })),
+    ...ladderActions,
     'discard-active': (c) => {
       c.system('Mission verwerfen?', '<p>Die bisher geloggten Sätze dieser Einheit gehen verloren.</p>',
         [['discard-yes', 'Verwerfen'], ['close-modal', 'Behalten', 'primary']], 'warn');

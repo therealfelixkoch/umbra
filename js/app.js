@@ -9,7 +9,6 @@ import { arcOf, WEEK_PLAN } from './data/arcs.js';
 import { victoryPanels, retreatPanels, nemesisPanels } from './engine/story.js';
 import { debriefStats } from './engine/debrief.js';
 import { comicPanels, bindPanels } from './ui/lore.js';
-import { setHaptics } from './ui/haptics.js';
 import { XP_CONFIG } from './data/xp-config.js';
 import today from './ui/today.js';
 import training from './ui/training.js';
@@ -21,10 +20,9 @@ import check from './ui/check.js';
 import review from './ui/review.js';
 import debrief from './ui/debrief.js';
 import intro from './ui/intro.js';
-import surge from './ui/surge.js';
-import eid from './ui/oaths.js';
+import temper from './ui/temper.js';
 
-const SCREENS = { heute: today, training, arena, kodex, profil: profile, onboarding, check, review, debrief, intro, surge, eid };
+const SCREENS = { heute: today, training, arena, kodex, profil: profile, onboarding, check, review, debrief, intro, temper };
 const TABS = [['heute', 'Heute'], ['arena', 'Arena'], ['kodex', 'Kodex'], ['profil', 'Profil']];
 
 const app = {
@@ -57,7 +55,6 @@ export const ctx = {
     }
     store.save(app.data);
     setSound(app.data.settings.sound !== false);
-    setHaptics(app.data.settings.vibration !== false);
     render();
   },
   setUi(patch) {
@@ -94,7 +91,7 @@ function render() {
   let route = app.route;
   if (!app.data.settings.onboarded) route = 'onboarding';
   const screen = SCREENS[route];
-  const showTabs = !['onboarding', 'training', 'check', 'review', 'debrief', 'intro', 'surge', 'eid'].includes(route);
+  const showTabs = !['onboarding', 'training', 'check', 'review', 'debrief', 'intro', 'temper'].includes(route);
   root.innerHTML = `<main class="screen screen-${route}">${screen.render(ctx)}</main>${showTabs ? tabbar(route) : ''}`;
   screen.mount?.(ctx, root);
   animateKK();
@@ -244,7 +241,6 @@ async function boot() {
     return;
   }
   setSound(app.data.settings.sound !== false);
-  setHaptics(app.data.settings.vibration !== false);
   if (app.data.active && app.route === 'heute') app.route = 'training';
   if (sync()) store.save(app.data);
   render();

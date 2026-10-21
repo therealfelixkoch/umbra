@@ -3,7 +3,6 @@
 // Der Boss heilt sich nie. Verpasste Tage kosten nichts.
 import { BOSS_BY_ARC } from '../data/lore.js';
 import { FULL_MISSIONS } from '../data/missions.js';
-import { oathDamage } from './oaths.js';
 
 export const PLANNED_PER_WEEK = 3;
 export const BOSS_WEEKS = 5;
@@ -30,10 +29,8 @@ export function bossStatus(data, arc = data.engine.arc) {
     damage += h.total;
     crits += h.crits ? 1 : 0;
   }
-  // Gehaltene Gelübde: 0,1 pro Gelübde und Tag
-  const oaths = oathDamage(data.oaths, arc.n, BOSS_WEEKS);
-  damage = Math.round((damage + oaths) * 10) / 10;
+  damage = Math.round(damage * 10) / 10;
   const hp = Math.max(0, Math.round((BOSS_HP - damage) * 10) / 10);
-  return { id, max: BOSS_HP, hp, damage, crits, oaths, defeated: hp <= 0,
+  return { id, max: BOSS_HP, hp, damage, crits, defeated: hp <= 0,
     retreating: hp > 0 && arc.week > BOSS_WEEKS };
 }

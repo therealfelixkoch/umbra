@@ -39,26 +39,29 @@ export function activeMinutes(marks, { countGaps = false, gapMin = GAP_MIN } = {
   return { minutes: Math.round(ms / 60000), gaps };
 }
 
-/** Intensität 1–5: Übungsbelastung gewichtet nach erledigten Sätzen, eine Nachkommastelle. */
+/** Session-Intensität: RPE 1–10 der Übungen, gewichtet nach erledigten Sätzen, eine Nachkommastelle. */
 export function sessionIntensity(exercises) {
   let w = 0;
   let sum = 0;
   for (const e of exercises || []) {
-    if (e.effort == null) continue;
+    if (e.rpe == null) continue;
     const n = (e.sets || []).filter((s) => s.done).length || 1;
     w += n;
-    sum += e.effort * n;
+    sum += e.rpe * n;
   }
   return w ? Math.round((sum / w) * 10) / 10 : null;
 }
 
-/** Intensität aus RPE 1–10 (Intervalle, ARENA) auf die Skala 1–5. */
+/** Intensität aus RPE 1–10 (Intervalle): Schnitt. */
 export const intensityFromRpe = (rpes) => {
   const r = (rpes || []).filter((x) => x != null);
-  return r.length ? Math.round((r.reduce((a, b) => a + b, 0) / r.length / 2) * 10) / 10 : null;
+  return r.length ? Math.round((r.reduce((a, b) => a + b, 0) / r.length) * 10) / 10 : null;
 };
 
-/** Trainingslast = Intensität × Minuten. Nur Anzeige, keine Regeln daran. */
+/** Belastung 1–5 aus v3 grob auf RPE: 1→2, 2→4, 3→6, 4→8, 5→10. */
+export const effortToRpe = (e) => (e == null ? null : Math.max(1, Math.min(10, Math.round(e * 2))));
+
+/** Trainingslast = Session-RPE × Minuten. Nur Anzeige, keine Regeln daran. */
 export const trainingLoad = (intensity, minutes) => (intensity && minutes ? Math.round(intensity * minutes) : null);
 
 /** Wochensumme der Trainingslast (Sessions mit `load`). */
@@ -120,4 +123,58 @@ export function roundPhases(rounds, work, rest) {
     if (r < rounds) out.push({ phase: 'rest', sec: rest, round: r });
   }
   return out;
+}
+
+// ——— Satzpausen nach Schwere der Übung ———
+export const REST_SEC = { heavy: 150, medium: 90, light: 60, explosive: 90, warmup: 30 };
+export const REST_STEP = 15;
+
+/**
+ * Vorgeschlagene Pause nach einem Satz.
+ * @param {object} def Übung (mit `rest`-Klasse)
+ * @param {{topSet?:boolean, rir?:number|null, adjust?:number, rounds?:boolean}} o
+ *   topSet/RIR 0 → +30 s; adjust = gemerkte manuelle Anpassung (± 15-s-Schritte) für diese Übung
+ */
+export function restFor(def, { topSet = false, rir = null, adjust = 0 } = {}) {
+  let sec = def.mode === 'fixed' && def.unit === 'min' ? 60 : REST_SEC[def.rest] ?? REST_SEC.medium;
+  if (topSet || rir === 0) sec += 30;
+  return Math.max(REST_STEP, sec + (adjust || 0));
+}
+
+// ——— Vollbild-Timer in der Übung ———
+export const SWITCH_SEC = 5;
+
+/**
+ * Phasen eines Übungs-Timers.
+ * - Zeitübung: eine Arbeitsphase (darf überzogen werden, die echte Zeit wird geloggt)
+ * - je Seite: Seite 1 → 5 s Seitenwechsel → Seite 2
+ * - Runden (z. B. Sack 3 × 2 min): Arbeit → Pause → Arbeit …
+ */
+export function exercisePhases({ target, perSide = false, rounds = 0, rest = 60 }) {
+  if (rounds > 0) {
+    const out = [];
+    for (let r = 1; r <= rounds; r++) {
+      out.push({ phase: 'work', sec: target, round: r });
+      if (r < rounds) out.push({ phase: 'rest', sec: rest, round: r });
+    }
+    return out;
+  }
+  if (perSide) return [{ phase: 'side1', sec: target }, { phase: 'switch', sec: SWITCH_SEC }, { phase: 'side2', sec: target }];
+  return [{ phase: 'work', sec: target }];
+}
+
+/** Stand des Übungs-Timers. Die letzte Phase läuft über ihr Ende hinaus weiter (Überzeit). */
+export function exerciseTimerAt(phases, startAt, now) {
+  const t = Math.max(0, (now - startAt) / 1000);
+  let acc = 0;
+  for (let i = 0; i < phases.length; i++) {
+    const p = phases[i];
+    const last = i === phases.length - 1;
+    if (t < acc + p.sec || last) {
+      const el = t - acc;
+      return { index: i, ...p, elapsed: el, left: p.sec - el, over: el >= p.sec, last };
+    }
+    acc += p.sec;
+  }
+  return null;
 }

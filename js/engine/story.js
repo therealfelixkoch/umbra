@@ -79,9 +79,6 @@ export function unlockCodex(data, today, getDef = defaultGetDef) {
 
 export function codexEntry(key, meta, getDef = defaultGetDef) {
   const [kind, id] = key.split(':');
-  if (kind === 'oath') {
-    return { title: 'Besiegeltes Gelübde', kind: 'oath', id, text: `${meta.text || ''} Geschworen, gehalten, bis es von allein lief. Der Wächter trägt das Siegel.`.trim() };
-  }
   if (kind === 'boss') {
     const b = BOSSES[id];
     return { title: b.name, text: BOSS_LORE[id].codex, kind: 'boss', id };

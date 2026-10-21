@@ -28,24 +28,19 @@ export const XP_CONFIG = {
     quest: 100, // Side Quest
     ascension: 150,
     check: 50, // Mobility-Check
-    surge: 15,
-    wimhof: 15, // unabhängig von der Retentionszeit
-    cold: 10,
-    oath: 10, // pro gehaltenem Gelübde
-    sundayReset: 50,
-    oathSealed: 100,
+    temper: 15, // TEMPER-Episode oder Situations-Einsatz, unabhängig von der Retentionszeit
+    temperBook: 150, // TEMPER-Stufe abgeschlossen (Buch beendet), nicht im Tagesdeckel
   },
 
   partialMin: 0.2, // unvollständige Mission zählt mindestens 20 %
 
-  // Nebenquellen zusammen höchstens 60 XP pro Tag. Training bleibt die Hauptquelle.
-  sideDailyCap: 60,
-  sideSources: ['flow', 'rest', 'surge', 'wimhof', 'cold', 'oath'],
+  // Nebenquellen (TEMPER + FLOW) zusammen höchstens 40 XP pro Tag. Training bleibt die Hauptquelle.
+  sideDailyCap: 40,
+  sideSources: ['flow', 'rest', 'temper'],
 };
 
 export const SOURCE_LABELS = {
   mission: 'Missionen', compact: 'QUICK STRIKE', light: 'INFILTRATION leicht', express: 'SHADOWSTEP', arena: 'ARENA',
   flow: 'FLOW', rest: 'Ruhetag', record: 'Bestleistungen', weekGoal: 'Wochenziel', boss: 'Boss besiegt', quest: 'Side Quests',
-  ascension: 'Ascensions', check: 'Mobility-Check', surge: 'SURGE', wimhof: 'Wim Hof', cold: 'Kälte', oath: 'Gelübde',
-  sundayReset: 'SUNDAY RESET', oathSealed: 'Gelübde besiegelt',
+  ascension: 'Ascensions', check: 'Mobility-Check', temper: 'TEMPER', temperBook: 'TEMPER-Stufe',
 };

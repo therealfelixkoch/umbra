@@ -2,8 +2,6 @@
 import { weekStart, addDays, monthKey } from './dates.js';
 import { FULL_MISSIONS } from '../data/missions.js';
 import { XP_CONFIG } from '../data/xp-config.js';
-import { oathXpEntries } from './oaths.js';
-import { resetXpEntries } from './reset.js';
 import { isHolidayWeek } from './arc.js';
 
 // Gesamtränge und XP-Werte kommen aus js/data/xp-config.js (eine Stelle zum Anpassen).
@@ -27,7 +25,7 @@ export function sessionEntries(s) {
   else if (s.kind === 'arena') out.push(['arena', SRC.arena]);
   else if (s.kind === 'quest') out.push(['quest', SRC.quest]);
   else if (s.kind === 'ascension') out.push(['ascension', SRC.ascension]);
-  else if (SRC[s.kind] != null) out.push([s.kind, SRC[s.kind]]); // surge, wimhof, cold, oath, sundayReset, oathSealed
+  else if (SRC[s.kind] != null) out.push([s.kind, SRC[s.kind]]); // temper
   if (s.records?.length) out.push(['record', s.records.length * SRC.record]);
   return out;
 }
@@ -59,10 +57,6 @@ export function xpLedger(data, today) {
     for (const [n, e] of Object.entries(data.engine?.bossEvents || {})) {
       if (e.defeated) entries.push({ day: e.defeated, source: 'boss', xp: SRC.boss, raw: SRC.boss, arc: Number(n) });
     }
-  }
-  // Gehaltene Gelübde (Nebenquelle), besiegelte Gelübde, komplette SUNDAY RESETs
-  if (!Array.isArray(data)) {
-    entries.push(...oathXpEntries(data.oaths, SRC), ...resetXpEntries(data, SRC));
   }
   // Tagesdeckel für Nebenquellen
   entries.sort((a, b) => a.day.localeCompare(b.day));

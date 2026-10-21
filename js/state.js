@@ -3,8 +3,9 @@ import { initialEngine } from './engine/cycle.js';
 import { DEFAULT_HOLIDAY, rebaseFirstArc } from './engine/arc.js';
 import { sessionXp } from './engine/game.js';
 import { toDay } from './engine/dates.js';
+import { effortToRpe, sessionIntensity, intensityFromRpe, trainingLoad } from './engine/session.js';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export function defaultData() {
   return {
@@ -39,10 +40,6 @@ export function defaultData() {
     sideQuests: {}, // gewählte Side Quest je Woche
     bmt: { name: 'Bang Muay Thai', program: 'Jahr 1', weeks: [], current: null }, // eigenes Muay-Thai-Programm
     techChecks: {}, // Technik-Check je Monat (YYYY-MM)
-    whys: [], // DAS WARUM, alle Fassungen (neueste zuletzt)
-    oaths: { list: [], kept: {}, slips: [], alcoholInfoSeen: false, reviewedArc: null, askedArc: null }, // OATHS
-    resets: {}, // SUNDAY RESET je Woche (Montag)
-    weekPlans: {}, // grober Wochenplan je Woche (Montag) → { Tagesindex: 'arena'|'mission'|'frei' }
     active: null,
   };
 }
@@ -82,6 +79,31 @@ MIGRATIONS[2] = (raw) => {
     ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v3', day: today, suggestion: 'arc_rebase_xp_recalc', decision: 'applied' }] };
 };
 
+MIGRATIONS[3] = (raw) => {
+  // v3 → v4: Belastung 1–5 pro Übung wird RPE 1–10 (1→2 … 5→10). Intensität und Trainingslast neu
+  // (Session-RPE × Minuten). Die Vibrations-Einstellung entfällt (iPhone kann nicht vibrieren).
+  const toRpe = (e) => {
+    if (e.effort == null) return e;
+    const { effort, ...rest } = e;
+    return { ...rest, rpe: rest.rpe ?? effortToRpe(effort) };
+  };
+  const sessions = (raw.sessions || []).map((s) => {
+    if (s.kind === 'arena') return s.rpe && s.minutes ? { ...s, load: Math.round(s.rpe * s.minutes) } : s;
+    if (!s.exercises && !s.intervals) return s;
+    const exercises = s.exercises ? s.exercises.map(toRpe) : s.exercises;
+    const intensity = exercises ? sessionIntensity(exercises) : intensityFromRpe(s.intervals?.rpe);
+    const next = { ...s, exercises };
+    if (intensity != null) next.intensity = intensity; else delete next.intensity;
+    const load = trainingLoad(intensity, s.minutes);
+    if (load) next.load = load; else delete next.load;
+    return next;
+  });
+  const active = raw.active?.log ? { ...raw.active, log: raw.active.log.map(toRpe) } : raw.active;
+  const { vibration, ...settings } = raw.settings || {};
+  return { ...raw, schemaVersion: 4, sessions, active, settings,
+    ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v4', day: toDay(), suggestion: 'effort_to_rpe', decision: 'applied' }] };
+};
+
 export function migrate(raw) {
   let doc = raw;
   let v = doc.schemaVersion || 1;
@@ -115,9 +137,5 @@ export function normalize(input) {
     sideQuests: raw.sideQuests || {},
     bmt: raw.bmt?.weeks ? raw.bmt : { name: 'Bang Muay Thai', program: 'Jahr 1', weeks: [], current: null },
     techChecks: raw.techChecks && typeof raw.techChecks === 'object' ? raw.techChecks : {},
-    whys: Array.isArray(raw.whys) ? raw.whys : [],
-    oaths: { ...d.oaths, ...(raw.oaths || {}) },
-    resets: raw.resets || {},
-    weekPlans: raw.weekPlans || {},
   };
 }

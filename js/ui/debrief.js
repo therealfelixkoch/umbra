@@ -29,8 +29,6 @@ export default {
       ${comicPanels(debriefPanels(c.data, st), 'debrief-panels')}
       ${(() => { const ps = playerStats(c.data, today); const asc = highestAscension(c.data);
         return guardianImage(guardianTier(ps.rank.id), { aura: asc?.aura, caption: `Der Wächter · ${esc(rankName(ps.rank))}` }); })()}
-      ${st.why ? sys('Dein Warum', `${st.why.forWhom ? `<p>${esc(st.why.forWhom)}</p>` : ''}${st.why.oneYear ? `<p class="muted">${esc(st.why.oneYear)}</p>` : ''}`, { tone: 'gold' }) : ''}
-      ${st.nightsKept ? `<p class="lore center">In ${st.nightsKept} ${st.nightsKept === 1 ? 'Nacht' : 'Nächten'} hast du Wort gehalten.</p>` : ''}
       ${st.sleep.length ? sys('Schlaf · deine Zusammenhänge', `${st.sleep.map((x) => `<p class="small">${esc(x.text)}</p>`).join('')}<p class="muted small">Deine Daten, keine Diagnose.</p>`, { tone: 'calm' }) : ''}
       <details class="raw"><summary>Alle Zahlen</summary>
       ${sys('Konstanz', `<dl class="facts">
@@ -39,7 +37,7 @@ export default {
         <div><dt>FLOW-Tage</dt><dd class="num">${st.flowDays}</dd></div>
         <div><dt>Längste Serie</dt><dd class="num">${st.longestStreak} W</dd></div>
         <div><dt>Bestleistungen</dt><dd class="num">${st.records}</dd></div>
-        <div><dt>Rückeroberungen</dt><dd class="num">${st.reclaims}</dd></div>
+        <div><dt>TEMPER</dt><dd>${esc(st.temper)}</dd></div>
         ${st.boss ? `<div><dt>Boss</dt><dd>${st.boss.defeated ? 'besiegt' : `${num(st.boss.hp)}/${st.boss.max} LP übrig`}</dd></div>` : ''}
       </dl>`)}
       ${sys('ARENA', `<dl class="facts">

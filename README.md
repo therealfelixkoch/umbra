@@ -56,19 +56,26 @@ Stufe 1–5 → Score 0/25/50/75/100. Priorität = (100 − Score) × Gewicht. F
 - In der Ansicht: Fortschritt über alle Wochen (trainiert ×, abgeschlossen ✓, aktuell in Gold), der Plan der aktuellen Woche zum Abhaken, „Einheit eintragen“ (ARENA-Eintrag mit Intensität und Dauer, verknüpft mit der Woche), „Woche abschließen“ (dann wird die nächste offene Woche aktuell).
 - Pauschal per Zeit eintragen geht weiterhin unter ARENA → Eintragen.
 
-### Update v3 · Paket 3: OATHS, SUNDAY RESET und Schlaf
+### Update v4 · Paket 2: TEMPER
 
-- **Der Eid (OATHS):** 3 Wenn-dann-Gelübde pro Arc, mit Baukasten (Situation → Handlung) und Vorlagen. Ab 20 Uhr eine Karte auf Heute, ein Tap pro gehaltenem Gelübde (bis mittags für gestern nachholbar). Gezählt wird nur, was gehalten wurde: keine Markierung für Gebrochenes, keine Serien. Sonntags „Wie automatisch? 1–5“, drei Wochen in Folge ≥ 4 → besiegelt (goldenes Siegel, Chronik-Eintrag, +100 XP), danach ist Platz für ein neues. Zum Arc-Start: behalten, umformulieren oder ersetzen. „Ausrutscher“: Auslöser und neuer Wortlaut, ohne Vorwurf. Info-Karte Alkohol (Parr et al., PLOS ONE 2014). Jedes gehaltene Gelübde: +10 XP (im Tagesdeckel) und 0,1 Schaden am Arc-Boss. Debrief: „In X Nächten hast du Wort gehalten.“
-- **SUNDAY RESET:** ab Sonntag 16 Uhr (Montag nachholbar) eine Karte mit 5 Häkchen: Rückblick, Spaziergang im Tageslicht, Essen vorbereitet, Woche grob geplant (Wochenansicht zum Antippen, nur Hinweis), Gelübde bestätigt. Komplett +50 XP.
-- **Schlaf:** „Wie hast du geschlafen?“ 1–5 im Check-in. Ab 3 Wochen Daten im Rückblick und Debrief deine eigenen Zusammenhänge (Ankerübungen nach Nächten ≤ 2 vs. ≥ 4, Schlaf nach gehaltenem Getränke-Gelübde, Schlaf nach SURGE/Kälte), jeweils nur mit mindestens 5 Datenpunkten pro Gruppe und als „deine Daten, keine Diagnose“ markiert.
+- **Eigener Bereich**, unabhängig von den Arcs: 5–10 Minuten für den Geist. Karte auf Heute unter der Tagesmission, Klingen-Emblem neben dem Rang (schärfer mit jeder Stufe).
+- **Buch I – ERWACHEN** (Stufe HEAT, 30 Episoden) aus `docs/temper-geschichten.md`: Story → getaktete Übung → „Wie klar bist du jetzt? 1–5“. Bausteine: Regler (eine Runde Wim Hof bzw. 4 s ein / 6–8 s aus), Klinge (Zählen mit Abschweif-Taps), ECHO-Scan (mit deinem Namen und deiner ECHO-Beschreibung aus Episode 11), Welle, CO2-Test, Innenkarte, 3-Atemzüge-Reset. Jeder Baustein erklärt kurz, was er körperlich bewirkt.
+- **Freischaltung pro gemachter Episode**, keine Serien, keine Strafen. Einsätze: Verlangen (ab Ep. 9), NSDR (15), Stress/Wut (18), Einschlafen (22), Vor dem Kampf (26). Schlaf 1–2 im Check-in → TEMPER schlägt NSDR vor. Ab Ep. 26 optional „Reset?“ in der Satzpause vor dem letzten Satz einer Hauptübung.
+- **Messwerte:** Klarheit, CO2-Test (Ep. 5, 25, 30, danach wöchentlich), Abschweif-Taps pro Minute, Retention als ruhige Kurve (ohne XP, Rekord oder Rang), Minuten pro Woche. TEMPER-Zeile im Debrief.
+- **Sicherheit:** Bestätigung vor der ersten Wim-Hof-Runde und alle 30 Tage, Hinweis „Nie im oder am Wasser.“
+- **Stimme:** optional Gerätestimme (Deutsch, langsam), standardmäßig aus.
 
-### Update v3 · Paket 2: SURGE und DAS WARUM
+### Update v4 · Paket 1: Training, Feedback und Fehler
 
-- **„Ich bin im Nebel.“** auf Heute: Stimmung vorher (1–5) → dein Warum → „Was zieht gerade?“ → Protokoll → Stimmung nachher. **Die Welle** (90 s + 5 physiologische Seufzer), **Glut** (5 min Cyclic Sighing, kalte Dusche, 2 min Tageslicht), **NSDR** (10/20 min Body-Scan, Text Schritt für Schritt, sanfter Ton), **Flamme** (Sack-Runden oder Spaziergang, kalte Dusche). Ab 3 Durchgängen pro Protokoll schlägt SURGE das vor, was bei dir im Schnitt am meisten bringt. Jeder Durchgang ist im Debrief eine Rückeroberung. Kalte Duschen aus Glut/Flamme landen automatisch im Kälte-Log.
-- **Wim Hof:** Sicherheitsbestätigung beim ersten Mal und alle 30 Tage, 1–5 Runden, optional leiser Zähl-Ton bis 30, Tippen irgendwo startet/stoppt das Halten, 15 s Erholungsatem, fast schwarzer Bildschirm mit Wake Lock. Verlauf als ruhige Kurve und Wochenschnitt, **keine XP, Rekorde oder Ränge für die Retentionszeit**.
-- **Kälte-Log:** Art und Dauer (Timer oder Eingabe), Minuten pro Woche ohne Zielwert, einmaliger Sicherheitshinweis.
-- **DAS WARUM:** zu Beginn jedes Arcs (und jederzeit über SURGE): Für wen? Wer in einem Jahr? Erscheint in SURGE vor der Protokollwahl und im Debrief. Alte Fassungen in Kodex → Chronik. Nur Text: Eine Sprachaufnahme braucht in der installierten iPhone-Web-App eine Mikrofonfreigabe, die iOS bei jedem Start erneut abfragen kann, und Audio in IndexedDB ist im Export unhandlich. Darum bewusst weggelassen.
-- **XP:** SURGE 15, Wim Hof 15, Kälte 10, zusammen mit FLOW im Tagesdeckel von 60.
+- **Entfernt (v4-Entscheidung):** SURGE, eigener Wim-Hof-Bereich, Kälte-Log, DAS WARUM, Gelübde, SUNDAY RESET. Atem- und Wim-Hof-Bausteine leben in `js/engine/breath.js` weiter (für TEMPER).
+- **Ton und Musik:** `audioSession = ambient`, nur Web Audio, kein HTML-Audio mehr: Signaltöne mischen sich unter Spotify und pausieren es nie. Bei Lautlos-Schalter kein Ton, dafür immer ein großes visuelles Signal (Bildschirm-Blitz, blinkende Timer-Zahl). Vibration komplett entfernt.
+- **RPE 1–10** nach der letzten Serie jeder Übung (ersetzt Belastung 1–5, Migration 1→2 … 5→10). Session-Intensität = RPE gewichtet nach Sätzen, Trainingslast = Session-RPE × Minuten.
+- **Fixes Gewicht** pro Übung (Schalter „fix“ an der Last): nie mehr Gewicht, stattdessen mehr Wdh. → +1 Satz → langsameres Tempo → schwerere Stufe.
+- **Pausenklassen** pro Übung in der Datenbank (`rest`): schwer 150 s · mittel 90 s · leicht 60 s · explosiv 90 s · Aufwärmen 30 s, Runden 60 s. +30 s nach Top-Satz oder RIR 0. ±15 s im Pausen-Timer, gemerkt pro Übung.
+- **Vollbild-Timer** für Zeit-, Je-Seite- (Seite 1 → 5 s Wechsel → Seite 2 → dann Pause) und Runden-Übungen. Wiederholungs-Übungen je Seite mit Feldern links/rechts.
+- **Tauschen:** empfohlen → gleiche Kategorie → alle Übungen mit Suche, jede wählbar.
+- **Progressionsleitern** (`js/data/ladders.js`): 2 Einheiten in Folge oben mit RIR ≥ 2 → Vorschlag „Jetzt“ / „Ab dem nächsten Arc“ / „Nicht jetzt“. 2× unteres Ende verfehlt → Vorschlag leichter. In der Übungskarte jederzeit ▼▲.
+- **XP:** TEMPER 15, Buchabschluss 150, Tagesdeckel für TEMPER + FLOW 40.
 
 ### Update v3 · Paket 1: Feedback V5
 

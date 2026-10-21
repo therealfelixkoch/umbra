@@ -21,7 +21,8 @@ import { latestTest } from '../engine/mobility.js';
 import { weekView, attributeRanks, ascensionGrid, RANK_LORE } from './week.js';
 import { ASCENSIONS, highestAscension } from '../engine/progress.js';
 import { guardianImage } from './lore.js';
-import { PROTOCOLS } from '../engine/surge.js';
+import { bladeEmblem } from './temper.js';
+import { bladeTier } from '../engine/temper.js';
 import { journalView, xpSourceView, journalActions, journalChange } from './journal.js';
 import { guardianTier, GUARDIANS } from '../data/lore.js';
 
@@ -68,9 +69,8 @@ const setSettings = (c, patch) => c.update((data) => ({ ...data, settings: { ...
 function sessionLabel(s) {
   if (s.kind === 'arena') return `ARENA${s.bmt ? ` · BMT W${s.bmt.week}` : ''} · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'} · ${s.minutes} min`;
   if (s.kind === 'check') return 'Mobility-Check';
-  if (s.kind === 'surge') return `SURGE · ${PROTOCOLS[s.protocol]?.name || ''}${s.moodBefore != null && s.moodAfter != null ? ` · Stimmung ${s.moodBefore} → ${s.moodAfter}` : ''}`;
-  if (s.kind === 'wimhof') return `Wim Hof · ${s.rounds} ${s.rounds === 1 ? 'Runde' : 'Runden'}`;
-  if (s.kind === 'cold') return `Kälte · ${Math.round((s.seconds || 0) / 6) / 10} min`;
+  if (s.kind === 'temper') return s.ep ? `TEMPER · Episode ${s.ep}${s.clarity ? ` · Klarheit ${s.clarity}` : ''}` : `TEMPER · Einsatz`;
+  if (s.kind === 'temperBook') return `TEMPER · Buch ${s.book} abgeschlossen`;
   if (s.kind === 'quest') return 'Wochen-Quest erfüllt';
   if (s.kind === 'ascension') return `Ascension: ${ASCENSIONS.find((a) => a.id === s.ascension)?.name || ''}`;
   const m = MISSIONS[s.missionId];
@@ -94,6 +94,7 @@ export default {
       const title = equippedTitle(data);
       out += guardianImage(tier, { aura: asc?.aura, caption: `Der Wächter${title ? ` · ${esc(title)}` : ''}${asc ? `<br><span class="cap-sub">${esc(asc.name)}</span>` : ''}` });
       out += sys(`Rang · ${rankName(st.rank)}`, `
+        <div class="row gap blade-row">${bladeEmblem(bladeTier(data), 26)}<small class="muted">Klinge · TEMPER-Stufe ${['–', 'HEAT', 'HAMMER', 'QUENCH', 'TEMPER', 'EDGE'][bladeTier(data)]}</small></div>
         <div class="rank-row emblems">${RANKS.map((r, i) => `<span class="${i <= st.rank.index ? 'on' : ''}${i === st.rank.index ? ' cur' : ''}" title="${rankName(r)}">${rankEmblem(i, { size: i === st.rank.index ? 40 : 30 })}</span>`).join('')}</div>
         <div class="xpbar big"><i style="width:${Math.round(st.rank.progress * 100)}%"></i></div>
         <p class="lore">${RANK_LORE[st.rank.id]}</p>
@@ -141,8 +142,8 @@ export default {
         <p class="muted small">Ohne Kettlebells im Home Gym nimmt die App Kurzhanteln.</p></section>
       <section class="card"><div class="label">Kettlebell-Gewichte (kg)</div>${kbGrid(s.kbWeights)}</section>
       <section class="card"><div class="label">Körpergewicht</div>${stepper('p-bw', kg(s.bodyweight), 'kg')}
-        <div class="label">Pausenzeit zwischen Sätzen</div>
-        <div class="chips">${[60, 75, 90, 120].map((v) => `<button class="chip${s.restSec === v ? ' on' : ''}" data-act="p-rest" data-v="${v}">${v} s</button>`).join('')}</div>
+        <div class="label">Satzpausen</div>
+        <p class="muted small">Automatisch nach Schwere der Übung: schwer 150 s, mittel 90 s, leicht 60 s, explosiv 90 s. +30 s nach Top-Satz oder RIR 0. Im Pausen-Timer mit ±15 s anpassen, die App merkt es sich pro Übung.${Object.keys(s.restAdjust || {}).length ? ` <button class="link" data-act="p-rest-reset">Gemerkte Anpassungen zurücksetzen</button>` : ''}</p>
         <div class="label">Ellbogen-Zähler: voll ab</div>
         ${stepper('p-elbow', `${s.elbowThreshold || 3}`, 'Meldungen in 7 Tagen')}
         <div class="label">Feiertagsmodus</div>
@@ -152,7 +153,7 @@ export default {
         <div class="label">Ton beim Pausenende</div>
         <div class="chips"><button class="chip${s.sound !== false ? ' on' : ''}" data-act="p-sound" data-v="1">An</button><button class="chip${s.sound === false ? ' on' : ''}" data-act="p-sound" data-v="0">Aus</button></div>
         <button class="btn wide" data-act="p-sound-test">Ton testen</button>
-        <p class="muted small">Ton kommt nur bei angeschaltetem Bildschirm. Ist das iPhone gesperrt, pausiert iOS die App. Beim Pausenende pulsiert zusätzlich der Bildschirm violett.</p></section>
+        <p class="muted small">Der Ton mischt sich unter deine Musik und pausiert sie nie. Bei Lautlos-Schalter bleibt er stumm, dafür pulsiert der Bildschirm violett und die Timer-Zahl blinkt. Ist das iPhone gesperrt, pausiert iOS die App: Bildschirm anlassen.</p></section>
       ${quoteSettings(s)}
       <section class="card"><div class="label">Daten</div>
         <p class="muted small">Letzte Sicherung: ${s.lastBackupAt ? formatDay(s.lastBackupAt.slice(0, 10)) : 'noch nie'}</p>
@@ -199,8 +200,8 @@ export default {
       const r = testSound();
       c.system('Ton-Test', `<p>Du solltest drei Töne hören und ein violettes Pulsieren sehen.</p>
         <dl class="facts"><div><dt>Web Audio</dt><dd>${r.webAudio}</dd></div><div><dt>Audio-Sitzung</dt><dd>${r.audioSession}</dd></div>
-        <div><dt>Fallback</dt><dd>${r.fallback}</dd></div><div><dt>Bildschirm an</dt><dd>${r.wakeLock}</dd></div><div><dt>Als App gestartet</dt><dd>${r.standalone ? 'ja' : 'nein'}</dd></div></dl>
-        <p class="muted small">Kein Ton? Lautstärke hochdrehen. Steht „Audio-Sitzung“ auf „playback“, kommt der Ton auch bei Stummschalter.</p>`);
+        <div><dt>Bildschirm an</dt><dd>${r.wakeLock}</dd></div><div><dt>Als App gestartet</dt><dd>${r.standalone ? 'ja' : 'nein'}</dd></div></dl>
+        <p class="muted small">Am besten mit laufendem Spotify testen: Die Musik soll weiterspielen und der Ton darüber liegen. Bei Lautlos-Schalter kommt bewusst kein Ton, das violette Signal kommt immer.</p>`);
     },
     'p-title': (c, d) => setSettings(c, { title: c.data.settings.title === d.id ? null : d.id }),
     'q-hide': (c, d) => {
@@ -217,7 +218,7 @@ export default {
       setSettings(c, { ownQuotes: [...(c.data.settings.ownQuotes || []), q] });
     },
     'q-del': (c, d) => setSettings(c, { ownQuotes: (c.data.settings.ownQuotes || []).filter((q) => q.id !== d.id) }),
-    'p-rest': (c, d) => setSettings(c, { restSec: Number(d.v) }),
+    'p-rest-reset': (c) => setSettings(c, { restAdjust: {} }),
     'p-sound': (c, d) => setSettings(c, { sound: d.v === '1' }),
     'p-export': async (c) => {
       if (await exportFile(c.data, c.today())) setSettings(c, { lastBackupAt: new Date().toISOString() });

@@ -83,7 +83,6 @@ function chronicle(c) {
     <h1 class="h">Chronik</h1>
     <p class="muted small">Jede neue Übung, jeder Rekord und jeder Gegner schaltet einen Eintrag frei.</p>
     ${bosses.length ? sys('Gegner', bosses.map((x) => `<div class="chron boss"><div class="chron-img">${bossImage(x.e.id, { cls: 'lore-small' })}</div><div><b>${esc(x.e.title)}</b><p>${esc(x.e.text)}</p></div></div>`).join('')) : ''}
-    ${(c.data.whys || []).length ? sys('DAS WARUM', c.data.whys.slice().reverse().map((w) => `<div class="chron"><small>${formatDay(w.day)}${w.arc != null ? ` · Arc ${w.arc + 1}` : ''}</small>${w.forWhom ? `<p>${esc(w.forWhom)}</p>` : ''}${w.oneYear ? `<p class="muted">${esc(w.oneYear)}</p>` : ''}</div>`).join(''), { tone: 'gold' }) : ''}
     ${sys('Einträge', rest.length ? rest.map((x) => `<div class="chron"><small>${formatDay(x.meta.day || '2026-01-01')}</small><b>${esc(x.e.title)}</b><p>${esc(x.e.text)}</p></div>`).join('') : '<p class="muted">Noch leer. Die erste Mission schreibt den ersten Eintrag.</p>')}`;
 }
 

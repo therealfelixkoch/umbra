@@ -1,20 +1,24 @@
 // Training: Übung für Übung, Satz-Logging, Pausen-Timer, Zirkel, SHADOWSTEP, FLOW.
 import { sys, esc, glyphChips, targetText, loadText, setsText, trendBadge, stepper, kg } from './kit.js';
 import { getDef } from '../data/exercises.js';
-import { finishSession, completionOf, swapOptions, itemFor } from '../engine/plan.js';
-import { EXERCISES } from '../data/exercises.js';
+import { finishSession, completionOf, swapGroups, itemFor, stateKey } from '../engine/plan.js';
+import { EXERCISES, CATEGORIES } from '../data/exercises.js';
 import { ATTRIBUTES } from '../data/glyphs.js';
 import { stepLoad, snap } from '../engine/progression.js';
 import { rankFor, totalXp } from '../engine/game.js';
 import { exerciseDetail } from './kodex.js';
 import { showsElbowTap, reportElbow } from '../engine/signals.js';
-import { haptic } from './haptics.js';
 import { quoteAfterMission } from '../engine/story.js';
 import { guardianImage } from './lore.js';
+import { ladderLine } from './ladder.js';
+import { breathAt, slowPattern } from '../engine/breath.js';
+import { book1Reached } from '../engine/temper.js';
+import { logDecision } from '../engine/rulelog.js';
+import { stepFrom } from '../data/ladders.js';
 import { guardianTier } from '../data/lore.js';
 import { rankName } from '../engine/game.js';
 import { beep, keepAwake, signal, unlockAudio } from './sound.js';
-import { RIR_CHOICES, timerState, intervalPhases, phaseAt, workDone, PHASE_LABEL, activeMinutes } from '../engine/session.js';
+import { RIR_CHOICES, restFor, REST_STEP, exercisePhases, exerciseTimerAt, timerState, intervalPhases, phaseAt, workDone, PHASE_LABEL, activeMinutes } from '../engine/session.js';
 
 const fmt = (sec) => {
   const s = Math.max(0, Math.ceil(sec));
@@ -24,8 +28,8 @@ const fmt = (sec) => {
 // ——— Pausen-Timer (Overlay außerhalb des Render-Baums) ———
 const restEl = () => document.getElementById('rest');
 let rest = null;
-function startRest(sec, label = 'Pause') {
-  rest = { endAt: Date.now() + sec * 1000, label, fired: false };
+function startRest(sec, label = 'Pause', exId = null) {
+  rest = { endAt: Date.now() + sec * 1000, label, fired: false, exId };
   drawRest();
 }
 function drawRest() {
@@ -37,8 +41,22 @@ function drawRest() {
   }
   const left = (rest.endAt - Date.now()) / 1000;
   el.className = `open${left <= 0 ? ' over' : ''}`;
+  // 3-Atemzüge-Reset in der Pause (TEMPER, ab Episode 26): 3 × (4 s ein, 8 s aus)
+  if (rest.reset) {
+    const t = (Date.now() - rest.reset) / 1000;
+    if (t < 36) {
+      const b = breathAt(rest.reset, Date.now(), slowPattern(8));
+      el.className = 'open';
+      el.innerHTML = `<div class="rest-inner"><small>Reset · Atemzug ${Math.min(3, b.cycle + 1)}/3 · Pause ${fmt(left)}</small><b class="num">${b.label}</b>
+        <p class="muted small">Schultern sinken. Lang aus.</p><div class="row gap"><button class="btn" data-act="rest-reset-stop">Fertig</button></div></div>`;
+      return;
+    }
+    rest.reset = null;
+  }
   el.innerHTML = `<div class="rest-inner"><small>${esc(rest.label)}</small><b class="num">${left > 0 ? fmt(left) : 'Los'}</b>
-    <div class="row gap"><button class="btn" data-act="rest-add">+15 s</button><button class="btn primary" data-act="rest-skip">${left > 0 ? 'Überspringen' : 'Weiter'}</button></div></div>`;
+    ${rest.resetOffer && left > 40 ? '<button class="btn small ghost rest-reset" data-act="rest-reset">Reset?</button>' : ''}
+    <div class="row gap"><button class="btn" data-act="rest-sub">−15 s</button><button class="btn" data-act="rest-add">+15 s</button><button class="btn primary" data-act="rest-skip">${left > 0 ? 'Überspringen' : 'Weiter'}</button></div>
+    ${rest.exId ? '<small class="rest-note">±15 s merkt sich die App für diese Übung.</small>' : ''}</div>`;
   if (left <= 0 && !rest.fired) {
     rest.fired = true;
     signal(3);
@@ -91,9 +109,22 @@ function tick(c) {
     }
   }
   const ct = a.cardTimer;
-  if (ct && !ct.stoppedAt && !ct.fired && now - ct.startAt >= ct.target * 1000) {
-    ct.fired = true;
-    signal(3);
+  if (ct?.phases) {
+    const st = exerciseTimerAt(ct.phases, ct.startAt, now);
+    if (st.index !== ct.seen) {
+      cardPhaseChange(c, a, ct, st);
+      return;
+    }
+    if (st.last && st.over && !ct.fired) {
+      ct.fired = true;
+      signal(3);
+      if (ct.rounds) { finishRounds(c, a, ct, st.round); return; }
+    }
+    const el = document.querySelector('[data-bigclock]');
+    if (el) {
+      el.textContent = st.over ? `+${fmt(st.elapsed - st.sec)}` : fmt(st.left);
+      el.classList.toggle('over', st.over);
+    }
   }
   if (p.format === 'amrap' && a.clockEnd && now >= a.clockEnd && !a.clockFired) {
     a.clockFired = true;
@@ -127,6 +158,43 @@ const save = (c) => {
 // Zeitübungen und Runden-Übungen (Sack, Seil in Minuten) bekommen einen Timer in der Karte.
 const timed = (def) => (def.mode === 'time' && def.cat !== 'mobility') || (def.mode === 'fixed' && def.unit === 'min');
 const timerTarget = (def, s) => (def.mode === 'fixed' ? def.range[0] * 60 : s.value);
+const PHASE_NAME = { work: 'Los', side1: 'Seite 1', switch: 'Seitenwechsel', side2: 'Seite 2', rest: 'Pause' };
+
+// Phasenwechsel im Übungs-Timer: Signal, bei Runden die fertige Runde abhaken
+function cardPhaseChange(c, a, ct, st) {
+  const prev = ct.phases[ct.seen];
+  ct.seen = st.index;
+  if (ct.rounds && prev?.phase === 'work') {
+    const s = a.log[ct.i].sets[ct.ks[prev.round - 1]];
+    if (s) { s.done = true; s.sec = prev.sec; }
+  }
+  signal(st.phase === 'rest' || st.phase === 'switch' ? 2 : 1);
+  save(c);
+}
+
+// Letzte Runde vorbei: abhaken, Timer schließen, normale Pause zur nächsten Übung
+function finishRounds(c, a, ct, round) {
+  const k = ct.ks[round - 1];
+  const s = a.log[ct.i].sets[k];
+  a.cardTimer = null;
+  if (s && !s.done) { s.sec = ct.phases.at(-1).sec; training.actions['t-done'](c, { k }); } else save(c);
+}
+
+// Vollbild während der Übungs-Timer läuft: riesige Restzeit, Übung, Satz x/y, Phase
+function bigTimerView(a, ct, def) {
+  const st = exerciseTimerAt(ct.phases, ct.startAt, Date.now());
+  const sets = a.log[ct.i].sets;
+  const counter = ct.rounds ? `Runde ${st.round} von ${ct.ks.length}` : `Satz ${ct.k + 1} von ${sets.length}`;
+  const clock = st.over ? `+${fmt(st.elapsed - st.sec)}` : fmt(st.left);
+  return `<div class="bigtimer phase-${st.phase}">
+    <small class="bigtimer-count">${counter}</small>
+    <h1>${esc(def.name)}</h1>
+    <b class="bigtimer-phase">${st.phase === 'work' && !ct.rounds ? '' : PHASE_NAME[st.phase]}</b>
+    <b class="bigtimer-clock num${st.over ? ' over' : ''}" data-bigclock>${clock}</b>
+    ${st.phase === 'switch' ? '<p class="bigtimer-hint">Seite wechseln, gleich geht es weiter.</p>' : ''}
+    <button class="btn primary big wide" data-act="t-timer-stop" data-k="${ct.k}">${ct.rounds ? 'Stopp' : 'Stopp · Zeit loggen'}</button>
+    <p class="bigtimer-hint">${'wakeLock' in navigator ? 'Bildschirm bleibt an.' : 'Bildschirm anlassen für das Signal.'} Bei Lautlos-Schalter kommt nur das violette Signal.</p></div>`;
+}
 const IV4 = { warmup: 180, rounds: 4, work: 240, rest: 180, cooldown: 180 };
 const is4x4 = (def) => def.id.endsWith('_4x4');
 const clockOf = (ts) => new Date(ts).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
@@ -158,6 +226,7 @@ function setsView(c, a) {
   const showRir = !fixed && !it.explosive && it.rir != null;
   const hasTimer = timed(def);
   const ct = a.cardTimer?.i === i ? a.cardTimer : null;
+  if (ct?.phases) return bigTimerView(a, ct, def);
   const rir = fixed ? '' : it.explosive
     ? '<p class="rir">Kontrast: jede Wiederholung maximal explosiv, volle Pause. Stopp, sobald die Explosivität nachlässt.</p>'
     : it.topSet ? '<p class="rir">Top-Satz: 3–5 Wdh., 1 Wdh. im Tank. Backdown: 6–10 Wdh. mit ca. 18 % weniger Last.</p>'
@@ -185,20 +254,25 @@ function setsView(c, a) {
         <button class="check" data-act="t-done" data-k="${k}" aria-label="Erledigt">✓</button></div>${timer}</div>`;
     }
     const step = def.mode === 'time' ? 5 : 1;
+    const sides = def.perSide && def.mode === 'reps';
     return `<div class="set-wrap${s.done ? ' done' : ''}"><div class="set-row${s.done ? ' done' : ''}${isNext ? ' next' : ''}"><span class="set-n">${s.label ? `<i class="set-tag">${s.label === 'Top-Satz' ? 'TOP' : 'BD'}</i>` : k + 1}</span>
-      <div class="set-mid">${stepper('t-val', `${s.value}`, def.mode === 'time' ? 's' : 'Wdh.', { idx: `${k}:${step}`, big: true })}${lastLine}</div>
+      <div class="set-mid">${sides
+        ? `<div class="sides">${stepper('t-side', `${s.left ?? s.value}`, 'links', { idx: `${k}:L` })}${stepper('t-side', `${s.right ?? s.value}`, 'rechts', { idx: `${k}:R` })}</div>`
+        : stepper('t-val', `${s.value}`, def.mode === 'time' ? 's' : 'Wdh.', { idx: `${k}:${step}`, big: true })}${lastLine}</div>
       ${loadable && s.done ? `<small class="set-load">${kg(s.load)} kg</small>` : ''}
       <button class="check" data-act="t-done" data-k="${k}" aria-label="Satz erledigt">✓</button></div>
       ${timer}${showRir && s.done ? rirChips(k, s.rir) : ''}</div>`;
   }).join('');
 
   const open = entry.sets.find((s) => !s.done) || entry.sets[entry.sets.length - 1];
-  const loadRow = loadable ? `<div class="load-row"><span>${def.load === 'belt' ? 'Zusatzgewicht' : 'Gewicht'}</span>
-    ${stepper('t-load', kg(open.load), 'kg')}</div>` : '';
+  const loadRow = loadable ? `<div class="load-row"><span>${def.load === 'belt' ? 'Zusatzgewicht' : 'Gewicht'}
+      <button class="fix-toggle${it.fixed ? ' on' : ''}" data-act="t-fix" aria-pressed="${!!it.fixed}">${it.fixed ? '■ fix' : '□ fix'}</button></span>
+    ${stepper('t-load', kg(open.load), 'kg')}</div>
+    ${it.fixed ? '<p class="muted small">Gewicht fix: Die App steigert über mehr Wdh., dann +1 Satz, dann langsameres Tempo, dann die schwerere Stufe.</p>' : ''}` : '';
   const allDone = entry.sets.every((s) => s.done);
-  const effort = allDone ? `<div class="effort${entry.effort ? ' set' : ''}"><small>Wie hart war die Übung insgesamt?</small>
-    <div class="effort-chips">${[1, 2, 3, 4, 5].map((v) => `<button class="${entry.effort === v ? 'on' : ''}" data-act="t-effort" data-v="${v}">${v}</button>`).join('')}</div>
-    <div class="effort-scale"><span>locker</span><span>am Limit</span></div></div>` : '';
+  const effort = allDone ? `<div class="effort${entry.rpe ? ' set' : ''}"><small>Wie hart war das? RPE</small>
+    <div class="rpe-chips">${Array.from({ length: 10 }, (_, k) => k + 1).map((v) => `<button class="${entry.rpe === v ? 'on' : ''}" data-act="t-rpe" data-v="${v}">${v}</button>`).join('')}</div>
+    <div class="effort-scale"><span>locker</span><span>maximal</span></div></div>` : '';
   const lastFull = last ? `<div class="last-sets">${last.sets.map((x, k) => `<span><i>${k + 1}</i>${esc(lastSetText(def, x))}</span>`).join('')}</div>` : '<b>–</b>';
   const isLast = i === n - 1;
   return `${head(c, a, `${i + 1}/${n}`, comp)}
@@ -209,6 +283,7 @@ function setsView(c, a) {
     }).join('')}</nav>
     <section class="t-card">
       <div class="t-name"><h1>${esc(def.name)}${it.optional ? ' <em>optional</em>' : ''}</h1><div class="row gap"><button class="info" data-act="t-swap" aria-label="Übung tauschen">⇄</button><button class="info" data-act="t-info" data-id="${def.id}" aria-label="Info">i</button></div></div>
+      ${ladderLine(it, def, !entry.sets.some((s) => s.done) && !!it.slotKey && a.plan.profile !== 'travel')}
       ${it.swappedFrom ? `<p class="muted small">Getauscht statt ${esc(getDef(it.swappedFrom)?.name || it.swappedFrom)} · ${it.swapScope === 'arc' ? 'für den Rest des Arcs' : 'nur heute'}</p>` : ''}
       ${glyphChips(def, { small: true })}
       ${fixed ? `<p class="t-target">${targetText(def)}${entry.sets.length > 1 ? ` · ${entry.sets.length} Runden` : ''}</p>` : `
@@ -218,6 +293,7 @@ function setsView(c, a) {
         <div><small>Heute</small><b>${entry.sets.length} × ${targetText(def, it.target)}</b><em>${def.load ? esc(loadText(def, it.load)) : ''}</em></div>
       </div>${trendBadge(it.trend)}`}
       ${it.adjust ? `<p class="note">${esc(it.adjust)}</p>` : ''}
+      ${it.tempo ? '<p class="note">Tempo: 3 s ablassen, 1 s Pause in der Dehnung, dann kraftvoll hoch.</p>' : ''}
       ${rir}
       ${hasTimer ? '<p class="muted small">Timer starten, Bildschirm anlassen für das Signal. Stopp loggt die echte Zeit.</p>' : ''}
       ${loadRow}
@@ -422,7 +498,6 @@ function finish(c) {
   const rankUp = after.index > before.index;
   const quote = quoteAfterMission(c.data, s);
   c.go('heute');
-  if (rankUp) haptic([60, 40, 60, 40, 160]);
   c.system(rankUp ? 'Rang-Prüfung bestanden' : title, `${rankUp ? `<div class="rankup epic">${guardianImage(guardianTier(after.id), { cls: 'rankup-guardian' })}
       <small>Neuer Rang</small><b>${esc(rankName(after))}</b></div>` : ''}
     <div class="xp-gain num">+${s.xp} XP</div>
@@ -433,6 +508,20 @@ function finish(c) {
     ${rec ? `<div class="record"><b>Rekord gebrochen</b><ul>${rec}</ul></div>` : ''}
     ${quote ? `<blockquote class="quote">„${esc(quote.text)}“<cite>${esc(quote.person)} · ${esc(quote.source)}</cite></blockquote>` : ''}`,
   [['close-modal', 'Weiter', 'primary']], rankUp ? 'gold aura' : rec ? 'gold' : 'sys');
+}
+
+// ±15 s: läuft sofort und wird pro Übung gemerkt (gilt ab dem nächsten Satz)
+function adjustRest(c, dir) {
+  if (!rest) return;
+  rest.endAt = Math.max(Date.now() + 1000, Math.max(rest.endAt, Date.now()) + dir * REST_STEP * 1000);
+  rest.fired = false;
+  drawRest();
+  const id = rest.exId;
+  if (!id) return;
+  const adj = { ...(c.data.settings.restAdjust || {}) };
+  adj[id] = (adj[id] || 0) + dir * REST_STEP;
+  if (!adj[id]) delete adj[id];
+  c.update((data) => ({ ...data, settings: { ...data.settings, restAdjust: adj } }));
 }
 
 function swapTo(c, id, scope) {
@@ -463,6 +552,13 @@ const training = {
     return flowView(c, a);
   },
   onInput(c, name, value) {
+    if (name === 't-swap-q') {
+      // Suche filtert direkt im Modal; bei Suche zählen alle Gruppen
+      const q = value.trim().toLowerCase();
+      document.querySelectorAll('[data-swap-list] .swap').forEach((el) => { el.hidden = !!q && !el.dataset.name.includes(q); });
+      document.querySelectorAll('[data-swap-list] .label').forEach((el) => { el.hidden = !!q; });
+      return;
+    }
     const a = c.data.active;
     if (!a) return;
     a.ivLog ||= { rpe: [] };
@@ -486,6 +582,17 @@ const training = {
       const [k, step] = d.idx.split(':').map(Number);
       const s = a.log[a.index].sets[k];
       s.value = Math.max(0, s.value + Number(d.dir) * step);
+      save(c);
+    },
+    // Je Seite: links/rechts getrennt, gewertet wird die schwächere Seite
+    't-side': (c, d) => {
+      const a = c.data.active;
+      const [k, side] = d.idx.split(':');
+      const s = a.log[a.index].sets[Number(k)];
+      s.left ??= s.value;
+      s.right ??= s.value;
+      if (side === 'L') s.left = Math.max(0, s.left + Number(d.dir)); else s.right = Math.max(0, s.right + Number(d.dir));
+      s.value = Math.min(s.left, s.right);
       save(c);
     },
     't-load': (c, d) => {
@@ -513,7 +620,6 @@ const training = {
       const k = Number(d.k);
       sets[k].done = !sets[k].done;
       if (sets[k].done) {
-        haptic();
         // RIR vorausgewählt mit dem Ziel der Arc-Woche: ein Tap, wenn es passt
         if (sets[k].rir == null && it.rir != null && !it.explosive && getDef(entry.exId).mode !== 'fixed') sets[k].rir = it.rir;
         if (a.cardTimer?.i === a.index && a.cardTimer.k === k) a.cardTimer = null;
@@ -521,10 +627,15 @@ const training = {
       const lastOverall = a.index === a.plan.items.length - 1 && sets.every((s) => s.done);
       if (sets[k].done && !lastOverall) {
         const def = getDef(entry.exId);
-        const restSec = def.mode === 'fixed' ? (def.unit === 'min' ? 60 : 30) : c.data.settings.restSec;
+        const restSec = restFor(def, { topSet: sets[k].label === 'Top-Satz', rir: sets[k].rir ?? null,
+          adjust: c.data.settings.restAdjust?.[entry.exId] || 0 });
         // Letzter Satz: auf der Karte bleiben, bis die Belastung getippt ist
-        if (sets.every((s) => s.done)) startRest(restSec, `Pause · gleich: ${getDef(a.log[a.index + 1].exId).name}`);
-        else startRest(restSec, def.mode === 'fixed' && def.unit === 'min' ? `Pause · gleich Runde ${sets.filter((s) => s.done).length + 1}` : 'Pause');
+        if (sets.every((s) => s.done)) startRest(restSec, `Pause · gleich: ${getDef(a.log[a.index + 1].exId).name}`, entry.exId);
+        else {
+          startRest(restSec, def.mode === 'fixed' && def.unit === 'min' ? `Pause · gleich Runde ${sets.filter((s) => s.done).length + 1}` : 'Pause', entry.exId);
+          // Vor dem letzten Satz einer Hauptübung: „Reset?“ (TEMPER ab Episode 26, abschaltbar)
+          rest.resetOffer = it.main && sets.filter((s) => !s.done).length === 1 && c.data.settings.temperResetHint !== false && book1Reached(c.data) >= 26;
+        }
       }
       save(c);
     },
@@ -549,12 +660,30 @@ const training = {
     },
     't-rir': (c, d) => {
       const a = c.data.active;
-      a.log[a.index].sets[Number(d.k)].rir = Number(d.v);
+      const set = a.log[a.index].sets[Number(d.k)];
+      const was = set.rir;
+      set.rir = Number(d.v);
+      // RIR 0 nachgetragen: laufende Pause um 30 s verlängern
+      if (set.rir === 0 && was !== 0 && rest && rest.exId === a.log[a.index].exId && rest.endAt > Date.now()) {
+        rest.endAt += 30000;
+        drawRest();
+      }
       save(c);
     },
-    't-effort': (c, d) => {
+    't-fix': (c) => {
       const a = c.data.active;
-      a.log[a.index].effort = Number(d.v);
+      const it = a.plan.items[a.index];
+      const sk = stateKey(a.plan.profile, it.key);
+      it.fixed = !it.fixed || undefined;
+      c.update((data) => {
+        const fl = { ...(data.settings.fixedLoad || {}) };
+        if (it.fixed) fl[sk] = true; else delete fl[sk];
+        return { ...data, settings: { ...data.settings, fixedLoad: fl } };
+      });
+    },
+    't-rpe': (c, d) => {
+      const a = c.data.active;
+      a.log[a.index].rpe = Number(d.v);
       if (a.index < a.plan.items.length - 1) a.index += 1;
       save(c);
     },
@@ -563,7 +692,15 @@ const training = {
       const a = c.data.active;
       const def = getDef(a.log[a.index].exId);
       const k = Number(d.k);
-      a.cardTimer = { i: a.index, k, startAt: Date.now(), target: timerTarget(def, a.log[a.index].sets[k]) };
+      const sets = a.log[a.index].sets;
+      const target = timerTarget(def, sets[k]);
+      // Runden-Übung (Sack, Seil in Minuten): alle offenen Runden am Stück mit 1 min Pause
+      const ks = def.mode === 'fixed' ? sets.map((s, j) => (!s.done && j >= k ? j : -1)).filter((j) => j >= 0) : [k];
+      const rounds = def.mode === 'fixed' && ks.length > 1;
+      const phases = exercisePhases({ target, perSide: def.perSide && def.mode === 'time', rounds: rounds ? ks.length : 0, rest: 60 });
+      a.cardTimer = { i: a.index, k, ks, rounds, phases, startAt: Date.now(), seen: 0, target };
+      keepAwake(true);
+      signal(1);
       rest = null;
       drawRest();
       save(c);
@@ -572,14 +709,22 @@ const training = {
       const a = c.data.active;
       const ct = a.cardTimer;
       if (!ct) return;
-      const def = getDef(a.log[a.index].exId);
-      const secs = Math.round(timerState(ct, Date.now()).elapsed);
-      const s = a.log[a.index].sets[Number(d.k)];
-      // Echte Zeit loggen (Zeitübung: in 5-s-Schritten wie der Stepper)
+      const def = getDef(a.log[ct.i].exId);
+      const st = exerciseTimerAt(ct.phases, ct.startAt, Date.now());
+      a.cardTimer = null;
+      if (ct.rounds) {
+        // Laufende Runde mit der echten Zeit abhaken, offene Runden bleiben offen
+        const s = a.log[ct.i].sets[ct.ks[st.round - 1]];
+        if (st.phase === 'work' && s && !s.done && st.elapsed >= 15) { s.sec = Math.round(st.elapsed); training.actions['t-done'](c, { k: ct.ks[st.round - 1] }); return; }
+        save(c);
+        return;
+      }
+      // Echte Zeit loggen (je Seite: die Zeit der zweiten Seite; Zeitübung in 5-s-Schritten wie der Stepper)
+      const secs = Math.round(st.phase === 'switch' ? ct.phases[0].sec : st.elapsed);
+      const s = a.log[ct.i].sets[ct.k];
       if (def.mode === 'time') s.value = Math.max(5, Math.round(secs / 5) * 5);
       else s.sec = secs;
-      a.cardTimer = null;
-      if (!s.done) training.actions['t-done'](c, { k: d.k });
+      if (!s.done) training.actions['t-done'](c, { k: ct.k });
       else save(c);
     },
     't-swap': (c) => {
@@ -589,11 +734,16 @@ const training = {
         c.system('Tausch nicht möglich', '<p>Für diese Übung sind schon Sätze geloggt. Tausche vor dem ersten Satz.</p>');
         return;
       }
-      const opts = swapOptions(entry.exId, { data: c.data, profile: a.plan.profile, today: c.today(), all: EXERCISES });
-      c.modal(sys('Übung tauschen', `<p class="muted small">Ersatz mit ähnlichem Muster. <b class="focus">Lücke</b> = deckt diese Woche etwas ab, das noch fehlt.</p>
-        <div class="swap-list">${opts.map((o) => `<button class="swap" data-act="t-swap-pick" data-id="${o.id}"><b>${esc(getDef(o.id).name)}</b>
-        <small>${o.fills.length ? `<span class="focus">Lücke:</span> ${o.fills.map((x) => esc(ATTRIBUTES[x].name)).join(', ')}` : o.direct ? 'Alternative / Stufe' : 'ähnliches Muster'}</small></button>`).join('') || '<p class="muted">Keine passende Alternative mit deinem Equipment.</p>'}</div>
-        <button class="btn ghost wide" data-act="close-modal">Abbrechen</button>`, { cls: 'pop' }));
+      const g = swapGroups(entry.exId, { data: c.data, profile: a.plan.profile, today: c.today(), all: EXERCISES });
+      const row = (o, why) => `<button class="swap${o.has ? '' : ' missing'}" data-act="t-swap-pick" data-id="${o.id}" data-name="${esc(o.name.toLowerCase())}"><b>${esc(o.name)}</b>
+        <small>${why || (o.has ? esc(CATEGORIES[o.cat] || '') : 'Equipment fehlt im aktuellen Profil')}</small></button>`;
+      c.modal(sys('Übung tauschen', `<input class="search" type="search" data-input="t-swap-q" placeholder="Alle Übungen durchsuchen …" autocomplete="off">
+        <div class="swap-list" data-swap-list>
+        ${g.recommended.length ? `<div class="label">Empfohlen · gleiches Muster</div>${g.recommended.map((o) => row(o, o.fills.length
+          ? `<span class="focus">Lücke:</span> ${o.fills.map((x) => esc(ATTRIBUTES[x].name)).join(', ')}` : o.direct ? 'Alternative / Stufe' : 'ähnliches Muster')).join('')}` : ''}
+        ${g.category.length ? `<div class="label">Gleiche Kategorie</div>${g.category.map((o) => row(o)).join('')}` : ''}
+        <div class="label">Alle Übungen</div>${g.all.map((o) => row(o)).join('')}</div>
+        <button class="btn ghost wide" data-act="close-modal">Abbrechen</button>`, { cls: 'pop swap-pop' }));
     },
     't-swap-pick': (c, d) => {
       const a = c.data.active;
@@ -603,6 +753,19 @@ const training = {
       c.system(`${getDef(d.id).name}`, `<p>Wie lange soll der Tausch gelten?</p>
         <p class="muted small">„Nur heute“ lässt die Arc-Planung und die Progression von ${esc(getDef(it.exId).name)} unberührt.</p>`,
       [['t-swap-today', 'Nur für heute', 'primary'], ...(arcOk ? [['t-swap-arc', 'Für den Rest des Arcs']] : []), ['close-modal', 'Abbrechen']]);
+    },
+    // Stufe jederzeit wechseln (vor dem ersten Satz): gilt ab sofort für diesen Platz
+    't-step': (c, d) => {
+      const a = c.data.active;
+      const old = a.plan.items[a.index];
+      const to = stepFrom(old.exId, Number(d.dir));
+      if (!to || !old.slotKey) return;
+      const it = itemFor(to, { data: c.data, profile: a.plan.profile, sets: old.sets, arcN: a.plan.arc?.n });
+      Object.assign(it, { noFailure: old.noFailure, rir: old.rir, failLast: old.failLast, main: old.main, slotKey: old.slotKey, optional: old.optional });
+      a.plan.items[a.index] = it;
+      a.log[a.index] = { key: it.key, exId: it.exId, sets: Array.from({ length: it.sets }, () => ({ value: it.target, load: it.load, done: false })) };
+      c.update((data) => logDecision({ ...data, engine: { ...data.engine, slotVariant: { ...(data.engine.slotVariant || {}), [old.slotKey]: to } } },
+        { rule: `ladder:manual_${Number(d.dir) > 0 ? 'up' : 'down'}`, day: c.today(), input: { from: old.exId, slot: old.slotKey }, suggestion: to, decision: 'accepted' }));
     },
     't-swap-today': (c) => swapTo(c, c.ui.swapPick, 'today'),
     't-swap-arc': (c) => swapTo(c, c.ui.swapPick, 'arc'),
@@ -624,7 +787,7 @@ const training = {
       save(c);
     },
     't-clock': (c) => { c.data.active.clockEnd = Date.now() + 15 * 60000; save(c); },
-    't-round-plus': (c) => { c.data.active.roundsDone += 1; haptic(); save(c); },
+    't-round-plus': (c) => { c.data.active.roundsDone += 1; save(c); },
     't-round-minus': (c) => { const a = c.data.active; a.roundsDone = Math.max(0, a.roundsDone - 1); save(c); },
     't-iv-start': (c) => { unlockAudio(); c.data.active.iv = { startAt: Date.now(), pausedMs: 0, seen: 0 }; signal(1); save(c); },
     't-iv-pause': (c) => {
@@ -654,7 +817,10 @@ const training = {
       else c.data.active.flow = { i: f.i, paused: true, left: (f.endAt - Date.now()) / 1000 };
       save(c);
     },
-    'rest-add': () => { if (rest) { rest.endAt = Math.max(rest.endAt, Date.now()) + 15000; rest.fired = false; drawRest(); } },
+    'rest-add': (c) => adjustRest(c, +1),
+    'rest-sub': (c) => adjustRest(c, -1),
+    'rest-reset': () => { if (rest) { rest.reset = Date.now(); drawRest(); } },
+    'rest-reset-stop': () => { if (rest) { rest.reset = null; drawRest(); } },
     'rest-skip': () => { rest = null; drawRest(); },
     't-menu': (c) => c.system('Mission', '<p>Was möchtest du tun?</p>',
       [['t-pause', 'Später weitermachen'], ['t-finish', 'Jetzt beenden (zählt anteilig)'], ['t-discard', 'Verwerfen']]),

@@ -1,83 +1,41 @@
 // Ton und Bildschirm-wach-halten.
-// iPhone-Web-Apps: Ton erst nach einem Tap. Darum wird beim ersten Tap freigeschaltet:
-// (1) Web Audio, (2) audioSession = "playback" (iOS 17+, Ton auch bei Stummschalter),
-// (3) ein HTML-Audio-Element als Fallback. Vibration gibt es auf dem iPhone nicht, dafür ein visuelles Signal.
+// Entscheidung: Deine Musik (Spotify) läuft immer weiter. Darum nur Web Audio mit audioSession = "ambient"
+// (iOS 17+): Signaltöne mischen sich unter die Musik und pausieren sie nie. Kein HTML-Audio-Element, denn
+// <audio> übernimmt auf iOS den Audio-Fokus und stoppt Spotify. Folge: Bei Lautlos-Schalter kein Ton,
+// darum gibt es zu jedem Signal ein großes visuelles Signal. Vibration gibt es auf dem iPhone nicht.
 let audio = null;
 let soundOn = true;
-let fallback = null;
-let unlocked = false;
 
 export function setSound(on) {
   soundOn = on;
 }
 
-// Kurzer Signalton als WAV (für das HTML-Audio-Fallback), einmal erzeugt
-function beepWav(freq = 880, ms = 220) {
-  const rate = 22050;
-  const n = Math.floor((rate * ms) / 1000);
-  const buf = new ArrayBuffer(44 + n * 2);
-  const v = new DataView(buf);
-  const str = (o, t) => [...t].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
-  str(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
-  v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true);
-  v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, n * 2, true);
-  for (let i = 0; i < n; i++) {
-    const env = Math.min(1, i / 200) * Math.min(1, (n - i) / 400);
-    v.setInt16(44 + i * 2, Math.sin((2 * Math.PI * freq * i) / rate) * 0.6 * env * 32767, true);
-  }
-  let bin = '';
-  new Uint8Array(buf).forEach((b) => { bin += String.fromCharCode(b); });
-  return `data:audio/wav;base64,${btoa(bin)}`;
-}
-
 // Muss in einem Tap-Handler laufen, sonst bleibt der Ton auf iOS stumm.
 export function unlockAudio() {
   try {
-    if (navigator.audioSession && navigator.audioSession.type !== 'playback') navigator.audioSession.type = 'playback';
+    if (navigator.audioSession && navigator.audioSession.type !== 'ambient') navigator.audioSession.type = 'ambient';
   } catch { /* nicht unterstützt */ }
   try {
     audio ||= new (window.AudioContext || window.webkitAudioContext)();
-    if (audio.state === 'suspended') audio.resume();
+    // Nach einer Unterbrechung (Anruf, Spotify-Wechsel) meldet iOS „interrupted“: beim nächsten Tap fortsetzen.
+    if (audio.state !== 'running') audio.resume().catch(() => {});
   } catch { /* kein Web Audio */ }
-  if (!unlocked) {
-    unlocked = true;
-    try {
-      fallback = new Audio(beepWav());
-      fallback.preload = 'auto';
-      fallback.muted = true;
-      fallback.play().then(() => { fallback.pause(); fallback.currentTime = 0; fallback.muted = false; }).catch(() => { fallback.muted = false; });
-    } catch { fallback = null; }
-  }
 }
 
-// Visuelles Signal: Bildschirm pulsiert kurz violett (iPhone kann nicht vibrieren).
-export function pulse() {
+// Visuelles Signal: Bildschirm pulsiert violett, laufende Timer-Zahlen blinken (auch ohne Ton sichtbar).
+export function pulse(strong = false) {
   const b = document.body;
-  b.classList.remove('signal-pulse');
+  b.classList.remove('signal-pulse', 'signal-strong');
   void b.offsetWidth;
   b.classList.add('signal-pulse');
-  setTimeout(() => b.classList.remove('signal-pulse'), 1600);
-}
-
-function htmlBeep(times) {
-  if (!fallback) return false;
-  for (let i = 0; i < times; i++) {
-    setTimeout(() => {
-      try {
-        const el = fallback.cloneNode();
-        el.play().catch(() => {});
-      } catch { /* nichts */ }
-    }, i * 280);
-  }
-  return true;
+  if (strong) b.classList.add('signal-strong');
+  setTimeout(() => b.classList.remove('signal-pulse', 'signal-strong'), strong ? 2600 : 1600);
 }
 
 export function beep(times = 1, freq = 880) {
-  navigator.vibrate?.(times > 1 ? [200, 100, 200, 100, 200] : 150);
-  if (!soundOn) return;
-  if (!audio || audio.state !== 'running') {
-    if (audio?.state === 'suspended') audio.resume().catch(() => {});
-    htmlBeep(times);
+  if (!soundOn || !audio) return;
+  if (audio.state !== 'running') {
+    audio.resume().catch(() => {});
     return;
   }
   for (let i = 0; i < times; i++) {
@@ -98,7 +56,7 @@ export function beep(times = 1, freq = 880) {
 // Signal am Ende eines Timers: Ton + violettes Pulsieren
 export function signal(times = 3) {
   beep(times);
-  pulse();
+  pulse(times >= 3);
 }
 
 // Für „Ton testen“: spielt den Signalton und meldet, was das Gerät kann.
@@ -111,7 +69,6 @@ export function testSound() {
   return {
     webAudio: audio ? audio.state : 'nicht verfügbar',
     audioSession: navigator.audioSession ? navigator.audioSession.type : 'nicht verfügbar (iOS unter 17)',
-    fallback: fallback ? 'bereit' : 'nicht verfügbar',
     wakeLock: 'wakeLock' in navigator ? 'verfügbar' : 'nicht verfügbar',
     standalone: window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true,
   };
@@ -129,11 +86,10 @@ function out() {
 // Boxring-Glocke: heller Metallschlag mit Glocken-Teiltönen.
 // times = 3 → „Ding Ding Ding“ (Rundenende), times = 1 → Rundenstart. Ertönt auch bei „Ton aus“.
 export function ringBell(times = 1) {
-  navigator.vibrate?.(times > 1 ? [150, 120, 150, 120, 150] : 200);
-  pulse();
-  if (!audio || audio.state !== 'running') {
-    if (audio?.state === 'suspended') audio.resume().catch(() => {});
-    htmlBeep(times);
+  pulse(times > 1);
+  if (!audio) return;
+  if (audio.state !== 'running') {
+    audio.resume().catch(() => {});
     return;
   }
   const dest = out();

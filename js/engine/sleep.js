@@ -3,7 +3,6 @@
 import { addDays, daysBetween } from './dates.js';
 import { performance, mainSlots } from './stagnation.js';
 import { getDef as defaultGetDef } from '../data/exercises.js';
-import { isAlcohol } from './oaths.js';
 
 export const MIN_POINTS = 5;
 export const MIN_DAYS = 21;
@@ -74,44 +73,6 @@ export function sleepInsights(data, today, { getDef = defaultGetDef, from = null
       text: `Nach Nächten mit Schlaf ≤ 2 lag deine Leistung bei ${a >= 0 ? '+' : ''}${de(a)} % zum eigenen Schnitt, nach Nächten ≥ 4 bei ${b >= 0 ? '+' : ''}${de(b)} %.` });
   }
 
-  // Schlaf in der Nacht nach einem Tag (Check-in am Folgetag)
-  const nextSleep = (day) => sleepOf(data.checkins, addDays(day, 1));
-  const days = Object.keys(data.checkins || {}).map((d) => addDays(d, -1)).filter(inRange);
-
-  // 2) Alkohol-Gelübde gehalten vs. nicht getippt
-  const alc = (data.oaths?.list || []).filter(isAlcohol);
-  if (alc.length) {
-    const kept = [];
-    const open = [];
-    for (const d of days) {
-      const active = alc.filter((o) => o.created <= d && (!o.retired || o.retired > d) && (!o.sealedDay || o.sealedDay > d));
-      if (!active.length) continue;
-      const sl = nextSleep(d);
-      if (sl == null) continue;
-      const ids = data.oaths.kept?.[d]?.ids || [];
-      (active.every((o) => ids.includes(o.id)) ? kept : open).push(sl);
-    }
-    if (kept.length >= MIN_POINTS && open.length >= MIN_POINTS) {
-      out.push({ id: 'alcohol', title: 'Schlaf und Getränke-Gelübde',
-        a: { label: 'Gelübde gehalten', n: kept.length, value: r1(avg(kept)) }, b: { label: 'ohne Tap', n: open.length, value: r1(avg(open)) },
-        text: `Nach Tagen, an denen du das Getränke-Gelübde gehalten hast, lag dein Schlaf im Schnitt bei ${de(avg(kept))}, sonst bei ${de(avg(open))}.` });
-    }
-  }
-
-  // 3) SURGE oder Kälte am Tag vs. ohne
-  const recover = new Set(data.sessions.filter((s) => s.kind === 'surge' || s.kind === 'cold').map((s) => s.day));
-  const withR = [];
-  const without = [];
-  for (const d of days) {
-    const sl = nextSleep(d);
-    if (sl == null) continue;
-    (recover.has(d) ? withR : without).push(sl);
-  }
-  if (withR.length >= MIN_POINTS && without.length >= MIN_POINTS) {
-    out.push({ id: 'surge', title: 'Schlaf nach SURGE oder Kälte',
-      a: { label: 'mit SURGE/Kälte', n: withR.length, value: r1(avg(withR)) }, b: { label: 'ohne', n: without.length, value: r1(avg(without)) },
-      text: `Nach Tagen mit SURGE oder Kälte lag dein Schlaf im Schnitt bei ${de(avg(withR))}, an Tagen ohne bei ${de(avg(without))}.` });
-  }
   return out;
 }
 

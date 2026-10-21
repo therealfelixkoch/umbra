@@ -62,13 +62,17 @@ export const TREND = {
   reps_up: ['▲', '+1 Wdh.'],
   time_up: ['▲', '+5 s'],
   variant_up: ['◆', 'Neue Stufe'],
-  variant_ready: ['◆', 'Neue Stufe im nächsten Arc'],
-  variant_down_ready: ['◆', 'Leichtere Stufe im nächsten Arc'],
+  variant_ready: ['◆', 'Nächste Stufe bereit'],
+  variant_down_ready: ['◆', 'Leichtere Stufe vorgeschlagen'],
   load_down: ['▼', 'Etwas leichter'],
   variant_down: ['▼', 'Leichtere Variante'],
   reps_down: ['▼', 'Ziel angepasst'],
   top: ['■', 'Obergrenze erreicht'],
   held_rir: ['=', 'gehalten · RIR 0'],
+  set_up: ['▲', '+1 Satz'],
+  tempo_up: ['▲', 'langsameres Tempo'],
+  set_down: ['▼', 'Zusatzsatz weg'],
+  tempo_down: ['▼', 'normales Tempo'],
 };
 
 export function trendBadge(trend) {

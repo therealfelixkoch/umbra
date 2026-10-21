@@ -2,7 +2,7 @@ import { describe, it, expect } from './runner.js';
 import { decide, advanceQueue } from '../js/engine/decide.js';
 import { hardStreak, gapDays, plattCount } from '../js/engine/history.js';
 import { initialEngine, modifierFor, completeMission, startDeload, shouldSuggestDeload, rotateFrom } from '../js/engine/cycle.js';
-import { progress, initialState, ladderFor, stepLoad } from '../js/engine/progression.js';
+import { progress, initialState, ladderFor, stepLoad, applyLadderChoice } from '../js/engine/progression.js';
 import { buildPlan, createActive, finishSession, resolveExercise, logArena } from '../js/engine/plan.js';
 import { weekStreak, rankFor, sessionXp } from '../js/engine/game.js';
 import { addDays, weekStart, daysBetween } from '../js/engine/dates.js';
@@ -230,24 +230,29 @@ describe('Progression', () => {
     const withBelt = progress(def, st, sets([8, 8, 8, 8]), ctx(['kb', 'bar', 'belt']));
     expect(withBelt.load).toBe(8);
     expect(withBelt.target).toBe(5);
-    const noBelt = progress(def, st, sets([8, 8, 8, 8]), ctx(['kb', 'bar']));
+    const once = progress(def, st, sets([8, 8, 8, 8]), ctx(['kb', 'bar']));
+    expect(once.lastChange).toBe('top');
+    const noBelt = progress(def, once, sets([8, 8, 8, 8]), ctx(['kb', 'bar']));
     expect(noBelt.exId).toBe('pullup_tactical');
-    expect(noBelt.pendingVariant).toBe('pullup_lsit');
+    expect(noBelt.suggest.id).toBe('archer_pullup');
+    expect(noBelt.pendingVariant).toBe(undefined);
     expect(noBelt.lastChange).toBe('variant_ready');
   });
-  it('Bodyweight ohne Last → schwerere Variante wird vorgemerkt', () => {
+  it('Bodyweight ohne Last → nächste Leiterstufe nach 2 Einheiten oben vorgeschlagen', () => {
     const def = getDef('pike_pushup_box'); // 8–12
-    const r = progress(def, { exId: def.id, load: 0, target: 12, miss: 0 }, sets([12, 12, 12]), ctx());
+    const one = progress(def, { exId: def.id, load: 0, target: 12, miss: 0 }, sets([12, 12, 12]), ctx());
+    expect(one.suggest).toBe(undefined);
+    const r = progress(def, one, sets([12, 12, 12]), ctx());
     expect(r.exId).toBe('pike_pushup_box');
-    expect(r.pendingVariant).toBe('hspu_negative');
+    expect(r.suggest).toEqual({ id: 'pike_pushup_high', dir: 1 });
   });
-  it('Bodyweight zu schwer → leichtere Variante wird vorgemerkt', () => {
+  it('Bodyweight zu schwer → leichtere Stufe wird vorgeschlagen', () => {
     const def = getDef('hanging_leg_raise'); // 8–12
     let st = { exId: def.id, load: 0, target: 8, miss: 0 };
     st = progress(def, st, sets([5, 4, 4]), ctx());
     st = progress(def, st, sets([5, 5, 4]), ctx());
     expect(st.exId).toBe('hanging_leg_raise');
-    expect(st.pendingVariant).toBe('hanging_knee_raise');
+    expect(st.suggest).toEqual({ id: 'hanging_knee_raise', dir: -1 });
   });
   it('Zeit-Übung: +5 s bis Obergrenze, dann mehr Gewicht', () => {
     const def = getDef('suitcase_carry'); // 40–60
@@ -275,8 +280,9 @@ describe('Progression', () => {
   it('Kalibrierung aus Startwerten', () => {
     const c = { settings, startValues: { pullups: 12 }, getDef };
     expect(initialState(getDef('pullup_tactical'), c).target).toBe(7);
-    const weak = initialState(getDef('pullup_tactical'), { ...c, startValues: { pullups: 3 } });
-    expect(weak.exId).toBe('pullup_negative');
+    const weak = initialState(getDef('pullup_tactical'), { ...c, startValues: { pullups: 3 }, equipment: ['bar'] });
+    expect(weak.exId).toBe('pullup_negative'); // Band fehlt → Stufe übersprungen
+    expect(initialState(getDef('pullup_tactical'), { ...c, startValues: { pullups: 3 }, equipment: ['bar', 'band'] }).exId).toBe('pullup_band');
     expect(initialState(getDef('pullup_tactical'), { settings, getDef }).target).toBe(5);
   });
   it('Lastleitern', () => {
@@ -697,11 +703,12 @@ describe('Arcs: Wochen zählen nur mit 2 Missionen', () => {
 });
 
 describe('Varianten nur beim Arc-Wechsel', () => {
-  it('Progression merkt die schwerere Variante nur vor', () => {
+  it('Progression schlägt nur vor, vorgemerkt wird erst mit „Ab dem nächsten Arc“', () => {
     const def = getDef('pike_pushup_box');
-    const r = progress(def, { exId: def.id, load: 0, target: 12, miss: 0 }, sets([12, 12, 12]), ctx());
-    expect(r.exId).toBe('pike_pushup_box');
-    expect(r.pendingVariant).toBe('hspu_negative');
+    let r = progress(def, { exId: def.id, load: 0, target: 12, miss: 0 }, sets([12, 12, 12]), ctx());
+    r = progress(def, r, sets([12, 12, 12]), ctx());
+    expect(r.pendingVariant).toBe(undefined);
+    expect(applyLadderChoice({ ...r, suggest: { ...r.suggest, slotKey: 'C:2' } }, 'arc').state.pendingVariant).toBe('pike_pushup_high');
   });
   it('Arc-Wechsel setzt vorgemerkte Stufe bei Hauptübungen', () => {
     const { engine, exState } = applyArcChange(initialEngine(MON), { pike_pushup_box: { exId: 'pike_pushup_box', pendingVariant: 'hspu_negative' } });
@@ -1018,7 +1025,7 @@ describe('Migration v1 → v2', () => {
     expect(m.engine.queue).toEqual(['C', 'D', 'A', 'B']);
     expect(m.engine.fullSinceDeload).toBe(undefined);
     expect(m.settings.holiday.enabled).toBe(true);
-    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3']);
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4']);
     expect(m.mobility.length).toBe(1);
   });
   it('nach der Migration startet Arc I am Tag der ersten Mission (v3)', () => {
@@ -1644,9 +1651,9 @@ describe('v3 · Session-Auswertung', () => {
     expect(activeMinutes([0, 10 * m, 20 * m, 80 * m, 90 * m], { countGaps: true }).minutes).toBe(90);
   });
   it('Intensität gewichtet nach Sätzen, Last = Intensität × Minuten', () => {
-    const ex = [{ effort: 4, sets: [{ done: true }, { done: true }, { done: true }] }, { effort: 2, sets: [{ done: true }] }, { sets: [{ done: true }] }];
-    expect(sessionIntensity(ex)).toBe(3.5);
-    expect(trainingLoad(3.5, 40)).toBe(140);
+    const ex = [{ rpe: 8, sets: [{ done: true }, { done: true }, { done: true }] }, { rpe: 5, sets: [{ done: true }] }, { sets: [{ done: true }] }];
+    expect(sessionIntensity(ex)).toBe(7.3);
+    expect(trainingLoad(7.3, 40)).toBe(292);
     expect(sessionIntensity([])).toBe(null);
   });
   it('finishSession speichert Dauer, Intensität und Last', () => {
@@ -1654,13 +1661,13 @@ describe('v3 · Session-Auswertung', () => {
     const plan = buildPlan({ missionId: 'C', profile: 'room', data, today: T });
     const a = createActive(plan, T, 0);
     doneAll(a, 2);
-    a.log.forEach((e) => { e.effort = 3; });
+    a.log.forEach((e) => { e.rpe = 6; });
     a.marks = [5 * m, 20 * m, 40 * m];
     const r = finishSession(data, a, { now: 45 * m });
     expect(r.session.minutes).toBe(45);
-    expect(r.session.intensity).toBe(3);
-    expect(r.session.load).toBe(135);
-    expect(r.session.exercises[0].effort).toBe(3);
+    expect(r.session.intensity).toBe(6);
+    expect(r.session.load).toBe(270);
+    expect(r.session.exercises[0].rpe).toBe(6);
   });
   it('Wochensumme der Trainingslast', () => {
     expect(weekLoad([{ day: '2026-10-12', load: 100 }, { day: '2026-10-18', load: 50 }, { day: '2026-10-19', load: 9 }], '2026-10-12', '2026-10-18')).toBe(150);
@@ -1756,18 +1763,22 @@ describe('v3 · XP', () => {
     expect(sessionXp({ kind: 'mission', missionId: 'A', completion: 1, records: [{}, {}] })).toBe(150);
     expect(sessionXp({ kind: 'arena', rpe: 10, minutes: 180 })).toBe(80);
   });
-  it('Tagesdeckel 60 für Nebenquellen, Training ungedeckelt', () => {
+  it('Tagesdeckel 40 für TEMPER + FLOW, Training ungedeckelt', () => {
     const day = '2026-10-14';
-    const ss = [{ day, kind: 'flow' }, { day, kind: 'surge' }, { day, kind: 'surge' }, { day, kind: 'wimhof' }, { day, kind: 'cold' },
+    const ss = [{ day, kind: 'flow' }, { day, kind: 'temper' }, { day, kind: 'temper' },
       { day, kind: 'mission', missionId: 'A', completion: 1 }];
     const l = xpLedger({ sessions: ss, settings: {}, engine: {} });
     const side = l.entries.filter((e) => XP_CONFIG.sideSources.includes(e.source)).reduce((n, e) => n + e.xp, 0);
-    expect(side).toBe(60);
-    expect(l.total).toBe(160);
+    expect(side).toBe(40);
+    expect(l.total).toBe(140);
     expect(sideCapLeft({ sessions: ss, settings: {}, engine: {} }, day)).toBe(0);
   });
-  it('keine XP für Retentionszeit (Wim Hof pauschal)', () => {
-    expect(sessionXp({ kind: 'wimhof', retention: [30, 60, 90] })).toBe(sessionXp({ kind: 'wimhof', retention: [200, 240, 300] }));
+  it('Buchabschluss zählt nicht in den Deckel', () => {
+    const day = '2026-10-14';
+    expect(totalXp([{ day, kind: 'flow' }, { day, kind: 'temper' }, { day, kind: 'temperBook' }])).toBe(185);
+  });
+  it('keine XP für Retentionszeit (TEMPER pauschal)', () => {
+    expect(sessionXp({ kind: 'temper', retention: [30] })).toBe(sessionXp({ kind: 'temper', retention: [240] }));
   });
   it('Wochenziel +100 und Boss +500 im XP-Buch', () => {
     const ss = ['2026-10-12', '2026-10-13', '2026-10-14'].map((d) => ({ ...mission(d, 'A', { completion: 1 }), arc: { n: 0, week: 1 } }));
@@ -1791,7 +1802,7 @@ describe('v3 · Migration v2 → v3', () => {
   };
   it('XP neu berechnet, alter Wert bleibt als xpV2', () => {
     const m = normalize(JSON.parse(JSON.stringify(v2)));
-    expect(m.schemaVersion).toBe(3);
+    expect(m.schemaVersion).toBe(SCHEMA_VERSION);
     expect(m.sessions.map((s) => s.xp)).toEqual([100, 80]);
     expect(m.sessions.map((s) => s.xpV2)).toEqual([125, 120]);
   });
@@ -1800,10 +1811,10 @@ describe('v3 · Migration v2 → v3', () => {
     expect(m.exState.pullup.target).toBe(6);
     expect(m.engine.queue).toEqual(['B', 'C', 'D', 'A']);
     expect(m.engine.arc.startedDay).toBe('2026-10-15');
-    expect(m.ruleLog.at(-1).rule).toBe('migration:v3');
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4']);
     expect(m.techChecks).toEqual({});
   });
-  it('v3 bleibt v3', () => {
+  it('Migration ist wiederholbar', () => {
     const once = migrate(JSON.parse(JSON.stringify(v2)));
     expect(JSON.stringify(migrate(once))).toBe(JSON.stringify(once));
   });
@@ -1815,7 +1826,7 @@ describe('v3 · ARENA-Status und Verlauf', () => {
     expect(s.content).toEqual(['Sparring', 'Clinch']);
     expect(s.sparRounds).toBe(5);
     expect(s.focus).toBe('Teep halten');
-    expect(s.load).toBe(360);
+    expect(s.load).toBe(720); // Session-RPE 8 × 90 min
   });
   it('Statistik gesamt, pro Monat und pro Arc', () => {
     const ss = [{ day: '2026-09-30', kind: 'arena', minutes: 60, arc: { n: 0 }, content: ['Technik'] },
@@ -1851,262 +1862,8 @@ describe('v3 · ARENA-Status und Verlauf', () => {
   });
 });
 
-// ——— Update v3 · Paket 2 ———
-import { breathAt, SIGH_CYCLE, protocolSteps, roundsAt, cueAt, surgeEffect, recommendProtocol, logSurge, whSafetyDue, whStart, whTap, whTick,
-  logWimhof, wimhofStats, logCold, coldWeeks, whyDue, addWhy, currentWhy, reclaims } from '../js/engine/surge.js';
-
-describe('v3 · SURGE', () => {
-  it('Cyclic Sighing: 2 s ein, 1 s nachfüllen, 6 s aus', () => {
-    expect(SIGH_CYCLE).toBe(9);
-    expect(breathAt(0, 1000).phase).toBe('in');
-    expect(breathAt(0, 2500).phase).toBe('in2');
-    const out = breathAt(0, 6000);
-    expect(out.phase).toBe('out');
-    expect(Math.round(out.left)).toBe(3);
-    expect(breathAt(0, 9500).cycle).toBe(1);
-  });
-  it('Protokolle: Schritte und Dauern', () => {
-    const w = protocolSteps('welle');
-    expect(w.map((s) => s.type)).toEqual(['wave', 'breath']);
-    expect(w[0].sec).toBe(90);
-    expect(w[1].sec).toBe(45); // 5 Seufzer
-    expect(protocolSteps('glut', { coldSec: 180 }).map((s) => [s.type, s.sec])).toEqual([['breath', 300], ['cold', 180], ['timer', 120]]);
-    expect(protocolSteps('nsdr', { nsdrMin: 20 })[0].sec).toBe(1200);
-    expect(protocolSteps('nsdr')[0].sec).toBe(600);
-    expect(protocolSteps('flamme', { rounds: 4 })[0].sec).toBe(4 * 240 - 60);
-    expect(protocolSteps('flamme', { flame: 'walk' })[0].sec).toBe(1200);
-  });
-  it('Runden und NSDR-Hinweise nach Zeit', () => {
-    const st = { rounds: 3, work: 180, rest: 60 };
-    expect(roundsAt(st, 10)).toEqual({ round: 1, phase: 'work', left: 170 });
-    expect(roundsAt(st, 200).phase).toBe('rest');
-    expect(roundsAt(st, 250).round).toBe(2);
-    expect(cueAt(['a', 'b', 'c'], 30, 0)).toBe('a');
-    expect(cueAt(['a', 'b', 'c'], 30, 29)).toBe('c');
-  });
-  it('Wirksamkeit: Empfehlung erst ab 3 Durchgängen', () => {
-    let d = defaultData();
-    const add = (p, b, a) => { d = logSurge(d, { day: T, protocol: p, moodBefore: b, moodAfter: a, now: Math.random() }).data; };
-    add('glut', 2, 4); add('glut', 1, 3);
-    expect(recommendProtocol(d.sessions)).toBe(null);
-    add('glut', 2, 3);
-    add('welle', 2, 5); add('welle', 3, 3);
-    const r = recommendProtocol(d.sessions);
-    expect(r.id).toBe('glut');
-    expect(r.text).toBe('Glut hebt deine Stimmung im Schnitt um 1,7.');
-    expect(surgeEffect(d.sessions).welle.n).toBe(2);
-    expect(d.sessions[0].xp).toBe(15);
-  });
-  it('Rückeroberungen zählen', () => {
-    const d = logSurge(defaultData(), { day: '2026-10-14', protocol: 'welle', moodBefore: 2, moodAfter: 3 }).data;
-    expect(reclaims(d.sessions, '2026-10-12', '2026-10-18')).toBe(1);
-  });
-});
-
-describe('v3 · Wim Hof', () => {
-  it('Sicherheitsbestätigung beim ersten Mal und alle 30 Tage', () => {
-    expect(whSafetyDue(null, T)).toBe(true);
-    expect(whSafetyDue('2026-10-01', T)).toBe(false);
-    expect(whSafetyDue(addDays(T, -30), T)).toBe(true);
-  });
-  it('Ablauf: Atmen → Tipp → Halten → Tipp → 15 s Erholung → nächste Runde', () => {
-    let s = whStart(2, 0);
-    s = whTap(s, 60_000);
-    expect(s.phase).toBe('hold');
-    s = whTap(s, 150_000);
-    expect(s.phase).toBe('recover');
-    expect(s.holds).toEqual([90]);
-    expect(whTick(s, 160_000).phase).toBe('recover');
-    s = whTick(s, 165_000);
-    expect(s.phase).toBe('breathe');
-    expect(s.round).toBe(2);
-    s = whTick(whTap(whTap(s, 200_000), 300_000), 315_000);
-    expect(s.phase).toBe('done');
-    expect(s.holds).toEqual([90, 100]);
-    expect(whTap(s, 400_000)).toBe(s);
-  });
-  it('XP pauschal, Statistik ohne Rekord', () => {
-    const a = logWimhof(defaultData(), { day: '2026-10-13', holds: [60, 90] }).data;
-    const b = logWimhof(a, { day: '2026-10-14', holds: [80, 120, 150], now: 5 }).data;
-    expect(b.sessions.map((s) => s.xp)).toEqual([15, 15]);
-    const st = wimhofStats(b.sessions, '2026-10-16');
-    expect(st.sessions.map((x) => x.avg)).toEqual([75, 117]);
-    expect(st.weekAvg).toBe(100);
-    expect(b.records).toEqual({});
-  });
-});
-
-describe('v3 · Kälte und Warum', () => {
-  it('Kälte-Log: Wochensumme in Minuten, ohne Ziel', () => {
-    let d = logCold(defaultData(), { day: '2026-10-13', seconds: 120 }).data;
-    d = logCold(d, { day: '2026-10-15', seconds: 90, type: 'bad', now: 7 }).data;
-    const w = coldWeeks(d.sessions, '2026-10-16', 2);
-    expect(w).toEqual([{ ws: '2026-10-05', minutes: 0 }, { ws: '2026-10-12', minutes: 3.5 }]);
-    expect(d.sessions[0].xp).toBe(10);
-  });
-  it('Neben-XP aus SURGE, Wim Hof und Kälte teilen sich den Tagesdeckel', () => {
-    let d = defaultData();
-    for (let i = 0; i < 3; i++) d = logSurge(d, { day: T, protocol: 'welle', moodBefore: 2, moodAfter: 3, now: i }).data;
-    d = logWimhof(d, { day: T, holds: [60], now: 9 }).data;
-    d = logCold(d, { day: T, seconds: 60, now: 10 }).data;
-    expect(totalXp(d)).toBe(60);
-  });
-  it('Warum: einmal pro Arc fragen, alte Fassungen bleiben', () => {
-    const d0 = { ...defaultData(), engine: { ...defaultData().engine, arc: { n: 0, week: 1 } } };
-    expect(whyDue(d0)).toBe(true);
-    const d1 = addWhy(d0, { day: T, forWhom: ' Für meine Tochter ', oneYear: 'Ruhig und stark' });
-    expect(whyDue(d1)).toBe(false);
-    expect(currentWhy(d1.whys).forWhom).toBe('Für meine Tochter');
-    const d2 = { ...d1, engine: { ...d1.engine, arc: { n: 1, week: 1 } } };
-    expect(whyDue(d2)).toBe(true);
-    const d3 = addWhy(d2, { day: addDays(T, 42), forWhom: 'Neu', oneYear: '' });
-    expect(d3.whys.length).toBe(2);
-    expect(currentWhy(d3.whys).forWhom).toBe('Neu');
-    expect(whyDue({ ...d2, engine: { ...d2.engine, whyAsked: 1 } })).toBe(false);
-  });
-  it('Debrief zeigt Rückeroberungen und Warum', () => {
-    let d = { ...defaultData(), settings: { ...defaultData().settings, onboarded: true } };
-    const day = d.engine.arc.startedDay;
-    d = addWhy(d, { day, forWhom: 'X', oneYear: 'Y' });
-    d = logSurge(d, { day, protocol: 'glut', moodBefore: 1, moodAfter: 3 }).data;
-    const st = debriefStats(d, d.engine.arc.n, day);
-    expect(st.reclaims).toBe(1);
-    expect(st.why.forWhom).toBe('X');
-    expect(normalize(JSON.parse(JSON.stringify(d))).whys.length).toBe(1);
-  });
-});
-
 // ——— Update v3 · Paket 3 ———
-import { emptyOaths, addOath, activeOaths, toggleKept, keptOn, rateAutomaticity, rephraseOath, retireOath, logSlip, nightsKept, oathDamage,
-  arcReviewDue, chooseDue, eveningDay, isAlcohol, oathText, TEMPLATES } from '../js/engine/oaths.js';
-import { resetDue, resetState, toggleReset, settleReset, cyclePlan, planHint } from '../js/engine/reset.js';
 import { sleepInsights, sleepDataReady } from '../js/engine/sleep.js';
-import { bossStatus as bossV3 } from '../js/engine/boss.js';
-
-const three = () => {
-  let o = emptyOaths();
-  TEMPLATES.slice(0, 3).forEach((t, i) => { o = addOath(o, { ...t, day: '2026-10-12', arc: 0, now: i + 1 }); });
-  return o;
-};
-
-describe('v3 · OATHS', () => {
-  it('drei Wenn-dann-Gelübde, nicht mehr', () => {
-    const o = three();
-    expect(activeOaths(o).length).toBe(3);
-    expect(oathText(o.list[0])).toBe('Wenn ich ins Bett gehe, dann bleibt das Handy in der Küche.');
-    let threw = false;
-    try { addOath(o, { when: 'x', then: 'y', day: T }); } catch { threw = true; }
-    expect(threw).toBe(true);
-    expect(addOath(emptyOaths(), { when: 'Wenn ich heimkomme,', then: 'dann Wasser.', day: T }).list[0].when).toBe('ich heimkomme');
-  });
-  it('Alkohol-Gelübde erkannt', () => {
-    expect(isAlcohol(TEMPLATES[2])).toBe(true);
-    expect(isAlcohol({ when: 'ich ein Bier aufmache', then: 'trinke ich langsam' })).toBe(true);
-    expect(isAlcohol(TEMPLATES[0])).toBe(false);
-  });
-  it('nur Gehaltenes zählt: Tap an/aus, keine Markierung für Gebrochenes', () => {
-    let o = three();
-    const id = o.list[0].id;
-    o = toggleKept(o, T, id, { n: 0, week: 1 });
-    expect(keptOn(o, T)).toEqual([id]);
-    o = toggleKept(o, T, id);
-    expect(keptOn(o, T)).toEqual([]);
-    expect(o.kept[T]).toBe(undefined);
-    expect(JSON.stringify(o).includes('broken')).toBe(false);
-  });
-  it('Abendkarte ab 20 Uhr, bis mittags für gestern', () => {
-    expect(eveningDay(T, 20)).toBe(T);
-    expect(eveningDay(T, 8)).toBe(addDays(T, -1));
-    expect(eveningDay(T, 15)).toBe(null);
-  });
-  it('besiegelt nach 3 Wochen in Folge ≥ 4', () => {
-    let o = three();
-    const id = o.list[1].id;
-    o = rateAutomaticity(o, '2026-10-05', id, 4, T).oaths;
-    o = rateAutomaticity(o, '2026-10-12', id, 3, T).oaths;
-    let r = rateAutomaticity(o, '2026-10-19', id, 5, T);
-    expect(r.sealed).toEqual([]);
-    r = rateAutomaticity(rateAutomaticity(r.oaths, '2026-10-26', id, 4, T).oaths, '2026-11-02', id, 5, '2026-11-08');
-    expect(r.sealed).toEqual([id]);
-    expect(activeOaths(r.oaths).length).toBe(2);
-    expect(addOath(r.oaths, { when: 'a', then: 'b', day: T }).list.length).toBe(4);
-  });
-  it('umformulieren, ersetzen, Ausrutscher', () => {
-    let o = three();
-    const id = o.list[0].id;
-    o = rephraseOath(o, id, { when: 'ich ins Schlafzimmer gehe', then: 'bleibt das Handy draußen', day: T });
-    expect(o.list[0].history.length).toBe(1);
-    o = logSlip(o, { day: T, id, trigger: ' Serie ', rewrite: '' });
-    expect(o.slips[0].trigger).toBe('Serie');
-    o = retireOath(o, id, T);
-    expect(o.list[0].status).toBe('retired');
-    expect(activeOaths(o).length).toBe(2);
-  });
-  it('Arc-Start: neu schwören oder wählen', () => {
-    const o = three();
-    expect(arcReviewDue(o, 0)).toBe(false);
-    expect(arcReviewDue(o, 1)).toBe(true);
-    expect(arcReviewDue({ ...o, reviewedArc: 1 }, 1)).toBe(false);
-    expect(chooseDue(emptyOaths(), 0)).toBe(true);
-    expect(chooseDue({ ...emptyOaths(), askedArc: 0 }, 0)).toBe(false);
-    expect(chooseDue(o, 0)).toBe(false);
-  });
-  it('Boss-Schaden 0,1 pro gehaltenem Gelübde und Tag, Nächte gezählt', () => {
-    let o = three();
-    for (const d of ['2026-10-13', '2026-10-14']) for (const x of o.list) o = toggleKept(o, d, x.id, { n: 0, week: 1 });
-    o = toggleKept(o, '2026-10-15', o.list[0].id, { n: 0, week: 6 });
-    expect(oathDamage(o, 0)).toBe(0.6);
-    expect(nightsKept(o, '2026-10-12', '2026-10-18')).toBe(3);
-    const data = { ...defaultData(), oaths: o, engine: { ...defaultData().engine, arc: { n: 0, week: 2 } } };
-    expect(bossV3(data).damage).toBe(0.6);
-  });
-  it('XP: 10 pro gehaltenem Gelübde im Tagesdeckel, Siegel 100', () => {
-    let o = three();
-    for (const x of o.list) o = toggleKept(o, T, x.id);
-    const d = { ...defaultData(), oaths: o, sessions: [{ day: T, kind: 'surge' }, { day: T, kind: 'surge' }, { day: T, kind: 'wimhof' }] };
-    expect(totalXp(d)).toBe(60);
-    const sealed = { ...o, list: o.list.map((x, i) => (i ? x : { ...x, status: 'sealed', sealedDay: T })) };
-    expect(totalXp({ ...d, oaths: sealed })).toBe(160);
-  });
-});
-
-describe('v3 · SUNDAY RESET', () => {
-  const sun = '2026-10-18';
-  it('ab Sonntag 16 Uhr, Montag nachholbar', () => {
-    const d = defaultData();
-    expect(resetDue(d, sun, 15)).toBe(null);
-    expect(resetDue(d, sun, 16)).toBe('2026-10-12');
-    expect(resetDue(d, '2026-10-19', 9)).toBe('2026-10-12');
-    expect(resetDue(d, '2026-10-20', 9)).toBe(null);
-  });
-  it('5 Häkchen → komplett, +50 XP; Rückblick und Plan haken sich selbst ab', () => {
-    let d = defaultData();
-    d = { ...d, reviews: { '2026-10-12': { day: sun } } };
-    expect(resetState(d, '2026-10-12').review).toBe(true);
-    d = cyclePlan(d, '2026-10-19', 0);
-    expect(resetState(d, '2026-10-12').plan).toBe(true);
-    expect(d.weekPlans['2026-10-19'][0]).toBe('arena');
-    for (const k of ['walk', 'meals']) d = toggleReset(d, '2026-10-12', k, sun);
-    expect(d.resets['2026-10-12'].done).toBe(undefined);
-    d = toggleReset(d, '2026-10-12', 'oaths', sun);
-    expect(d.resets['2026-10-12'].done).toBe(sun);
-    expect(resetDue(d, sun, 18)).toBe(null);
-    expect(totalXp(d)).toBe(50);
-  });
-  it('settleReset schließt ab, wenn der Rückblick das letzte Häkchen war', () => {
-    let d = defaultData();
-    for (const k of ['walk', 'meals', 'plan', 'oaths']) d = toggleReset(d, '2026-10-12', k, sun);
-    d = settleReset({ ...d, reviews: { '2026-10-12': {} } }, '2026-10-12', sun);
-    expect(d.resets['2026-10-12'].done).toBe(sun);
-  });
-  it('Wochenplan schaltet durch und gibt nur einen Hinweis', () => {
-    let d = defaultData();
-    for (let k = 0; k < 2; k++) d = cyclePlan(d, '2026-10-19', 2);
-    expect(planHint(d, '2026-10-21')).toBe('mission');
-    d = cyclePlan(cyclePlan(d, '2026-10-19', 2), '2026-10-19', 2);
-    expect(planHint(d, '2026-10-21')).toBe(null);
-  });
-});
 
 describe('v3 · Schlaf', () => {
   const start = '2026-09-01';
@@ -2137,23 +1894,262 @@ describe('v3 · Schlaf', () => {
     const few = build(30, (i, day) => ({ sleep: i % 2 ? 1 : 5, session: i < 6 ? mk(day, 8) : null }));
     expect(sleepInsights(few, addDays(start, 30)).some((x) => x.id === 'anchor')).toBe(false);
   });
-  it('Schlaf nach SURGE/Kälte und nach Getränke-Gelübde', () => {
-    let d = build(30, (i, day) => ({ sleep: i % 2 ? 4 : 2, session: i % 2 === 0 ? { day, kind: 'surge' } : null }));
-    let o = addOath(emptyOaths(), { ...TEMPLATES[2], day: start, now: 1 });
-    for (let i = 0; i < 30; i += 2) o = toggleKept(o, addDays(start, i), o.list[0].id);
-    d = { ...d, oaths: o };
-    const ins = sleepInsights(d, addDays(start, 30));
-    const s = ins.find((x) => x.id === 'surge');
-    expect(s.a.value).toBe(4);
-    expect(s.b.value).toBe(2);
-    const alc = ins.find((x) => x.id === 'alcohol');
-    expect(alc.a.value).toBe(4);
-    expect(alc.text.includes('Getränke-Gelübde')).toBe(true);
+});
+
+// ——— Update v4 · Paket 1 ———
+import { REST_SEC, restFor, exercisePhases, exerciseTimerAt, effortToRpe } from '../js/engine/session.js';
+import { swapGroups } from '../js/engine/plan.js';
+import { LADDERS, ladderOf, stepFrom } from '../js/data/ladders.js';
+
+describe('v4 · Fixes Gewicht', () => {
+  const def = getDef('goblet_curl'); // 15–20, KB
+  const c4 = { settings: { ...defaultData().settings, kbWeights: [8, 12, 16] }, equipment: ['kb'], getDef, rir: 2, fixed: true };
+  const top = (load = 12) => [20, 20].map((v) => ({ value: v, load, rir: 2 }));
+  it('nie mehr Gewicht: Wdh. → +1 Satz → Tempo → schwerere Stufe', () => {
+    let st = { exId: def.id, load: 12, target: 18, miss: 0 };
+    st = progress(def, st, [18, 18].map((v) => ({ value: v, load: 12, rir: 2 })), c4);
+    expect(st.target).toBe(19);
+    expect(st.load).toBe(12);
+    st = progress(def, st, top(), c4);
+    expect(st.lastChange).toBe('set_up');
+    expect(st.extraSet).toBe(true);
+    expect(st.load).toBe(12);
+    st = progress(def, st, top(), c4);
+    expect(st.lastChange).toBe('tempo_up');
+    expect(st.tempo).toBe(true);
+    st = progress(def, st, top(), c4);
+    expect(st.load).toBe(12);
+    expect(['top', 'variant_ready'].includes(st.lastChange)).toBe(true);
   });
-  it('Migration ergänzt Gelübde, Resets, Wochenpläne', () => {
-    const m = normalize({ schemaVersion: 3, settings: {}, sessions: [], engine: {} });
-    expect(m.oaths.list).toEqual([]);
-    expect(m.resets).toEqual({});
-    expect(m.weekPlans).toEqual({});
+  it('ohne „fix“ geht es wie gewohnt übers Gewicht', () => {
+    const r = progress(def, { exId: def.id, load: 12, target: 20, miss: 0 }, top(), { ...c4, fixed: false });
+    expect(r.load).toBe(16);
+  });
+  it('itemFor: Zusatzsatz und Tempo-Hinweis bei fixem Gewicht', () => {
+    const d = defaultData();
+    d.settings.fixedLoad = { goblet_curl: true };
+    d.exState = { goblet_curl: { exId: 'goblet_curl', load: 12, target: 15, extraSet: true, tempo: true } };
+    const it = itemFor('goblet_curl', { data: d, profile: 'room', sets: 2 });
+    expect(it.sets).toBe(3);
+    expect(it.tempo).toBe(true);
+    expect(it.fixed).toBe(true);
+  });
+});
+
+describe('v4 · Pausenklassen', () => {
+  it('jede Übung hat eine Klasse', () => {
+    const missing = Object.values(EXERCISES).filter((d) => !REST_SEC[d.rest]).map((d) => d.id);
+    expect(missing).toEqual([]);
+  });
+  it('Sekunden je Klasse, +30 bei Top-Satz oder RIR 0, gemerkte Anpassung', () => {
+    expect(restFor(getDef('deadlift'))).toBe(150);
+    expect(restFor(getDef('bw_row'))).toBe(90);
+    expect(restFor(getDef('hanging_leg_raise'))).toBe(60);
+    expect(restFor(getDef('broad_jump'))).toBe(90);
+    expect(restFor(getDef('deadlift'), { topSet: true })).toBe(180);
+    expect(restFor(getDef('bw_row'), { rir: 0 })).toBe(120);
+    expect(restFor(getDef('bw_row'), { adjust: -30 })).toBe(60);
+    expect(restFor(getDef('hanging_leg_raise'), { adjust: -90 })).toBe(15);
+    expect(restFor(getDef('bag_rounds'))).toBe(60);
+  });
+});
+
+describe('v4 · Timer in der Übung', () => {
+  it('je Seite: Seite 1 → 5 s Wechsel → Seite 2', () => {
+    const ph = exercisePhases({ target: 40, perSide: true });
+    expect(ph.map((p) => [p.phase, p.sec])).toEqual([['side1', 40], ['switch', 5], ['side2', 40]]);
+    expect(exerciseTimerAt(ph, 0, 30_000).phase).toBe('side1');
+    expect(exerciseTimerAt(ph, 0, 42_000).phase).toBe('switch');
+    const s2 = exerciseTimerAt(ph, 0, 50_000);
+    expect(s2.phase).toBe('side2');
+    expect(Math.round(s2.left)).toBe(35);
+    const over = exerciseTimerAt(ph, 0, 95_000);
+    expect(over.over).toBe(true);
+    expect(Math.round(over.elapsed)).toBe(50);
+  });
+  it('Runden: Arbeit → Pause → Arbeit, ohne Pause am Ende', () => {
+    const ph = exercisePhases({ target: 120, rounds: 3, rest: 60 });
+    expect(ph.map((p) => p.phase)).toEqual(['work', 'rest', 'work', 'rest', 'work']);
+    expect(exerciseTimerAt(ph, 0, 200_000).round).toBe(2);
+  });
+  it('nach Hintergrund (großer Zeitsprung) korrekt', () => {
+    const ph = exercisePhases({ target: 60 });
+    expect(exerciseTimerAt(ph, 1000, 1000 + 600_000).over).toBe(true);
+  });
+});
+
+describe('v4 · Tauschen', () => {
+  const data = { ...defaultData(), settings: { ...defaultData().settings, onboarded: true } };
+  it('empfohlen → Kategorie → alle; jede Übung wählbar', () => {
+    const g = swapGroups('jump_rope', { data, profile: 'room', today: T, all: EXERCISES });
+    const cat = g.category.map((o) => o.id);
+    expect(cat.includes('easy_run') || g.recommended.some((o) => o.id === 'easy_run')).toBe(true);
+    expect([...g.recommended, ...g.category].some((o) => o.id === 'bag_rounds')).toBe(true);
+    const ids = new Set([...g.recommended, ...g.category, ...g.all].map((o) => o.id));
+    expect(ids.size).toBe(Object.keys(EXERCISES).length - 1);
+    const pull = swapGroups('pullup_tactical', { data, profile: 'room', today: T, all: EXERCISES });
+    expect(pull.recommended[0].has).toBe(true);
+    expect(pull.all.some((o) => o.id === 'deadlift' && !o.has)).toBe(true);
+  });
+});
+
+describe('v4 · Progressionsleitern', () => {
+  it('alle Stufen existieren, easier/harder folgen den Leitern', () => {
+    for (const l of LADDERS) for (const id of l.steps) expect(!!getDef(id)).toBe(true);
+    expect(getDef('bw_row').harder).toBe('bw_row_elevated');
+    expect(getDef('bw_row_elevated').harder).toBe('bw_row_weighted');
+    expect(getDef('pullup_band').easier).toBe('pullup_negative');
+    expect(stepFrom('pushup', 1)).toBe('pushup_feet_elevated');
+    expect(stepFrom('pseudo_planche_pushup', 1)).toBe(null);
+    expect(ladderOf('dip').index).toBe(2);
+  });
+  it('Vorschlag erst nach 2 Einheiten oben mit RIR ≥ 2', () => {
+    const def = getDef('bw_row'); // 10–15
+    const s = (rir) => [15, 15, 15].map((v) => ({ value: v, load: 0, rir }));
+    let st = progress(def, { exId: 'bw_row', load: 0, target: 15 }, s(1), ctx());
+    st = progress(def, st, s(1), ctx());
+    expect(st.suggest).toBe(undefined);
+    st = progress(def, st, s(2), ctx());
+    expect(st.suggest).toBe(undefined);
+    st = progress(def, st, s(3), ctx());
+    expect(st.suggest).toEqual({ id: 'bw_row_elevated', dir: 1 });
+  });
+  it('„Jetzt“ wechselt den Platz, „Nicht jetzt“ setzt den Zähler zurück', () => {
+    const st = { exId: 'bw_row', topStreak: 2, suggest: { id: 'bw_row_elevated', dir: 1, slotKey: 'A:2' } };
+    const now = applyLadderChoice(st, 'now');
+    expect(now.switchTo).toBe('bw_row_elevated');
+    expect(now.state.suggest).toBe(undefined);
+    const no = applyLadderChoice(st, 'no');
+    expect(no.switchTo).toBe(null);
+    expect(no.state.topStreak).toBe(0);
+  });
+  it('finishSession hängt den Platz an den Vorschlag, unterwegs nicht', () => {
+    const data = { ...defaultData(), settings: { ...defaultData().settings, onboarded: true },
+      exState: { bw_row: { exId: 'bw_row', load: 0, target: 15, topStreak: 1 } } };
+    const plan = buildPlan({ missionId: 'A', profile: 'room', data, today: T });
+    const i = plan.items.findIndex((x) => x.exId === 'bw_row');
+    const a = createActive(plan, T);
+    a.log[i].sets.forEach((s) => { s.done = true; s.value = 15; s.rir = 2; });
+    const r = finishSession(data, a);
+    expect(r.data.exState.bw_row.suggest.slotKey).toBe(plan.items[i].slotKey);
+  });
+});
+
+describe('v4 · RPE und Migration', () => {
+  it('Belastung 1–5 → RPE: 1→2 … 5→10', () => {
+    expect([1, 2, 3, 4, 5].map(effortToRpe)).toEqual([2, 4, 6, 8, 10]);
+  });
+  it('Migration v3 → v4: RPE, Intensität und Last neu, Vibration weg', () => {
+    const v3 = { schemaVersion: 3, settings: { onboarded: true, vibration: false }, engine: {}, exState: {}, records: {}, checkins: {},
+      sessions: [{ day: T, kind: 'mission', missionId: 'C', minutes: 40, intensity: 3, load: 120,
+        exercises: [{ exId: 'dip', effort: 3, sets: [{ value: 8, done: true }, { value: 8, done: true }] }, { exId: 'kb_halo', effort: 5, sets: [{ value: 8, done: true }] }] },
+      { day: T, kind: 'arena', rpe: 8, minutes: 60, load: 240 }] };
+    const m = normalize(JSON.parse(JSON.stringify(v3)));
+    expect(m.schemaVersion).toBe(4);
+    expect(m.sessions[0].exercises.map((e) => e.rpe)).toEqual([6, 10]);
+    expect(m.sessions[0].exercises[0].effort).toBe(undefined);
+    expect(m.sessions[0].intensity).toBe(7.3);
+    expect(m.sessions[0].load).toBe(292);
+    expect(m.sessions[1].load).toBe(480);
+    expect(m.settings.vibration).toBe(undefined);
+    expect(m.ruleLog.at(-1).rule).toBe('migration:v4');
+  });
+});
+
+// ——— Update v4 · Paket 2: TEMPER ———
+import { BOOKS, MISSIONS_T, BOOK1_SCRIPTS } from '../js/data/temper.js';
+import { nextEpisode, missionsAvailable, suggestion, expandScript, scriptMinutes, scanCue, logTemper, co2Due, bladeTier,
+  book1Reached, temperMetrics, debriefLine as temperLine, episodeValue } from '../js/engine/temper.js';
+
+const withEpisodes = (n, extra = {}) => {
+  let d = { ...defaultData(), ...extra };
+  for (let ep = 1; ep <= n; ep++) d = logTemper(d, { day: addDays('2026-09-01', ep), book: 1, ep, clarity: 3, minutes: 6, now: ep }).data;
+  return d;
+};
+
+describe('v4 · TEMPER', () => {
+  it('Buch I: 30 Episoden mit Story und Skript', () => {
+    const b = BOOKS[0];
+    expect(b.episodes.length).toBe(30);
+    for (const e of b.episodes) {
+      expect(e.story.length > 0).toBe(true);
+      expect(Array.isArray(e.script) && e.script.length > 0).toBe(true);
+    }
+    expect(b.episodes[10].story.some((l) => l.startsWith('ECHO'))).toBe(true);
+  });
+  it('Skriptdauer passt grob zur angegebenen Dauer', () => {
+    for (const e of BOOKS[0].episodes) {
+      const mins = scriptMinutes(expandScript(e.script, { choice: 'down', free: { regler: 'down', count: true, scan: true } }));
+      const want = Number(e.dur.match(/\d+/)[0]);
+      expect(Math.abs(mins - want) <= 3).toBe(true);
+    }
+  });
+  it('Freischaltung pro gemachter Episode, nicht pro Tag', () => {
+    expect(nextEpisode(defaultData()).ep.n).toBe(1);
+    const d = withEpisodes(3);
+    expect(nextEpisode(d).ep.n).toBe(4);
+    // eine Woche Pause ändert nichts, keine Strafe
+    expect(nextEpisode(d).ep.n).toBe(4);
+  });
+  it('Situations-Einsätze ab der richtigen Episode', () => {
+    expect(missionsAvailable(withEpisodes(8)).map((m) => m.id)).toEqual([]);
+    expect(missionsAvailable(withEpisodes(9)).map((m) => m.id)).toEqual(['craving']);
+    expect(missionsAvailable(withEpisodes(18)).map((m) => m.id).sort()).toEqual(['craving', 'nsdr', 'stress']);
+    expect(missionsAvailable(withEpisodes(26)).length).toBe(5);
+    expect(MISSIONS_T.find((m) => m.id === 'prefight').from).toBe(26);
+  });
+  it('Schlaf 1–2 → NSDR statt Episode (sobald frei)', () => {
+    const today = '2026-10-21';
+    const d = withEpisodes(15, { checkins: { [today]: { day: today, sleep: 2 } } });
+    expect(suggestion(d, today).kind).toBe('mission');
+    expect(suggestion(d, today).mission.id).toBe('nsdr');
+    const early = withEpisodes(10, { checkins: { [today]: { day: today, sleep: 1 } } });
+    expect(suggestion(early, today).kind).toBe('episode');
+    const fine = withEpisodes(15, { checkins: { [today]: { day: today, sleep: 4 } } });
+    expect(suggestion(fine, today).kind).toBe('episode');
+  });
+  it('XP pauschal 15, unabhängig von der Retention; Buchabschluss 150', () => {
+    const a = logTemper(defaultData(), { day: T, book: 1, ep: 21, retention: 30 }).session;
+    const b = logTemper(defaultData(), { day: T, book: 1, ep: 21, retention: 180 }).session;
+    expect(a.xp).toBe(15);
+    expect(b.xp).toBe(a.xp);
+    const d29 = withEpisodes(29);
+    const r = logTemper(d29, { day: '2026-10-21', book: 1, ep: 30, now: 99 });
+    expect(r.finished.id).toBe('HEAT');
+    expect(r.data.sessions.at(-1).kind).toBe('temperBook');
+    expect(r.data.sessions.at(-1).xp).toBe(150);
+    expect(bladeTier(r.data)).toBe(1);
+    // nochmal Episode 30 → kein zweiter Buchabschluss
+    expect(logTemper(r.data, { day: '2026-10-22', book: 1, ep: 30, now: 100 }).finished).toBe(null);
+  });
+  it('Reset und Regler werden aufgelöst', () => {
+    const r = expandScript([{ t: 'reset', reps: 3 }]);
+    expect(r.map((s) => s.t)).toEqual(['breath', 'guide', 'breath', 'guide', 'breath']);
+    expect(expandScript([{ t: 'choice' }], { choice: 'up' })[0].t).toBe('wimhof');
+    expect(expandScript([{ t: 'choice' }], { choice: 'down' })[0].out).toBe(8);
+    expect(expandScript([{ t: 'scan', sec: 60, regions: 'map' }], { map: ['Kiefer'] })[0].regions).toEqual(['Kiefer']);
+    const free = expandScript([{ t: 'free' }], { free: { regler: null, count: true, scan: false } });
+    expect(free.map((s) => s.t)).toEqual(['count']);
+  });
+  it('ECHO-Scan: Region und Schritt nach Zeit, mit Namen', () => {
+    const seg = { t: 'scan', sec: 40, regions: ['Stirn', 'Kiefer'], mode: 'name' };
+    const a = scanCue(seg, 1, { name: 'Felix' });
+    expect(a.region).toBe('Stirn');
+    expect(a.text.includes('Felix')).toBe(true);
+    expect(scanCue(seg, 10).text.includes('Ein Wort')).toBe(true);
+    expect(scanCue(seg, 25).region).toBe('Kiefer');
+  });
+  it('CO2-Test wöchentlich nach Buch I, Messwerte und Debrief-Zeile', () => {
+    let d = withEpisodes(30);
+    expect(co2Due(d, '2026-10-21')).toBe(true);
+    d = logTemper(d, { day: '2026-10-20', mission: 'prefight', co2: 48, now: 200 }).data;
+    expect(co2Due(d, '2026-10-21')).toBe(false);
+    expect(co2Due(d, '2026-10-27')).toBe(true);
+    let e = logTemper(defaultData(), { day: '2026-10-01', book: 1, ep: 5, co2: 31, now: 1 }).data;
+    e = logTemper(e, { day: '2026-10-15', book: 1, ep: 25, co2: 48, taps: 6, countSec: 180, now: 2 }).data;
+    expect(episodeValue(e, 1, 5, 'co2')).toBe(31);
+    expect(temperMetrics(e, '2026-10-21').taps[0].value).toBe(2);
+    expect(temperLine(e, '2026-10-01', '2026-10-31')).toBe('Ausatmung: 31 → 48 s · Episoden: 2');
+    expect(book1Reached(e)).toBe(25);
   });
 });

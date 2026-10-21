@@ -8,8 +8,8 @@ export const TECH_SKILLS = [
   ['boxing', 'Boxen'], ['defense', 'Verteidigung / Checks'], ['footwork', 'Footwork'], ['cardio', 'Kondition Runde 3+'],
 ];
 
-// Intensität 1–5 aus dem Gefühl 1–10 (für Trainingslast)
-export const arenaIntensity = (s) => (s.rpe ? Math.round((s.rpe / 2) * 10) / 10 : null);
+// Intensität = RPE 1–10 (für Trainingslast)
+export const arenaIntensity = (s) => s.rpe ?? null;
 
 function summarize(list) {
   const content = Object.fromEntries(ARENA_CONTENT.map((k) => [k, 0]));

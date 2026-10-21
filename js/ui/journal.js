@@ -19,7 +19,7 @@ function setLine(def, x) {
 
 function meta(s) {
   return [s.minutes ? `${s.minutes} min` : null,
-    typeof s.intensity === 'number' ? `Intensität ${String(s.intensity).replace('.', ',')}` : s.rpe ? `Gefühl ${s.rpe}/10` : null,
+    typeof s.intensity === 'number' ? `RPE ${String(s.intensity).replace('.', ',')}` : s.rpe ? `Gefühl ${s.rpe}/10` : null,
     s.arc ? `Arc-Woche ${s.arc.week}` : null].filter(Boolean).join(' · ');
 }
 
@@ -29,7 +29,7 @@ function detail(s) {
     const def = getDef(e.exId);
     if (!def) continue;
     const sets = doneSets(e);
-    parts.push(`<div class="j-ex"><div class="j-ex-head"><b>${esc(def.name)}</b>${e.effort ? `<span class="pill">Belastung ${e.effort}/5</span>` : ''}</div>
+    parts.push(`<div class="j-ex"><div class="j-ex-head"><b>${esc(def.name)}</b>${e.rpe ? `<span class="pill">RPE ${e.rpe}</span>` : ''}</div>
       ${sets.length ? `<ol class="j-sets">${sets.map((x) => `<li>${esc(setLine(def, x))}${x.label ? ` <small class="muted">${esc(x.label)}</small>` : ''}</li>`).join('')}</ol>` : '<p class="muted small">nicht gemacht</p>'}
       ${e.swappedFrom ? `<p class="muted small">Getauscht statt ${esc(getDef(e.swappedFrom)?.name || e.swappedFrom)} · ${e.swapScope === 'arc' ? 'für den Arc' : 'nur heute'}</p>` : ''}
       ${e.adjust ? `<p class="muted small">Angepasst: ${esc(e.adjust)}</p>` : ''}
@@ -109,7 +109,7 @@ export function xpSourceView(c) {
   }).join('');
   return sys('XP pro Quelle', `<div class="seg small"><button class="${by === 'week' ? 'on' : ''}" data-act="xp-by" data-v="week">Woche</button><button class="${by === 'arc' ? 'on' : ''}" data-act="xp-by" data-v="arc">Arc</button></div>
     ${body || '<p class="muted">Noch keine XP.</p>'}
-    <p class="muted small">Neben-XP (FLOW, SURGE, Wim Hof, Kälte, Gelübde) zusammen höchstens 60 pro Tag.</p>`);
+    <p class="muted small">Neben-XP (TEMPER und FLOW) zusammen höchstens 40 pro Tag.</p>`);
 }
 
 export const journalActions = {
