@@ -166,3 +166,55 @@ export function debriefLine(data, from, to) {
   if (mins) parts.push(`${mins} min`);
   return parts.join(' · ');
 }
+
+// ——— Ton-Führung und Briefing ———
+export const CHECKIN_EVERY = 60; // Sekunden, mit leichter Zufallsabweichung
+const CHECKIN_TYPES = new Set(['count', 'guide']);
+
+/**
+ * Wann in einem Abschnitt der leise Check-in-Ton kommt (Sekunden ab Abschnittsbeginn).
+ * Ca. jede Minute, ±12 s, deterministisch je Seed (gleiche Episode = gleiche Zeiten). Nicht in den
+ * ersten 30 s und nicht in den letzten 20 s. Keine Check-ins im stillen Zählen (Episode 10) und in kurzen Abschnitten.
+ */
+export function checkinTimes(seg, seed = 1, every = CHECKIN_EVERY) {
+  if (!CHECKIN_TYPES.has(seg.t) || !isTimed(seg) || seg.sec < 75) return [];
+  let x = (seed * 9301 + 49297) % 233280;
+  const rnd = () => { x = (x * 9301 + 49297) % 233280; return x / 233280; };
+  const out = [];
+  for (let t = every; t < seg.sec - 20; t += every) {
+    const at = Math.round(t + (rnd() * 24 - 12));
+    if (at >= 30 && at < seg.sec - 20) out.push(at);
+  }
+  return out;
+}
+
+const mm = (sec) => (sec >= 60 ? `${Math.round(sec / 6) / 10} min`.replace('.', ',') : `${sec} s`);
+
+/** Ein Schritt im Briefing: Titel, Dauer, wie es geht, welche Töne vorkommen. */
+export function briefingSteps(segs) {
+  return segs.map((s) => {
+    const dur = isTimed(s) ? mm(s.sec) : '';
+    switch (s.t) {
+      case 'guide': return { title: s.tap ? 'Beobachten' : 'Ankommen', dur, how: s.cues.slice(0, 3).join(' '), tones: s.sec >= 75 ? ['checkin'] : [] };
+      case 'count': return { title: 'Die Klinge: Zählen', dur,
+        how: `Zähl beim Ausatmen 1 bis 10, dann von vorn.${s.tap ? ' Abgeschweift oder verzählt: irgendwo tippen, zurück zu 1.' : ''}${s.thought ? ` Gedanken kurz benennen: ${s.thought}.` : ''}${s.eyes === 'open' ? ' Augen offen, Blick auf einen Punkt.' : ' Augen zu.'}${s.loud ? ' Ein lauter Ort ist heute richtig.' : ''}`,
+        tones: ['checkin', ...(s.tap ? ['hold'] : [])] };
+      case 'silent': return { title: 'Stilles Zählen', dur, how: 'Frei zählen, ohne Anleitung. Nur die Glocke am Anfang und am Ende.', tones: s.tap ? ['hold'] : [] };
+      case 'breath': return { title: s.reset ? '3-Atemzüge-Reset' : 'Geführtes Atmen', dur, how: s.reset ? 'Drei lange Ausatmer, Schultern sinken lassen.' : `4 s ein, ${s.out} s aus. Der Atem-Ton führt: steigt beim Ein-, sinkt beim Ausatmen.`, tones: ['breath'] };
+      case 'sigh': return { title: 'Physiologische Seufzer', dur, how: 'Zweimal durch die Nase ein (lang, dann kurz nachfüllen), lang durch den Mund aus.', tones: ['breath'] };
+      case 'wave': return { title: 'Die Welle', dur, how: 'Ein Verlangen oder eine Unruhe beobachten: Es steigt, erreicht einen Gipfel und fällt. Nicht folgen.', tones: [] };
+      case 'scan': return { title: 'ECHO-Scan', dur, how: `ECHO wandert durch ${Array.isArray(s.regions) ? s.regions.join(', ') : 'deine Innenkarte'}. Wahrnehmen${s.mode === 'name' ? ', mit einem Wort benennen' : s.mode === 'ask' ? ', fragen: „Was hält das fest?“' : ''}, beim Ausatmen lösen. Doppelton = nächste Station.`, tones: ['next'] };
+      case 'nsdr': return { title: 'NSDR', dur, how: 'Liegen, Augen zu. Ein langsamer Body-Scan. Doppelton = nächste Körperregion.', tones: ['next'] };
+      case 'wimhof': return { title: 'Eine Runde Wim Hof', dur: 'ca. 2–4 min', how: '30 tiefe Atemzüge, ausatmen, halten. Tipp startet und stoppt das Halten. Danach 15 s Erholungsatem.', tones: ['hold'] };
+      case 'co2': return { title: 'CO2-Test', dur: 'ca. 1 min', how: '4 normale Atemzüge, voll einatmen, tippen, so langsam wie möglich ausatmen, wieder tippen.', tones: ['hold'] };
+      case 'map': return { title: 'Innenkarte', dur: '', how: 'Am Ende tippst du die 3 Orte an, an denen ECHO am meisten gefunden hat.', tones: [] };
+      case 'choice': return { title: 'Der Regler', dur: '', how: 'Du wählst: Hoch (eine Runde Wim Hof) oder Runter (langes Ausatmen).', tones: [] };
+      case 'free': return { title: 'Freie Sitzung', dur: 'ca. 8 min', how: 'Du stellst zusammen: Regler, Zählen, ECHO-Scan.', tones: ['checkin', 'next'] };
+      case 'echo': return { title: 'ECHO einrichten', dur: '', how: 'Einmalig: Name und wie ECHO aussieht.', tones: [] };
+      default: return { title: s.t, dur, how: '', tones: [] };
+    }
+  });
+}
+
+/** Alle Töne, die in einer Übung vorkommen (Glocke immer). */
+export const briefingTones = (segs) => ['bell', ...new Set(briefingSteps(segs).flatMap((s) => s.tones))];

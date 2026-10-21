@@ -92,6 +92,7 @@ export const MISSIONS_T = [
 
 /** Was die einzelnen Bausteine körperlich tun (1–2 Sätze, ohne Esoterik). */
 export const WHY = {
+  guide: 'Den Atem nur zu beobachten lenkt die Aufmerksamkeit von Gedanken auf Körpersignale. Der Atem wird dabei meist von selbst langsamer.',
   breath: 'Ein langer Ausatem aktiviert über den Vagusnerv den Teil des Nervensystems, der Puls und Anspannung senkt.',
   sigh: 'Zweimal einatmen öffnet zusammengefallene Lungenbläschen, das lange Ausatmen senkt den CO2-Druck: der schnellste bekannte Weg, Stress im Moment zu senken.',
   count: 'Zählen gibt der Aufmerksamkeit einen festen Punkt. Jedes Zurückkommen trainiert das Netzwerk, das Ablenkung bemerkt und umlenkt.',

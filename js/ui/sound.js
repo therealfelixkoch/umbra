@@ -3,8 +3,25 @@
 // (iOS 17+): Signaltöne mischen sich unter die Musik und pausieren sie nie. Kein HTML-Audio-Element, denn
 // <audio> übernimmt auf iOS den Audio-Fokus und stoppt Spotify. Folge: Bei Lautlos-Schalter kein Ton,
 // darum gibt es zu jedem Signal ein großes visuelles Signal. Vibration gibt es auf dem iPhone nicht.
+// Ausnahme TEMPER: Dort läuft die Sitzung als „playback“ (Musik pausiert, Töne auch bei Lautlos-Schalter).
 let audio = null;
 let soundOn = true;
+let session = 'ambient';
+
+function applySession() {
+  try {
+    if (navigator.audioSession && navigator.audioSession.type !== session) navigator.audioSession.type = session;
+  } catch { /* nicht unterstützt */ }
+}
+
+/** Audio-Modus: 'ambient' (mischt sich unter Musik, Standard) oder 'playback' (TEMPER). */
+export function setAudioMode(mode) {
+  session = mode === 'playback' ? 'playback' : 'ambient';
+  applySession();
+}
+
+/** Web-Audio-Kontext für eigene Klänge (TEMPER). Null, solange noch kein Tap war. */
+export const audioCtx = () => (audio && audio.state === 'running' ? audio : null);
 
 export function setSound(on) {
   soundOn = on;
@@ -12,9 +29,7 @@ export function setSound(on) {
 
 // Muss in einem Tap-Handler laufen, sonst bleibt der Ton auf iOS stumm.
 export function unlockAudio() {
-  try {
-    if (navigator.audioSession && navigator.audioSession.type !== 'ambient') navigator.audioSession.type = 'ambient';
-  } catch { /* nicht unterstützt */ }
+  applySession();
   try {
     audio ||= new (window.AudioContext || window.webkitAudioContext)();
     // Nach einer Unterbrechung (Anruf, Spotify-Wechsel) meldet iOS „interrupted“: beim nächsten Tap fortsetzen.

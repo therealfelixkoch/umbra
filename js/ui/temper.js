@@ -1,13 +1,14 @@
 // TEMPER: Ritual für den Geist. Startbereich, Episoden (Story → Übung → Klarheit) und Situations-Einsätze.
 // Die laufende Übung lebt außerhalb der Daten (wie der ARENA-Timer); gespeichert wird am Ende.
 import { sys, esc, stepper } from './kit.js';
-import { beep, signal, keepAwake, unlockAudio } from './sound.js';
+import { keepAwake, unlockAudio, setAudioMode, pulse } from './sound.js';
+import { TONES, playTone, pacerStart, pacerSet, pacerStop, ambienceStart, stopAll } from './temper-audio.js';
 import { formatDay } from '../engine/dates.js';
 import { BOOKS, STAGES, WHY, MAP_PLACES, ECHO_DEFAULT } from '../data/temper.js';
 import { breathAt, slowPattern, SIGH, NSDR_CUES, cueAt, whStart, whTap, whTick, whSafetyDue, WH_RECOVER } from '../engine/breath.js';
 import {
   nextEpisode, missionsAvailable, suggestion, expandScript, isTimed, segAt, scanCue, echoDesc, logTemper, temperMetrics,
-  episodeValue, bladeTier, doneEpisodes, scriptMinutes,
+  episodeValue, bladeTier, doneEpisodes, scriptMinutes, checkinTimes, briefingSteps, briefingTones,
 } from '../engine/temper.js';
 import { sideCapLeft } from '../engine/game.js';
 import { XP_CONFIG } from '../data/xp-config.js';
@@ -64,6 +65,8 @@ function stopTicker() {
   clearInterval(ticker);
   ticker = null;
   keepAwake(false);
+  stopAll();
+  setAudioMode('ambient'); // Musik darf danach wieder normal laufen
   try { speechSynthesis.cancel(); } catch { /* nichts */ }
 }
 
@@ -75,7 +78,7 @@ function tick() {
     const n = whTick(run.wh, now);
     if (n !== run.wh) {
       run.wh = n;
-      beep(1, 660);
+      playTone('next');
       if (n.phase === 'done') { run.retention = n.holds[0]; next(); return; }
       rerender();
       return;
@@ -87,7 +90,7 @@ function tick() {
         : run.countTone ? `${Math.min(30, Math.floor(t / 1.6) + 1)}` : '';
       if (run.wh.phase === 'breathe' && run.countTone) {
         const k = Math.floor(t / 1.6) + 1;
-        if (k <= 30 && k !== run.whCount) { run.whCount = k; beep(1, 330); }
+        if (k <= 30 && k !== run.whCount) { run.whCount = k; playTone('hold'); }
       }
     }
     return;
@@ -102,8 +105,18 @@ function tick() {
   if (st.done) { next(); return; }
   const clock = document.querySelector('[data-tclock]');
   if (clock) clock.textContent = fmt(st.left);
+  // Leiser Check-in-Ton ca. jede Minute: zurück zum Atem bzw. zur Zahl
+  if (run.ci && run.ci[0] != null && st.elapsed >= run.ci[0]) { run.ci.shift(); playTone('checkin'); }
+  // Doppelton bei jeder neuen Station im ECHO-Scan
+  if (s.t === 'scan') {
+    const idx = scanCue(s, st.elapsed).index;
+    if (run.station != null && idx !== run.station) playTone('next');
+    run.station = idx;
+  }
   if (s.t === 'breath' || s.t === 'sigh') {
     const b = breathAt(run.segStart, now, s.t === 'sigh' ? SIGH : slowPattern(s.out || 6));
+    pacerStart();
+    pacerSet(b.scale);
     const c = document.querySelector('[data-breath]');
     if (c) c.style.transform = `scale(${(0.45 + 0.55 * b.scale).toFixed(3)})`;
     const l = document.querySelector('[data-breath-label]');
@@ -111,7 +124,12 @@ function tick() {
   }
   // Text-Hinweise wechseln: neu zeichnen (und vorlesen, falls an)
   const cue = currentCue(s, st.elapsed);
-  if (cue !== run.cue) { run.cue = cue; speak(cue); rerender(); }
+  if (cue !== run.cue) {
+    if (s.t === 'nsdr' && run.cue) playTone('next');
+    run.cue = cue;
+    speak(cue);
+    rerender();
+  }
 }
 
 function currentCue(s, elapsed) {
@@ -126,21 +144,24 @@ function next() {
   const prev = seg();
   // Zählzeit für „Taps pro Minute“: echte Dauer des Abschnitts (auch wenn früher weitergetippt)
   if (prev?.t === 'count' || (prev?.t === 'guide' && prev.tap) || prev?.t === 'silent') run.countSec += Math.min(prev.sec, (Date.now() - run.segStart) / 1000);
-  if (prev?.t === 'silent') beep(1, 523);
+  if (prev?.t === 'breath' || prev?.t === 'sigh') pacerStop();
   run.i += 1;
   run.segStart = Date.now();
   run.cue = null;
   run.segTaps = 0;
+  run.station = null;
   if (run.i >= run.segs.length) {
-    stopTicker();
-    signal(2);
+    playTone('bell'); // Ende
+    pulse();
+    setTimeout(stopTicker, 4500); // Glocke ausklingen lassen
     run.stage = 'clarity';
     rerender();
     return;
   }
   const s = seg();
-  if (s.t === 'silent') beep(1, 523);
-  else if (prev) beep(1, 523);
+  run.ci = checkinTimes(s, (run.ep?.n || 7) * 31 + run.i);
+  if (s.t === 'silent') playTone('bell');
+  else if (prev) playTone('next');
   if (s.t === 'wimhof') run.wh = null;
   rerender();
 }
@@ -177,7 +198,10 @@ function homeView(c) {
   out += metricsCard(m);
   out += `<section class="card"><div class="label">Stimme</div>
     <div class="chips"><button class="chip${data.settings.temperVoice ? ' on' : ''}" data-act="tp-voice" data-v="1">Vorlesen</button><button class="chip${data.settings.temperVoice ? '' : ' on'}" data-act="tp-voice" data-v="0">Nur Text</button></div>
-    <p class="muted small">Gerätestimme (Deutsch, langsam). Klingt je nach iPhone mechanisch, deshalb standardmäßig aus. Sie mischt sich nicht so sauber unter Musik wie die Signaltöne.</p>
+    <p class="muted small">Gerätestimme (Deutsch, langsam). Klingt mechanisch, deshalb standardmäßig aus. Eine natürliche Stimme kann später dazukommen. Bis dahin führen die Töne.</p>
+    <div class="label">Klangteppich</div>
+    <div class="chips"><button class="chip${data.settings.temperAmbience !== false ? ' on' : ''}" data-act="tp-amb" data-v="1">An</button><button class="chip${data.settings.temperAmbience === false ? ' on' : ''}" data-act="tp-amb" data-v="0">Aus</button></div>
+    <p class="muted small">Leiser Drone mit sanftem Rauschen unter der Übung. Die Hinweistöne kommen immer.</p>
     <div class="label">Reset-Hinweis im Training</div>
     <div class="chips"><button class="chip${data.settings.temperResetHint !== false ? ' on' : ''}" data-act="tp-hint" data-v="1">An</button><button class="chip${data.settings.temperResetHint === false ? ' on' : ''}" data-act="tp-hint" data-v="0">Aus</button></div>
     <p class="muted small">Ab Episode 26: In der Pause vor dem letzten Satz einer Hauptübung erscheint „Reset?“.</p></section>`;
@@ -203,16 +227,27 @@ function metricsCard(m) {
   return m.episodes || m.weeks.some((w) => w.minutes) ? sys('Messwerte', `${body}<p class="muted small">Keine Serien, keine Rekorde. Nur dein Verlauf.</p>`) : '';
 }
 
-function storyView() {
+function storyView(c) {
   const e = run.ep;
   const lines = e ? e.story : [];
-  const main = run.segs.find((s) => WHY[s.t]);
+  const main = run.segs.find((x) => WHY[x.t] && x.t !== 'guide') || run.segs.find((x) => WHY[x.t]);
+  const steps = briefingSteps(run.segs);
+  const tones = briefingTones(run.segs);
+  const first = !c.data.settings.temperBriefed;
+  const amb = c.data.settings.temperAmbience !== false;
   return `<div class="temper-story"><small class="bigtimer-count">${e ? `Buch ${run.book.n} · Episode ${e.n}` : 'Einsatz'}</small>
     <h1>${esc(e ? e.title : run.mission.name)}</h1>
     ${lines.map((l) => `<p class="${l.startsWith('ECHO') ? 'echo-line' : 'sys-line'}">${esc(l)}</p>`).join('')}
-    ${e ? `<p class="muted small">Übung: ${esc(e.exercise.replace(/\*\*/g, ''))}</p>` : ''}
-    ${main ? `<p class="why small">${esc(WHY[main.t])}</p>` : ''}
     ${e?.field ? `<p class="note">Feldauftrag: ${esc(e.field)}</p>` : ''}
+    <details class="card briefing"${first ? ' open' : ''}><summary><b>Briefing</b><small>Was · Warum · Wie · Töne</small></summary>
+      ${main ? `<div class="label">Warum</div><p class="small">${esc(WHY[main.t])}</p>` : ''}
+      <div class="label">Ablauf</div>
+      <ol class="brief-steps">${steps.map((x) => `<li><b>${esc(x.title)}</b>${x.dur ? ` <span class="muted">· ${esc(x.dur)}</span>` : ''}<br><small>${esc(x.how)}</small></li>`).join('')}</ol>
+      <div class="label">Töne · Augen zu, die Töne führen dich</div>
+      <div class="brief-tones">${tones.map((k) => `<button class="tone-row" data-act="tp-tone" data-k="${k}"><span class="tone-play">▶</span><span><b>${TONES[k].name}</b><small>${esc(TONES[k].meaning)}</small></span></button>`).join('')}</div>
+      <p class="muted small">Während TEMPER pausiert deine Musik, damit die Töne auch bei Lautlos-Schalter hörbar sind. Bildschirm darf an bleiben, er wird dunkel.</p>
+    </details>
+    <div class="chips"><button class="chip${amb ? ' on' : ''}" data-act="tp-amb" data-v="1">Klangteppich an</button><button class="chip${amb ? '' : ' on'}" data-act="tp-amb" data-v="0">Stille</button></div>
     <button class="btn primary wide big" data-act="tp-go">Übung starten</button>
     <button class="btn ghost wide" data-act="tp-cancel">Abbrechen</button></div>`;
 }
@@ -349,7 +384,7 @@ const screen = {
   render(c) {
     ctxRef = c;
     if (!run) return homeView(c);
-    if (run.stage === 'story') return storyView();
+    if (run.stage === 'story') return storyView(c);
     if (run.stage === 'clarity') return clarityView();
     return runView(c);
   },
@@ -365,10 +400,35 @@ const screen = {
   actions: {
     'tp-episode': (c) => { const n = nextEpisode(c.data); if (n) begin(c, n); },
     'tp-mission': (c, d) => begin(c, { mission: missionsAvailable(c.data).find((m) => m.id === d.id) }),
-    'tp-go': (c) => { unlockAudio(); run.stage = 'run'; run.segStart = Date.now(); run.startedAt = Date.now(); beep(1, 523); startTicker(); c.render(); },
+    'tp-go': (c) => {
+      // Musik pausieren, Töne auch bei Lautlos: Audio-Sitzung „playback“ (muss im Tap passieren)
+      setAudioMode('playback');
+      unlockAudio();
+      run.stage = 'run';
+      run.segStart = Date.now();
+      run.startedAt = Date.now();
+      run.ci = checkinTimes(seg(), (run.ep?.n || 7) * 31);
+      setTimeout(() => {
+        playTone('bell');
+        if (c.data.settings.temperAmbience !== false) ambienceStart();
+      }, 150);
+      startTicker();
+      if (!c.data.settings.temperBriefed) c.update((data) => ({ ...data, settings: { ...data.settings, temperBriefed: true } }));
+      else c.render();
+    },
+    'tp-tone': (c, d) => {
+      setAudioMode('playback');
+      unlockAudio();
+      setTimeout(() => {
+        if (d.k === 'breath') { pacerStart(); let t = 0; const iv = setInterval(() => { t += 0.1; pacerSet(t < 4 ? t / 4 : Math.max(0, 1 - (t - 4) / 6)); if (t > 10) { clearInterval(iv); pacerStop(); } }, 100); }
+        else playTone(d.k);
+      }, 100);
+    },
+    'tp-amb': (c, d) => c.update((data) => ({ ...data, settings: { ...data.settings, temperAmbience: d.v === '1' } })),
     'tp-next': () => next(),
     'tp-none': () => {},
     'tp-tap': (c) => {
+      playTone('hold');
       run.taps += 1;
       run.segTaps = (run.segTaps || 0) + 1;
       const el = document.querySelector('.temper-taps');
@@ -387,15 +447,15 @@ const screen = {
     'tp-wh-tap': (c) => {
       if (!run.wh || !['breathe', 'hold'].includes(run.wh.phase)) return;
       run.wh = whTap(run.wh, Date.now());
-      beep(1, run.wh.phase === 'hold' ? 440 : 520);
+      playTone('hold');
       c.render();
     },
     // CO2-Test
     'tp-co2-ready': (c) => { run.co2State = { phase: 'ready' }; c.render(); },
     'tp-co2-tap': (c) => {
       const st = run.co2State;
-      if (st.phase === 'ready') run.co2State = { phase: 'exhale', since: Date.now() };
-      else if (st.phase === 'exhale') { run.co2 = Math.round((Date.now() - st.since) / 1000); run.co2State = { phase: 'result', result: run.co2 }; beep(1, 523); }
+      if (st.phase === 'ready') { run.co2State = { phase: 'exhale', since: Date.now() }; playTone('hold'); }
+      else if (st.phase === 'exhale') { run.co2 = Math.round((Date.now() - st.since) / 1000); run.co2State = { phase: 'result', result: run.co2 }; playTone('hold'); }
       c.render();
     },
     // Innenkarte, Regler, freie Sitzung, ECHO
