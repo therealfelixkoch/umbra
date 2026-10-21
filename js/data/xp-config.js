@@ -30,17 +30,24 @@ export const XP_CONFIG = {
     check: 50, // Mobility-Check
     temper: 15, // TEMPER-Episode oder Situations-Einsatz, unabhängig von der Retentionszeit
     temperBook: 150, // TEMPER-Stufe abgeschlossen (Buch beendet), nicht im Tagesdeckel
+    wrist: 10, // eigene Handgelenk-Session, Aktivierung oder Minimal-Dosis außerhalb einer Mission
+    wristCheck: 10, // Handgelenk-Status-Check
+    wristDone: 150, // Handgelenk-Protokoll erfolgreich beendet, nicht im Tagesdeckel
+    hands: 5, // HANDS
+    feet: 5, // FEET-Einheit
+    feetCheck: 10, // Fuß-Check
   },
 
   partialMin: 0.2, // unvollständige Mission zählt mindestens 20 %
 
-  // Nebenquellen (TEMPER + FLOW) zusammen höchstens 40 XP pro Tag. Training bleibt die Hauptquelle.
+  // Nebenquellen (TEMPER, FLOW, Handgelenk, HANDS) zusammen höchstens 40 XP pro Tag. Training bleibt die Hauptquelle.
   sideDailyCap: 40,
-  sideSources: ['flow', 'rest', 'temper'],
+  sideSources: ['flow', 'rest', 'temper', 'wrist', 'wristCheck', 'hands', 'feet', 'feetCheck'],
 };
 
 export const SOURCE_LABELS = {
   mission: 'Missionen', compact: 'QUICK STRIKE', light: 'INFILTRATION leicht', express: 'SHADOWSTEP', arena: 'ARENA',
   flow: 'FLOW', rest: 'Ruhetag', record: 'Bestleistungen', weekGoal: 'Wochenziel', boss: 'Boss besiegt', quest: 'Side Quests',
   ascension: 'Ascensions', check: 'Mobility-Check', temper: 'TEMPER', temperBook: 'TEMPER-Stufe',
+  wrist: 'Handgelenk', wristCheck: 'Handgelenk-Check', wristDone: 'Handgelenk-Protokoll beendet', hands: 'HANDS', feet: 'FEET', feetCheck: 'Fuß-Check',
 };

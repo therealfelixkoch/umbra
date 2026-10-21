@@ -6,6 +6,8 @@ import { countsForWeek, xpLedger, xpBySource } from './game.js';
 import { arenaRange, techCompare } from './arenastats.js';
 import { sleepInsights } from './sleep.js';
 import { debriefLine as temperLine } from './temper.js';
+import { W as wristOf, wristLine } from './wrist.js';
+import { FT, feetLine } from './feet.js';
 import { loadClass } from './load.js';
 import { elbowStatus, painPatterns, REGIONS } from './signals.js';
 import { stagnationStatus, performance, mainSlots } from './stagnation.js';
@@ -115,6 +117,8 @@ export function debriefStats(data, n, today, getDef = defaultGetDef) {
     arenaDetail: { ...arenaRange(ss, from, to), tech: techCompare(Object.fromEntries(Object.entries(data.techChecks || {}).filter(([k]) => k <= to.slice(0, 7)))) },
     trainingLoad: ss.reduce((m, s) => m + (s.load || 0), 0),
     temper: temperLine(data, from, to),
+    wrist: wristLine(wristOf(data), from, to),
+    feet: feetLine(FT(data), from, to),
     sleep: sleepInsights(data, today, { getDef, from, to }).map(({ id, text, a, b }) => ({ id, text, a, b })),
     xpBySource: xpBySource(xpLedger(data, today), 'arc')[n] || {},
     flowDays,

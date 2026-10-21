@@ -126,7 +126,7 @@ export function roundPhases(rounds, work, rest) {
 }
 
 // ——— Satzpausen nach Schwere der Übung ———
-export const REST_SEC = { heavy: 150, medium: 90, light: 60, explosive: 90, warmup: 30 };
+export const REST_SEC = { heavy: 150, medium: 90, light: 60, explosive: 90, warmup: 30, wrist: 30 };
 export const REST_STEP = 15;
 
 /**
@@ -150,7 +150,9 @@ export const SWITCH_SEC = 5;
  * - je Seite: Seite 1 → 5 s Seitenwechsel → Seite 2
  * - Runden (z. B. Sack 3 × 2 min): Arbeit → Pause → Arbeit …
  */
-export function exercisePhases({ target, perSide = false, rounds = 0, rest = 60 }) {
+export const RELAX_SEC = 5;
+
+export function exercisePhases({ target, perSide = false, rounds = 0, rest = 60, reps = 1 }) {
   if (rounds > 0) {
     const out = [];
     for (let r = 1; r <= rounds; r++) {
@@ -159,8 +161,11 @@ export function exercisePhases({ target, perSide = false, rounds = 0, rest = 60 
     }
     return out;
   }
-  if (perSide) return [{ phase: 'side1', sec: target }, { phase: 'switch', sec: SWITCH_SEC }, { phase: 'side2', sec: target }];
-  return [{ phase: 'work', sec: target }];
+  // Mehrere Holds pro Satz (Handgelenk-Isometrie): Halten · 5 s locker · Halten …
+  const holds = (phase) => Array.from({ length: Math.max(1, reps) }, (_, i) => [{ phase, sec: target, hold: i + 1, of: reps },
+    ...(i < reps - 1 ? [{ phase: 'relax', sec: RELAX_SEC }] : [])]).flat();
+  if (perSide) return [...holds('side1'), { phase: 'switch', sec: SWITCH_SEC }, ...holds('side2')];
+  return holds('work');
 }
 
 /** Stand des Übungs-Timers. Die letzte Phase läuft über ihr Ende hinaus weiter (Überzeit). */

@@ -29,6 +29,10 @@ export function decide({ checkin, hardStreak, queue, overrideRest = false, yeste
     return { rule: 0, kind: 'arenaday', missionId: 'FLOW', profile,
       reason: 'Heute Abend ARENA. Das reicht, heute früh nur FLOW, damit du abends frisch bist.' };
   }
+  if (where === 'five') {
+    return { rule: 1, kind: 'five', missionId: 'HANDS', profile,
+      reason: 'Nur 5 Minuten: HANDS für Hände und Handgelenke. Das hält beweglich, ohne den Tag zu belasten.' };
+  }
   if (where === 'mobility') {
     return { rule: 1, kind: 'flow', missionId: 'FLOW', profile, walk: true,
       reason: 'Nur Mobility gewählt: FLOW und danach ein Spaziergang.' };

@@ -23,6 +23,8 @@ import { ASCENSIONS, highestAscension } from '../engine/progress.js';
 import { guardianImage } from './lore.js';
 import { APP_VERSION } from '../version.js';
 import { bladeEmblem } from './temper.js';
+import { wristView } from './wrist.js';
+import { feetView, mountPhotos } from './feet.js';
 import { bladeTier } from '../engine/temper.js';
 import { journalView, xpSourceView, journalActions, journalChange } from './journal.js';
 import { guardianTier, GUARDIANS } from '../data/lore.js';
@@ -72,6 +74,12 @@ function sessionLabel(s) {
   if (s.kind === 'check') return 'Mobility-Check';
   if (s.kind === 'temper') return s.ep ? `TEMPER · Episode ${s.ep}${s.clarity ? ` · Klarheit ${s.clarity}` : ''}` : `TEMPER · Einsatz`;
   if (s.kind === 'temperBook') return `TEMPER · Buch ${s.book} abgeschlossen`;
+  if (s.kind === 'wrist') return `Handgelenk · ${{ strength: 'Kraftblock', activation: 'Aktivierung', minimal: 'Minimal-Dosis', maintenance: 'Erhaltung' }[s.wristBlock] || 'Block'}`;
+  if (s.kind === 'wristCheck') return 'Handgelenk-Status-Check';
+  if (s.kind === 'wristDone') return 'Handgelenk-Protokoll beendet';
+  if (s.kind === 'hands') return `HANDS${s.feel ? ` · Gefühl ${s.feel}/5` : ''}`;
+  if (s.kind === 'feet') return `FEET · Stufe ${s.stage || '?'}${s.noJumps ? ' · ohne Sprünge' : ''}`;
+  if (s.kind === 'feetCheck') return 'Fuß-Check';
   if (s.kind === 'quest') return 'Wochen-Quest erfüllt';
   if (s.kind === 'ascension') return `Ascension: ${ASCENSIONS.find((a) => a.id === s.ascension)?.name || ''}`;
   const m = MISSIONS[s.missionId];
@@ -85,7 +93,7 @@ export default {
     const data = c.data;
     const st = playerStats(data, c.today());
     const tab = c.ui.ptab || 'status';
-    const tabs = [['status', 'Status'], ['woche', 'Woche'], ['mobility', 'Mobil'], ['verlauf', 'Verlauf'], ['setup', 'Setup']];
+    const tabs = [['status', 'Status'], ['woche', 'Woche'], ['mobility', 'Mobil'], ['verlauf', 'Verlauf'], ['hand', 'Gelenke'], ['setup', 'Setup']];
     let out = `${hud(c)}<div class="seg">${tabs.map(([k, v]) => `<button class="${tab === k ? 'on' : ''}" data-act="ptab" data-v="${k}">${v}</button>`).join('')}</div>`;
 
     if (tab === 'status') {
@@ -135,6 +143,11 @@ export default {
     }
 
     if (tab === 'verlauf') return out + journalView(c, sessionLabel);
+    if (tab === 'hand') {
+      const j = c.ui.jtab || 'hand';
+      const seg = `<div class="seg sub">${[['hand', 'Hand'], ['fuss', 'Fuß']].map(([k, v]) => `<button class="${j === k ? 'on' : ''}" data-act="jtab" data-v="${k}">${v}</button>`).join('')}</div>`;
+      return out + seg + (j === 'fuss' ? feetView(c) : wristView(c));
+    }
 
     const s = data.settings;
     return out + `
@@ -165,9 +178,11 @@ export default {
         <button class="btn ghost wide danger" data-act="p-reset">Alle Daten löschen</button></section>
       <p class="foot muted">UMBRA · Daten nur auf diesem Gerät.</p>`;
   },
+  mount(c, root) { mountPhotos(root); },
   actions: {
     ...journalActions,
     ptab: (c, d) => c.setUi({ ptab: d.v }),
+    jtab: (c, d) => c.setUi({ jtab: d.v }),
     'wk-tip': (c, d, el) => el.classList.toggle('open'),
     'p-deload': (c) => c.system('Deload-Woche jetzt?', '<p>Die laufende Arc-Woche wird zur Deload-Woche: halbe Sätze, gleiches Gewicht, 3 Wdh. im Tank. Danach beginnt der nächste Arc.</p>',
       [['p-deload-yes', 'Deload-Woche starten', 'primary'], ['close-modal', 'Abbrechen']]),

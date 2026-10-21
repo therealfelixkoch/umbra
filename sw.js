@@ -4,7 +4,7 @@
 // in die neue Version. Ausgeliefert wird nur aus dem Cache der eigenen Version.
 // Lore-Bilder: eigener Cache, einzeln geladen. Fehlende Bilder brechen die Installation nicht ab;
 // bei jedem App-Start mit Netz holt der Service Worker neue oder geänderte Bilder nach.
-const VERSION = 'umbra-v21';
+const VERSION = 'v23';
 const LORE_CACHE = 'umbra-lore';
 const ASSETS = [
   './',
@@ -18,6 +18,7 @@ const ASSETS = [
   './js/app.js',
   './js/data/arcs.js',
   './js/data/exercises.js',
+  './js/data/feet.js',
   './js/data/glyphs.js',
   './js/data/ladders.js',
   './js/data/lore.js',
@@ -26,6 +27,7 @@ const ASSETS = [
   './js/data/story.js',
   './js/data/temper-book1.js',
   './js/data/temper.js',
+  './js/data/wrist.js',
   './js/data/xp-config.js',
   './js/engine/arc.js',
   './js/engine/arcsync.js',
@@ -37,6 +39,7 @@ const ASSETS = [
   './js/engine/dates.js',
   './js/engine/debrief.js',
   './js/engine/decide.js',
+  './js/engine/feet.js',
   './js/engine/footwork.js',
   './js/engine/game.js',
   './js/engine/history.js',
@@ -54,6 +57,7 @@ const ASSETS = [
   './js/engine/stagnation.js',
   './js/engine/story.js',
   './js/engine/temper.js',
+  './js/engine/wrist.js',
   './js/state.js',
   './js/store.js',
   './js/ui/arena.js',
@@ -62,7 +66,9 @@ const ASSETS = [
   './js/ui/check.js',
   './js/ui/debrief.js',
   './js/ui/emblem.js',
+  './js/ui/feet.js',
   './js/ui/footwork.js',
+  './js/ui/hands.js',
   './js/ui/intro.js',
   './js/ui/journal.js',
   './js/ui/kit.js',
@@ -79,6 +85,7 @@ const ASSETS = [
   './js/ui/training.js',
   './js/ui/voice.js',
   './js/ui/week.js',
+  './js/ui/wrist.js',
   './js/version.js',
   './manifest.webmanifest',
 ];

@@ -38,6 +38,8 @@ export default {
         <div><dt>Längste Serie</dt><dd class="num">${st.longestStreak} W</dd></div>
         <div><dt>Bestleistungen</dt><dd class="num">${st.records}</dd></div>
         <div><dt>TEMPER</dt><dd>${esc(st.temper)}</dd></div>
+        ${st.wrist ? `<div><dt>Handgelenk</dt><dd>${esc(st.wrist)}</dd></div>` : ''}
+        ${st.feet ? `<div><dt>FEET</dt><dd>${esc(st.feet)}</dd></div>` : ''}
         ${st.boss ? `<div><dt>Boss</dt><dd>${st.boss.defeated ? 'besiegt' : `${num(st.boss.hp)}/${st.boss.max} LP übrig`}</dd></div>` : ''}
       </dl>`)}
       ${sys('ARENA', `<dl class="facts">

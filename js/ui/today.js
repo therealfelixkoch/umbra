@@ -19,6 +19,10 @@ import { buildPlan, createActive, logArena } from '../engine/plan.js';
 import { TRAVEL_EQUIPMENT } from './onboarding.js';
 import { ladderCard, ladderActions } from './ladder.js';
 import { temperCard, bladeEmblem } from './temper.js';
+import { wristCards, afterCheckin } from './wrist.js';
+import { handsCard } from './hands.js';
+import { feetCard } from './feet.js';
+import { W } from '../engine/wrist.js';
 import { bladeTier } from '../engine/temper.js';
 import { playerStats, WEEK_GOAL, rankName } from '../engine/game.js';
 import { addDays, daysBetween, weekStart } from '../engine/dates.js';
@@ -34,7 +38,7 @@ const Q = {
   sleep: ['Wie hast du geschlafen?', [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']]],
   feeling: ['Wie fühlst du dich?', [['frisch', 'Frisch'], ['normal', 'Normal'], ['platt', 'Platt']]],
   tonightMT: ['Heute Abend Muay Thai?', [['yes', 'Ja'], ['no', 'Nein'], ['maybe', 'Vielleicht']]],
-  where: ['Wo und wie viel Zeit?', [['room', 'Eigener Raum · 45 min'], ['gym', 'Home Gym · 60 min'], ['travel', 'Unterwegs / Hotel'], ['kompakt', 'Nur 30 Minuten'], ['express', 'Nur 15 Minuten'], ['mobility', 'Nur Mobility']]],
+  where: ['Wo und wie viel Zeit?', [['room', 'Eigener Raum · 45 min'], ['gym', 'Home Gym · 60 min'], ['travel', 'Unterwegs / Hotel'], ['kompakt', 'Nur 30 Minuten'], ['express', 'Nur 15 Minuten'], ['five', 'Nur 5 Minuten'], ['mobility', 'Nur Mobility']]],
 };
 
 // Kleiner Status unter der Mission: Rang, Kampfkraft, Boss-Lebensbalken, Arc-Woche (x/6), Wochenziel.
@@ -93,7 +97,7 @@ function planPreview(plan) {
   if (plan.format === 'sets') {
     return `<ol class="ex-list">${plan.items.map((it) => {
       const def = getDef(it.exId);
-      return `<li><span>${esc(def.name)}${it.optional ? ' <em>optional</em>' : ''}${it.adjust ? ' <em class="warn-tag">angepasst</em>' : ''}</span><span class="muted">${def.mode === 'fixed' ? `${it.sets > 1 ? `${it.sets} × ` : ''}${targetText(def)}` : `${it.sets} × ${targetText(def, it.target)}`}${loadText(def, it.load) && def.load ? ` · ${loadText(def, it.load)}` : ''} ${trendBadge(it.trend)}</span></li>`;
+      return `<li><span>${esc(def.name)}${it.optional ? ' <em>optional</em>' : ''}${it.wrist ? ' <em class="wrist-tag">Handgelenk</em>' : ''}${it.adjust ? ' <em class="warn-tag">angepasst</em>' : ''}</span><span class="muted">${def.mode === 'fixed' ? `${it.sets > 1 ? `${it.sets} × ` : ''}${targetText(def)}` : `${it.sets} × ${targetText(def, it.target)}`}${loadText(def, it.load) && def.load ? ` · ${loadText(def, it.load)}` : ''} ${trendBadge(it.trend)}</span></li>`;
     }).join('')}</ol>`;
   }
   if (plan.format === 'intervals') return `<p class="muted">${plan.rounds} × ${plan.work / 60} min ${esc(nameOf(plan.exId))}, ${plan.rest / 60} min Pause.</p>`;
@@ -133,7 +137,7 @@ function checkinForm(c) {
   const today = c.today();
   const f = c.ui.ci || (c.ui.ci = { yesterdayMT: arenaOn(c.data.sessions, addDays(today, -1)) });
   const askWhere = f.tonightMT !== 'yes' || f.morning;
-  const ready = f.sleep && f.feeling && f.tonightMT && (!askWhere || f.where);
+  const ready = f.sleep && f.feeling && f.tonightMT && (!askWhere || f.where) && (!W(c.data).on || f.wristToday != null);
   const q = (k) => `<div class="q"><div class="q-label">${Q[k][0]}</div>${chips(k, Q[k][1], f[k])}</div>`;
   const morning = f.tonightMT === 'yes'
     ? `<div class="q"><div class="q-label">Zusätzlich Morgeneinheit?</div>${chips('morning', [['no', 'Nein, ARENA reicht'], ['yes', 'Ja, zusätzlich']], f.morning ? 'yes' : 'no')}</div>`
@@ -146,7 +150,8 @@ function checkinForm(c) {
   const travel = askWhere && f.where === 'travel' ? `<div class="q"><div class="q-label">Was ist da? (optional)</div>
     <div class="chips">${TRAVEL_EQUIPMENT.map((id) => `<button class="chip${gear.includes(id) ? ' on' : ''}" data-act="travel-gear" data-id="${id}">${esc(EQUIPMENT[id])}</button>`).join('')}</div>
     <p class="muted small">Nichts angehakt = nur Körpergewicht. Jede Übung wird durch eine mit gleichem Muster ersetzt, Fortschritt zählt getrennt.</p></div>` : '';
-  return sys('Tages-Check-in', `${q('yesterdayMT')}${q('sleep')}${q('feeling')}${elbow}${pain}${q('tonightMT')}${morning}${askWhere ? q('where') : ''}${travel}
+  const wristQ = W(c.data).on ? `<div class="q"><div class="q-label">Handgelenk heute (0–10)</div>${chips('wristToday', Array.from({ length: 11 }, (_, v) => [String(v), String(v)]), f.wristToday)}</div>` : '';
+  return sys('Tages-Check-in', `${q('yesterdayMT')}${q('sleep')}${q('feeling')}${elbow}${wristQ}${pain}${q('tonightMT')}${morning}${askWhere ? q('where') : ''}${travel}
     <button class="btn primary wide" data-act="submit-ci" ${ready ? '' : 'disabled'}>Mission anfordern</button>`);
 }
 
@@ -245,7 +250,7 @@ export default {
     }
 
     const rec = recommendation(c);
-    if (!rec) return out + checkinForm(c) + temperCard(c) + notes;
+    if (!rec) return out + checkinForm(c) + temperCard(c) + wristCards(c, null) + handsCard(c) + feetCard(c) + notes;
 
     const doneToday = data.sessions.filter((s) => s.day === today);
     const trained = doneToday.filter((s) => s.kind === 'mission' || s.kind === 'express').length;
@@ -257,6 +262,9 @@ export default {
     } else if (rec.kind === 'arenaday') {
       out += sys('ARENA-Tag', `<p class="reason">${esc(rec.reason)}</p><p class="muted">Ein kurzer FLOW am Morgen macht die Hüfte frei für die Kicks am Abend.</p>
         <div class="row gap"><button class="btn primary grow" data-act="start" data-id="FLOW">FLOW starten</button><button class="btn" data-act="morning-yes">Doch Morgeneinheit</button></div>`, { tone: 'calm' });
+    } else if (rec.kind === 'five') {
+      out += sys('Nur 5 Minuten', `<p class="reason">${esc(rec.reason)}</p>
+        <div class="row gap"><button class="btn primary grow" data-act="start" data-id="HANDS">HANDS starten</button></div>`, { tone: 'calm' });
     } else if (rec.kind === 'rest') {
       out += sys('Ruhetag', `<p class="reason">${esc(rec.reason)}</p><p class="muted">Erholung ist Teil des Trainings. Ein lockerer FLOW hält dich beweglich.</p>
         <div class="row gap"><button class="btn primary grow" data-act="start" data-id="FLOW">FLOW starten</button><button class="btn" data-act="override-rest">Trotzdem trainieren</button></div>`, { tone: 'calm' });
@@ -269,13 +277,16 @@ export default {
       out += sys('Mission verfügbar', `<div class="mission-title"><span class="mid">${rec.missionId.length === 1 ? rec.missionId : '◆'}</span><div><h2>${esc(plan.name)}</h2><small>${esc(plan.focus)} · ca. ${plan.minutes} min${rec.profile === 'gym' && plan.kind === 'mission' && rec.missionId !== 'FORGE' ? ' · Home Gym' : rec.profile === 'travel' ? ' · Unterwegs' : ''}</small></div></div>
         ${plan.kind === 'mission' ? arcLine(data, today, plan) : ''}
         <p class="reason">${esc(rec.reason)}</p>${rec.walk ? '<p class="note">Danach 20–30 Minuten spazieren.</p>' : ''}${modifierNote(plan)}
-        ${sparQ}${adjustNote(c, plan)}${planPreview(plan)}
+        ${sparQ}${adjustNote(c, plan)}${plan.wrist && rec.missionId !== 'WRIST' ? `<div class="signal-note"><span>${esc(plan.wrist.reason)}</span><button class="btn small ghost" data-act="wrist-decline">Heute ohne Handgelenk-Block</button></div>` : ''}${planPreview(plan)}
         <button class="btn primary wide" data-act="start-rec">Mission starten</button>`);
     }
     if (trained <= (ci.extra || 0)) {
       out += `<div class="row gap center"><button class="btn ghost" data-act="swap">Andere Einheit</button><button class="btn ghost" data-act="redo-ci">Check-in ändern</button></div>`;
     }
+    out += wristCards(c, rec);
     out += temperCard(c);
+    out += handsCard(c, rec);
+    out += feetCard(c, rec);
     out += notes;
 
     out += questCard(c);
@@ -323,6 +334,7 @@ export default {
         { rule: 'signals:physio', day: today, suggestion: 'physio_note', decision: 'shown' }));
     },
     'submit-ci': (c) => {
+      let wristEvents = [];
       const today = c.today();
       const f = c.ui.ci;
       c.update((data) => {
@@ -335,13 +347,20 @@ export default {
         if ((f.pain || []).length) next = reportPain(next, { day: today, regions: f.pain });
         const { painOpen, ...answers } = f;
         if (answers.sleep) answers.sleep = Number(answers.sleep);
+        if (answers.wristToday != null) answers.wristToday = Number(answers.wristToday);
         if (f.where === 'travel') {
           answers.travelGear = f.travelGear ?? data.settings.travelGear ?? [];
           next = { ...next, settings: { ...next.settings, travelGear: answers.travelGear } };
         }
-        return { ...next, checkins: { ...next.checkins, [today]: { day: today, ...answers } } };
+        next = { ...next, checkins: { ...next.checkins, [today]: { day: today, ...answers } } };
+        // Handgelenk: Folgetag-Werte einarbeiten, Zwick-Meldung Handgelenk setzt Gelb
+        const wr = afterCheckin(next, today, f.pain || []);
+        wristEvents = wr.events;
+        return wr.data;
       });
       c.ui.ci = null;
+      const ups = wristEvents.filter((e) => e.type === 'level_up');
+      if (ups.length) c.system('Handgelenk', `<p>Drei grüne Einheiten in Folge. Gesteigert:</p><ul class="cues">${ups.map((e) => `<li>${esc(getDef(e.key)?.name || e.key)}: ${esc(getDef(e.key)?.levels?.[e.level] || `Stufe ${e.level + 1}`)}</li>`).join('')}</ul>`);
     },
     spar: (c, d) => {
       const today = c.today();
@@ -391,7 +410,8 @@ export default {
     'redo-ci': (c) => {
       const today = c.today();
       const { day, choice, overrideRest, extra, ...answers } = c.data.checkins[today] || {};
-      c.ui.ci = { ...answers, sleep: answers.sleep != null ? String(answers.sleep) : undefined };
+      c.ui.ci = { ...answers, sleep: answers.sleep != null ? String(answers.sleep) : undefined,
+        wristToday: answers.wristToday != null ? String(answers.wristToday) : undefined };
       c.update((data) => {
         const checkins = { ...data.checkins };
         delete checkins[today];
@@ -400,7 +420,7 @@ export default {
     },
     swap: (c) => {
       const q = c.data.engine.queue;
-      const ids = [...q, 'FORGE', 'NOR4X4', 'D_LIGHT', 'EXPRESS', 'EXPRESS_BAG', 'FLOW'];
+      const ids = [...q, 'FORGE', 'NOR4X4', 'D_LIGHT', 'EXPRESS', 'EXPRESS_BAG', 'FLOW', 'HANDS', 'FEET'];
       c.modal(sys('Andere Einheit', `<div class="swap-list">${ids.map((id) =>
         `<button class="swap" data-act="choose" data-id="${id}"><b>${esc(MISSIONS[id].name)}</b><small>${esc(MISSIONS[id].focus)}${id === q[0] ? ' · als Nächstes dran' : ''}</small></button>`).join('')}</div>
         <button class="btn ghost wide" data-act="close-modal">Abbrechen</button>`, { cls: 'pop' }));
@@ -435,6 +455,7 @@ export default {
       c.go('training');
     },
     ...ladderActions,
+    'wrist-decline': (c) => c.update((data) => ({ ...data, engine: { ...data.engine, wristDeclined: c.today() } })),
     'discard-active': (c) => {
       c.system('Mission verwerfen?', '<p>Die bisher geloggten Sätze dieser Einheit gehen verloren.</p>',
         [['discard-yes', 'Verwerfen'], ['close-modal', 'Behalten', 'primary']], 'warn');

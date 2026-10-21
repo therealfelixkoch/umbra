@@ -8,6 +8,7 @@ import { footworkView, footworkActions, isRunning as footworkRunning } from './f
 import { bmtView, bmtActions, bmtInput } from './bmt.js';
 import { BMT_NAME } from '../engine/bmt.js';
 import { ARENA_CONTENT } from '../engine/arenastats.js';
+import { painPrompt } from './wrist.js';
 import { arenaStatusView, arenaStatusActions, arenaStatusInput } from './arenastatus.js';
 
 const RPE_LABEL = { 1: 'sehr locker', 3: 'locker', 5: 'mittel', 7: 'hart', 9: 'sehr hart', 10: 'maximal' };
@@ -228,10 +229,12 @@ export default screen;
 
 function save(c, day, { rpe, minutes, bmt = null, content, sparRounds, focus }) {
   let xp = 0;
+  let session = null;
   c.update((data) => {
     const r = logArena(data, { day, rpe, minutes, bmt, content, sparRounds: (content || []).includes('Sparring') ? sparRounds : null, focus });
     xp = r.session.xp;
+    session = r.session;
     return r.data;
   });
-  c.system('ARENA verbucht.', `<div class="xp-gain num">+${xp} XP</div><p class="muted">Intensität ${rpe} · ${hours(minutes)}${rpe >= HARD_RPE ? ' · Morgen plant das System entsprechend.' : ''}</p>`);
+  c.system('ARENA verbucht.', `<div class="xp-gain num">+${xp} XP</div><p class="muted">Intensität ${rpe} · ${hours(minutes)}${rpe >= HARD_RPE ? ' · Morgen plant das System entsprechend.' : ''}</p>${painPrompt(c, session)}`);
 }

@@ -1025,7 +1025,7 @@ describe('Migration v1 → v2', () => {
     expect(m.engine.queue).toEqual(['C', 'D', 'A', 'B']);
     expect(m.engine.fullSinceDeload).toBe(undefined);
     expect(m.settings.holiday.enabled).toBe(true);
-    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4']);
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6']);
     expect(m.mobility.length).toBe(1);
   });
   it('nach der Migration startet Arc I am Tag der ersten Mission (v3)', () => {
@@ -1811,7 +1811,7 @@ describe('v3 · Migration v2 → v3', () => {
     expect(m.exState.pullup.target).toBe(6);
     expect(m.engine.queue).toEqual(['B', 'C', 'D', 'A']);
     expect(m.engine.arc.startedDay).toBe('2026-10-15');
-    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4']);
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6']);
     expect(m.techChecks).toEqual({});
   });
   it('Migration ist wiederholbar', () => {
@@ -2045,14 +2045,14 @@ describe('v4 · RPE und Migration', () => {
         exercises: [{ exId: 'dip', effort: 3, sets: [{ value: 8, done: true }, { value: 8, done: true }] }, { exId: 'kb_halo', effort: 5, sets: [{ value: 8, done: true }] }] },
       { day: T, kind: 'arena', rpe: 8, minutes: 60, load: 240 }] };
     const m = normalize(JSON.parse(JSON.stringify(v3)));
-    expect(m.schemaVersion).toBe(4);
+    expect(m.schemaVersion).toBe(SCHEMA_VERSION);
     expect(m.sessions[0].exercises.map((e) => e.rpe)).toEqual([6, 10]);
     expect(m.sessions[0].exercises[0].effort).toBe(undefined);
     expect(m.sessions[0].intensity).toBe(7.3);
     expect(m.sessions[0].load).toBe(292);
     expect(m.sessions[1].load).toBe(480);
     expect(m.settings.vibration).toBe(undefined);
-    expect(m.ruleLog.at(-1).rule).toBe('migration:v4');
+    expect(m.ruleLog.some((e) => e.rule === 'migration:v4')).toBe(true);
   });
 });
 
@@ -2151,5 +2151,336 @@ describe('v4 · TEMPER', () => {
     expect(temperMetrics(e, '2026-10-21').taps[0].value).toBe(2);
     expect(temperLine(e, '2026-10-01', '2026-10-31')).toBe('Ausatmung: 31 → 48 s · Episoden: 2');
     expect(book1Reached(e)).toBe(25);
+  });
+});
+
+import { ATTRIBUTES as GLYPH_ATTR, EXPRESSIONS as GLYPH_EXPR } from '../js/data/glyphs.js';
+
+describe('Datenbank-Integrität', () => {
+  it('alle Glyphen-Tags existieren (sonst stürzt der Kodex ab)', () => {
+    const bad = [];
+    Object.values(EXERCISES).forEach((d) => (d.tags || []).forEach(([a, x]) => { if (!GLYPH_ATTR[a] || !GLYPH_EXPR[x]) bad.push(`${d.id}: ${a}/${x}`); }));
+    expect(bad).toEqual([]);
+  });
+});
+
+import { checkinTimes, briefingSteps, briefingTones } from '../js/engine/temper.js';
+
+describe('v4 · TEMPER Ton-Führung', () => {
+  it('Check-in ca. jede Minute, nicht am Anfang/Ende, gleich je Seed', () => {
+    const t = checkinTimes({ t: 'guide', sec: 300, cues: ['x'] }, 7);
+    expect(t.length).toBe(4);
+    expect(t.every((x) => x >= 30 && x < 280)).toBe(true);
+    for (let i = 1; i < t.length; i++) expect(t[i] - t[i - 1] >= 36 && t[i] - t[i - 1] <= 84).toBe(true);
+    expect(checkinTimes({ t: 'guide', sec: 300, cues: ['x'] }, 7)).toEqual(t);
+  });
+  it('kein Check-in im stillen Zählen, in kurzen Abschnitten, beim Atmen oder Scan', () => {
+    expect(checkinTimes({ t: 'silent', sec: 420 }, 1)).toEqual([]);
+    expect(checkinTimes({ t: 'count', sec: 60 }, 1)).toEqual([]);
+    expect(checkinTimes({ t: 'breath', sec: 240, out: 8 }, 1)).toEqual([]);
+    expect(checkinTimes({ t: 'scan', sec: 360, regions: ['a'] }, 1)).toEqual([]);
+  });
+  it('Briefing: Ablauf und Töne aus dem Skript', () => {
+    const segs = expandScript(BOOKS[0].episodes[3].script); // Episode 4: Atem + Zählen
+    const steps = briefingSteps(segs);
+    expect(steps.map((s) => s.title)).toEqual(['Geführtes Atmen', 'Die Klinge: Zählen']);
+    expect(steps[0].dur).toBe('2 min');
+    expect(briefingTones(segs)).toEqual(['bell', 'breath', 'checkin', 'hold']);
+    const ep1 = briefingSteps(expandScript(BOOKS[0].episodes[0].script));
+    expect(ep1[0].how.includes('Nichts verändern')).toBe(true);
+  });
+});
+
+// ——— Handgelenk-Modul (TFCC) und HANDS ———
+import { ampelOf, logWristPain, resolvePain, applyAmpel, inRedWindow, gripPct, stageFromCheck, addCheck, confirmStage, offSuggested,
+  noProgress, strengthAllowed, blockForMission, blockEntries, wristAdjust, emptyWrist, W as wristOf, trendDown } from '../js/engine/wrist.js';
+import { wristItems } from '../js/engine/plan.js';
+import { WRIST_EXERCISES } from '../js/data/wrist.js';
+
+const wristOn = (extra = {}) => ({ ...defaultData(), settings: { ...defaultData().settings, onboarded: true },
+  wrist: { ...emptyWrist(), on: true, side: 'rechts', stage: 3, startStage: 3, onSince: '2026-09-01', ...extra } });
+
+describe('Handgelenk · Ampel', () => {
+  it('Grün, Gelb, Rot aus „während“ und nächstem Tag', () => {
+    expect(ampelOf({ during: 2 }, 1, 1)).toEqual({ color: 'green', final: true });
+    expect(ampelOf({ during: 3 }, 1, 1).color).toBe('yellow');
+    expect(ampelOf({ during: 1 }, 2, 1).color).toBe('yellow');
+    expect(ampelOf({ during: 5 }).color).toBe('red');
+    expect(ampelOf({ during: 1, click: true }).color).toBe('red');
+    expect(ampelOf({ during: 1 }, 4, 1).color).toBe('red');
+    expect(ampelOf({ during: 1 }).final).toBe(false);
+  });
+  it('3 grüne Einheiten in Folge → Übung eine Stufe weiter; Gelb hält', () => {
+    let w = { ...emptyWrist() };
+    const g = (day) => ({ day, color: 'green', exercises: ['w_curl'] });
+    w = applyAmpel(w, g('2026-10-01')).wrist;
+    w = applyAmpel(w, g('2026-10-03')).wrist;
+    w = applyAmpel(w, { ...g('2026-10-05'), color: 'yellow' }).wrist;
+    expect(w.greens.w_curl).toBe(0);
+    w = applyAmpel(w, g('2026-10-07')).wrist;
+    w = applyAmpel(w, g('2026-10-09')).wrist;
+    const r = applyAmpel(w, g('2026-10-11'), { w_curl: 4 });
+    expect(r.wrist.levels.w_curl).toBe(1);
+    expect(r.events[0].type).toBe('level_up');
+  });
+  it('Rot → 2–3 Tage nur leicht, eine Stufe zurück', () => {
+    const w = { ...emptyWrist(), levels: { w_curl: 2 } };
+    const r = applyAmpel(w, { day: '2026-10-10', color: 'red', exercises: ['w_curl'] });
+    expect(r.wrist.levels.w_curl).toBe(1);
+    expect(inRedWindow(r.wrist, '2026-10-12')).toBe(true);
+    expect(inRedWindow(r.wrist, '2026-10-14')).toBe(false);
+    const d = { ...wristOn(), wrist: r.wrist };
+    expect(strengthAllowed(d, '2026-10-12').ok).toBe(false);
+    expect(blockEntries(r.wrist, 'activation', '2026-10-12')[0].dirs.length).toBe(4); // leicht: ohne Kleinfingerseite
+  });
+  it('Folgetag-Wert schließt den Eintrag ab', () => {
+    let d = wristOn({ checkins: {} });
+    d = { ...d, checkins: { '2026-10-10': { day: '2026-10-10', wristToday: 1 } } };
+    d = logWristPain(d, { day: '2026-10-10', during: 2, source: 'mission', exercises: ['w_curl'], now: 1 }).data;
+    expect(wristOf(d).pain[0].final).toBe(false);
+    d = { ...d, checkins: { ...d.checkins, '2026-10-11': { day: '2026-10-11', wristToday: 1 } } };
+    const r = resolvePain(d);
+    expect(wristOf(r.data).pain[0].color).toBe('green');
+    expect(wristOf(r.data).greens.w_curl).toBe(1);
+  });
+});
+
+describe('Handgelenk · Status-Check', () => {
+  it('Griffkraft-% betroffen/gesund aus dem Bestwert', () => {
+    expect(gripPct({ l: [40, 42, 41], r: [36, 38, 37] }, 'rechts')).toBe(90);
+    expect(gripPct({ l: [40], r: [38] }, 'beide')).toBe(null);
+    expect(gripPct(null, 'rechts')).toBe(null);
+  });
+  it('Stufen-Zuordnung nach Protokoll', () => {
+    expect(stageFromCheck({ rest: true, t2: 0, t3: 0, t4: 0, t5: 0 }).stage).toBe(1);
+    expect(stageFromCheck({ t2: 5, t3: 1, t4: 1, t5: 1 }).stage).toBe(2);
+    expect(stageFromCheck({ t2: 3, t3: 1, t4: 1, t5: 1 }).stage).toBe(3);
+    expect(stageFromCheck({ t2: 1, t3: 1, t4: 1, t5: 1, pct: 85 }).stage).toBe(3);
+    expect(stageFromCheck({ t2: 1, t3: 2, t4: 1, t5: 4 }).stage).toBe(4);
+    expect(stageFromCheck({ t2: 1, t3: 1, t4: 0, t5: 1, pct: 96 }).offReady).toBe(true);
+    expect(stageFromCheck({ t2: 1, t3: 1, t4: 0, t5: 1, pct: 92 }).offReady).toBe(false);
+  });
+  it('Ausschalt-Vorschlag nach 3 Wochen bereit ohne Rot', () => {
+    let d = wristOn();
+    for (const day of ['2026-10-05', '2026-10-12', '2026-10-19']) d = addCheck(d, { day, t2: 0, t3: 1, t4: 0, t5: 1, grip: null }).data;
+    expect(offSuggested(wristOf(d), '2026-10-21')).toBe(true);
+    const red = { ...wristOf(d), pain: [{ day: '2026-10-14', color: 'red' }] };
+    expect(offSuggested(red, '2026-10-21')).toBe(false);
+  });
+  it('Kein-Fortschritt-Hinweis nach 6 Wochen ohne Aufstieg', () => {
+    const w = wristOf(wristOn());
+    expect(noProgress(w, '2026-10-05')).toBe(false);
+    expect(noProgress(w, '2026-10-20')).toBe(true);
+    expect(noProgress({ ...w, stage: 4 }, '2026-10-20')).toBe(false);
+    const r = confirmStage(wristOn({ stage: 3 }), 4, '2026-10-20');
+    expect(r.up).toBe(true);
+  });
+  it('Wochentrend: mehr Morgenschmerz → Stufe zurück vorschlagen', () => {
+    const checkins = {};
+    ['2026-10-12', '2026-10-13'].forEach((d) => { checkins[d] = { wristToday: 1 }; });
+    ['2026-10-19', '2026-10-20'].forEach((d) => { checkins[d] = { wristToday: 3 }; });
+    expect(trendDown(wristOf(wristOn()), checkins, '2026-10-21')).toBe(true);
+  });
+});
+
+describe('Handgelenk · Einbau und Dosis', () => {
+  it('Kraftblock in ASCENT/IMPACT/FORGE, Aktivierung in BEDROCK/INFILTRATION', () => {
+    const d = wristOn();
+    expect(blockForMission(d, 'A', T).kind).toBe('strength');
+    expect(blockForMission(d, 'FORGE', T).kind).toBe('strength');
+    expect(blockForMission(d, 'B', T).kind).toBe('activation');
+    expect(blockForMission(d, 'D', T).kind).toBe('activation');
+    expect(blockForMission(defaultData(), 'A', T)).toBe(null);
+    const plan = buildPlan({ missionId: 'A', profile: 'room', data: d, today: T });
+    expect(plan.items.at(-1).wrist).toBe(true);
+    expect(plan.items.some((i) => i.prehab)).toBe(false); // Prehab ersetzt
+    expect(plan.items.some((i) => i.exId === 'goblet_curl')).toBe(true); // Armübungen bleiben
+    const b = buildPlan({ missionId: 'B', profile: 'room', data: d, today: T });
+    expect(b.items[1].wristKey).toBe('w_iso');
+    expect(b.wrist.kind).toBe('activation');
+  });
+  it('Dosis: max. 3 pro Woche, nie zwei Tage in Folge, nicht nach hartem ARENA-Abend', () => {
+    const s = (day) => ({ day, kind: 'mission', missionId: 'A', wristBlock: 'strength' });
+    expect(strengthAllowed({ ...wristOn(), sessions: [s('2026-10-15')] }, '2026-10-16').ok).toBe(false);
+    expect(strengthAllowed({ ...wristOn(), sessions: [s('2026-10-12'), s('2026-10-14'), s('2026-10-16')] }, '2026-10-18').ok).toBe(false);
+    expect(strengthAllowed({ ...wristOn(), sessions: [s('2026-10-12'), s('2026-10-14')] }, '2026-10-16').ok).toBe(true);
+    expect(strengthAllowed({ ...wristOn(), sessions: [{ day: '2026-10-15', kind: 'arena', intensity: 'hard', rpe: 8 }] }, '2026-10-16').ok).toBe(false);
+    expect(blockForMission({ ...wristOn(), sessions: [s('2026-10-15')] }, 'C', '2026-10-16').kind).toBe('activation');
+  });
+  it('Hotel-Version: ohne Hammer die Flasche, unterwegs ohne Geräte', () => {
+    const d = wristOn({ stage: 3, lastVariant: 'A' }); // nächste Variante B: Hammer-Übungen
+    d.settings = { ...d.settings, equipment: { ...d.settings.equipment, room: ['bar', 'kb'] }, travelGear: [] };
+    const room = wristItems({ data: d, profile: 'room', equipment: ['bar', 'kb'], today: T, kind: 'strength' });
+    expect(room.some((i) => i.exId === 'w_bottle_rot')).toBe(true);
+    const withHammer = wristItems({ data: d, profile: 'room', equipment: ['bar', 'kb', 'hammer'], today: T, kind: 'strength' });
+    expect(withHammer.some((i) => i.exId === 'w_hammer_rot')).toBe(true);
+    const travel = wristItems({ data: d, profile: 'travel', equipment: [], today: T, kind: 'strength' });
+    expect(travel.every((i) => (getDef(i.exId).equipment || []).length === 0)).toBe(true);
+  });
+  it('Ulnar-Hebel erst, wenn der Radial-Hebel grün läuft', () => {
+    const w = { ...emptyWrist(), on: true, stage: 3, lastVariant: 'A' };
+    expect(blockEntries(w, 'strength', T).some((e) => e.key === 'w_ulnar')).toBe(false);
+    expect(blockEntries({ ...w, greens: { w_radial: 1 } }, 'strength', T).some((e) => e.key === 'w_ulnar')).toBe(true);
+  });
+  it('Übungstausch: Fäuste bis Test 2 grün, neutraler Griff, Hinweis bei Dips', () => {
+    const w = wristOf(wristOn({ stage: 3, checks: [{ day: T, t2: 4 }] }));
+    expect(wristAdjust(w, 'pushup_max').note.includes('Fäusten')).toBe(true);
+    expect(wristAdjust(w, 'pullup_tactical').swap).toBe('pullup_neutral');
+    expect(wristAdjust(w, 'dip').note.includes('gerade')).toBe(true);
+    const ok = { ...w, stage: 4, checks: [{ day: T, t2: 1 }] };
+    expect(wristAdjust(ok, 'pushup_max')).toBe(null);
+    expect(wristAdjust({ ...w, on: false }, 'pushup_max')).toBe(null);
+  });
+  it('Modul AUS: keine Blöcke in Missionen, Daten bleiben', () => {
+    const d = wristOn({ on: false, levels: { w_curl: 2 } });
+    expect(blockForMission(d, 'A', T)).toBe(null);
+    const plan = buildPlan({ missionId: 'A', profile: 'room', data: d, today: T });
+    expect(plan.items.some((i) => i.prehab)).toBe(true);
+    expect(wristOf(d).levels.w_curl).toBe(2);
+  });
+  it('Eigene Session verbucht 10 XP im Tagesdeckel, Kraftblock in Mission keine Extra-XP', () => {
+    const d = wristOn();
+    const plan = buildPlan({ missionId: 'WRIST', profile: 'room', data: d, today: T, wristKind: 'minimal' });
+    const a = createActive(plan, T);
+    a.log.forEach((e) => e.sets.forEach((s) => { s.done = true; }));
+    const r = finishSession(d, a);
+    expect(r.session.kind).toBe('wrist');
+    expect(r.session.xp).toBe(10);
+    expect(r.session.wristBlock).toBe('minimal');
+    const day = '2026-10-14';
+    expect(totalXp([{ day, kind: 'flow' }, { day, kind: 'temper' }, { day, kind: 'wrist' }, { day, kind: 'hands' }])).toBe(40);
+    expect(totalXp([{ day, kind: 'wristDone' }])).toBe(150);
+  });
+  it('Alle Modul-Übungen sind gültig (Glyphen, Pausenklasse)', () => {
+    for (const e of WRIST_EXERCISES) {
+      expect(!!REST_SEC[e.rest]).toBe(true);
+      for (const [a, x] of e.tags) expect(!!GLYPH_ATTR[a] && !!GLYPH_EXPR[x]).toBe(true);
+    }
+  });
+});
+
+describe('HANDS', () => {
+  it('läuft unabhängig vom Modul, feste Folge, 5 XP', () => {
+    const plan = buildPlan({ missionId: 'HANDS', profile: 'room', data: defaultData(), today: T });
+    expect(plan.hands).toBe(true);
+    expect(plan.seq[0].exId).toBe('w_tendon');
+    expect(plan.seq.some((s) => s.sec)).toBe(true);
+    const a = createActive(plan, T);
+    a.feel = 4;
+    const r = finishSession(defaultData(), a);
+    expect(r.session.kind).toBe('hands');
+    expect(r.session.xp).toBe(5);
+    expect(r.session.feel).toBe(4);
+  });
+  it('mit aktivem Modul: Vierfüßler auf den Knöcheln, bis Test 2 grün ist', () => {
+    const plan = buildPlan({ missionId: 'HANDS', profile: 'room', data: wristOn({ checks: [{ day: T, t2: 3 }] }), today: T });
+    expect(plan.seq.find((s) => s.exId === 'h_quadruped').label.includes('Knöcheln')).toBe(true);
+  });
+  it('Check-in „Nur 5 Minuten“ → HANDS', () => {
+    expect(decide({ checkin: ci({ where: 'five' }), hardStreak: 0, queue: Q }).missionId).toBe('HANDS');
+  });
+  it('Migration v4 → v5: Modul aus, Hammer im Raum', () => {
+    const m = normalize({ schemaVersion: 4, settings: { equipment: { room: ['bar'] } }, sessions: [], engine: {} });
+    expect(m.schemaVersion).toBe(SCHEMA_VERSION);
+    expect(m.wrist.on).toBe(false);
+    expect(m.settings.equipment.room.includes('hammer')).toBe(true);
+  });
+});
+
+// ——— FEET ———
+import { FT as feetOf, nextStageFrom, weakerSide, addCheck as feetAddCheck, setStage as feetSetStage, checkDue as feetCheckDue,
+  barefootTarget, feetLine } from '../js/engine/feet.js';
+
+describe('FEET', () => {
+  const withFeet = (feet, extra = {}) => ({ ...defaultData(), feet: { ...feetOf({}), ...feet }, ...extra });
+  const feetPlan = (data, profile = 'room') => buildPlan({ missionId: 'FEET', profile, data, today: T });
+
+  it('unabhängig von Rotation, Arc-Woche und Wochenziel', () => {
+    const d = withFeet({ stage: 2 });
+    const plan = feetPlan(d);
+    expect(plan.feet).toBe(true);
+    expect(plan.kind).toBe('feet');
+    const before = JSON.stringify({ q: d.engine.queue, arc: d.engine.arc });
+    const r = finishSession(d, createActive(plan, T));
+    expect(r.session.kind).toBe('feet');
+    expect(r.session.stage).toBe(2);
+    expect(JSON.stringify({ q: r.data.engine.queue, arc: r.data.engine.arc })).toBe(before);
+    expect(weekStreak([r.session], T)).toEqual(weekStreak([], T));
+  });
+  it('Stufenvorschlag nur für die nächste Stufe, Bestätigen und Zurückschalten', () => {
+    expect(nextStageFrom({ day: T, spread: { l: 2, r: 2 }, toe: { l: 2, r: 3 }, shortClean: true }, 1)).toBe(2);
+    expect(nextStageFrom({ day: T, spread: { l: 1, r: 2 }, toe: { l: 2, r: 3 }, shortClean: true }, 1)).toBe(null);
+    expect(nextStageFrom({ day: T, heel: { l: 15, r: 16 }, eyes: { l: 20, r: 25 } }, 3)).toBe(4);
+    const c4 = { day: T, heel: { l: 22, r: 22 }, eyes: { l: 31, r: 30 }, pogoClean: true };
+    expect(nextStageFrom(c4, 4, { stageSince: addDays(T, -10), today: T })).toBe(null);
+    expect(nextStageFrom(c4, 4, { stageSince: addDays(T, -28), today: T })).toBe(5);
+    const r = feetAddCheck(withFeet({ stage: 1 }), { day: T, spread: { l: 2, r: 2 }, toe: { l: 2, r: 2 }, shortClean: true });
+    expect(r.suggest).toBe(2);
+    expect(r.data.feet.stage).toBe(1); // erst nach Bestätigung
+    const up = feetSetStage(r.data, 2, T);
+    expect(up.up).toBe(true);
+    expect(up.data.feet.stage).toBe(2);
+    const down = feetSetStage(up.data, 1, T);
+    expect(down.up).toBe(false);
+    expect(down.data.feet.stage).toBe(1);
+  });
+  it('schwächere Seite bekommt einen Satz mehr', () => {
+    expect(weakerSide({ heel: { l: 10, r: 14 } })).toBe('l');
+    expect(weakerSide({ heel: { l: 12, r: 13 }, eyes: { l: 30, r: 15 } })).toBe('r');
+    expect(weakerSide({ heel: { l: 12, r: 13 }, eyes: { l: 20, r: 25 } })).toBe(null);
+    const plan = feetPlan(withFeet({ stage: 3, checks: [{ day: T, heel: { l: 8, r: 14 } }] }));
+    const steps = plan.seq.filter((s) => s.exId === 'f_sl_heel_slow');
+    expect(steps.filter((s) => s.side === 'l').length).toBe(steps.filter((s) => s.side === 'r').length + 1);
+    expect(steps.some((s) => s.extra)).toBe(true);
+  });
+  it('Stufe 4 ohne Sprünge am Tag vor hartem Sparring', () => {
+    const normal = feetPlan(withFeet({ stage: 4 }));
+    expect(normal.seq.some((s) => getDef(s.exId).jump)).toBe(true);
+    const spar = feetPlan(withFeet({ stage: 4 }, { checkins: { [T]: { ...ci(), feetSpar: true } } }));
+    expect(spar.seq.some((s) => getDef(s.exId).jump)).toBe(false);
+    expect(spar.noJumps).toBe(true);
+  });
+  it('Equipment-Ersatz: ohne Ball Flasche, ohne Board Kissen, ohne Pipes weglassen', () => {
+    const d = withFeet({ stage: 3 });
+    d.settings = { ...d.settings, equipment: { ...d.settings.equipment, room: [] } };
+    const ids = feetPlan(d).seq.map((s) => s.exId);
+    expect(ids.includes('f_stand_cushion')).toBe(true);
+    expect(ids.includes('f_stand_unstable')).toBe(false);
+    expect(ids.includes('f_pipes')).toBe(false);
+    const ids1 = feetPlan(withFeet({ stage: 1 }, { settings: { ...d.settings } })).seq.map((s) => s.exId);
+    expect(ids1.includes('f_roll_bottle')).toBe(true);
+  });
+  it('Fuß-Check fällig ohne Check und nach 28 Tagen', () => {
+    expect(feetCheckDue(feetOf({}), T)).toBe(true);
+    expect(feetCheckDue(feetOf({ feet: { checks: [{ day: addDays(T, -27) }] } }), T)).toBe(false);
+    expect(feetCheckDue(feetOf({ feet: { checks: [{ day: addDays(T, -28) }] } }), T)).toBe(true);
+  });
+  it('Fotos nur als ID im Datendokument, nie das Bild', () => {
+    const r = feetAddCheck(withFeet({}), { day: T, photo: 'foot123', heel: { l: 10, r: 10 } });
+    const json = JSON.stringify(r.data);
+    expect(json.includes('foot123')).toBe(true);
+    expect(json.includes('data:image')).toBe(false);
+  });
+  it('XP: 5 pro Einheit, 10 pro Check, beide im Nebenquellen-Deckel', () => {
+    expect(sessionXp({ kind: 'feet', day: T })).toBe(5);
+    expect(sessionXp({ kind: 'feetCheck', day: T })).toBe(10);
+    const ss = Array.from({ length: 10 }, (_, i) => ({ id: `f${i}`, day: T, kind: i % 2 ? 'feet' : 'feetCheck', xp: i % 2 ? 5 : 10 }));
+    const l = xpLedger({ sessions: ss, settings: {}, engine: {} }, T);
+    expect(l.entries.filter((e) => e.day === T).reduce((n, e) => n + e.xp, 0)).toBe(40);
+  });
+  it('Barfuß-Zeit: Start 2.500, je Woche +500', () => {
+    expect(barefootTarget(feetOf({}), T)).toBe(2500);
+    expect(barefootTarget(feetOf({ feet: { steps: { [addDays(T, -14)]: 2000 } } }), T)).toBe(3500);
+  });
+  it('Debrief-Zeile', () => {
+    const f = feetOf({ feet: { stage: 3, stageLog: [{ day: addDays(T, -30), stage: 2 }, { day: addDays(T, -2), stage: 3 }],
+      checks: [{ day: addDays(T, -30), heel: { l: 10, r: 12 } }, { day: addDays(T, -2), heel: { l: 15, r: 16 } }] } });
+    expect(feetLine(f, addDays(T, -20), T)).toBe('Stufe 2 → 3 · Fersenheben L 10 → 15 / R 12 → 16');
+  });
+  it('Migration v5 → v6: FEET auf Stufe 1, Rest unverändert', () => {
+    const m = normalize({ schemaVersion: 5, settings: { equipment: { room: ['bar'] } }, sessions: [{ id: 'a', day: T, kind: 'mission' }], engine: {} });
+    expect(m.schemaVersion).toBe(6);
+    expect(m.feet.stage).toBe(1);
+    expect(m.sessions.length).toBe(1);
   });
 });

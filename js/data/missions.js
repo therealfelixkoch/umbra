@@ -109,6 +109,10 @@ export const MISSIONS = {
     format: 'intervals', rounds: 4, work: 240, rest: 180, warmup: 180, cooldown: 180, ex: 'norwegian_4x4', gymEx: 'rower_4x4',
     rpeLog: true,
   },
+  // Handgelenk-Modul als eigene Einheit (Block wird beim Bauen gewählt) und HANDS
+  WRIST: { id: 'WRIST', name: 'HANDGELENK', focus: 'Handgelenk-Block', minutes: 10, format: 'sets', slots: [] },
+  HANDS: { id: 'HANDS', name: 'HANDS', focus: 'Hände und Handgelenke · 5 min', minutes: 5, format: 'flow', hands: true },
+  FEET: { id: 'FEET', name: 'FEET', focus: 'Fußtraining barfuß · 5–8 min', minutes: 7, format: 'flow', feet: true },
   EXPRESS: {
     id: 'EXPRESS', name: 'SHADOWSTEP', focus: '15 Minuten · so viele Runden wie möglich', minutes: 15,
     format: 'amrap',
@@ -137,7 +141,7 @@ export const MISSIONS = {
 };
 
 export const MISSION_KIND = (id) =>
-  id === 'FLOW' ? 'flow' : id === 'EXPRESS' || id === 'EXPRESS_BAG' ? 'express' : 'mission';
+  id === 'FLOW' ? 'flow' : id === 'EXPRESS' || id === 'EXPRESS_BAG' ? 'express' : id === 'WRIST' ? 'wrist' : id === 'HANDS' ? 'hands' : id === 'FEET' ? 'feet' : 'mission';
 
 // Missionen, die als volle Mission zählen (Rotation, Arc-Woche, Pausen). FORGE und 4x4 belegen einen Rotationsplatz.
 export const FULL_MISSIONS = ['A', 'B', 'C', 'D', 'FORGE', 'NOR4X4', 'HOTEL'];

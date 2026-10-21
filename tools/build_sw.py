@@ -34,10 +34,21 @@ if not version:
     m = re.search(r"umbra-v(\d+)", old)
     version = f"umbra-v{int(m.group(1)) + 1 if m else 1}"
 
+# Versionsstempel in JS und CSS: passen sie nach einem Update nicht zusammen, repariert sich die App selbst.
+open(os.path.join(ROOT, 'js/version.js'), 'w', encoding='utf-8').write(
+    f"// Erzeugt von tools/build_sw.py – muss zur Version in sw.js und css/app.css passen.\nexport const APP_VERSION = '{version}';\n")
+css_path = os.path.join(ROOT, 'css/app.css')
+css = open(css_path, encoding='utf-8').read()
+stamp = f':root {{ --app-version: "{version}"; }} /* Versionsstempel, erzeugt von tools/build_sw.py */\n'
+css = re.sub(r'^:root \{ --app-version: "[^"]*"; \} /\* Versionsstempel[^\n]*\n', '', css)
+open(css_path, 'w', encoding='utf-8').write(stamp + css)
+
 assets = "\n".join(f"  './{f}'," for f in app_files())
 lore = "\n".join(f"  './assets/lore/{f}'," for f in lore_files())
 sw = f"""// Service Worker – erzeugt von tools/build_sw.py, nicht von Hand ändern.
-// App-Dateien: komplett vorab gecacht (Versionswechsel = neuer Cache).
+// App-Dateien: komplett vorab gecacht (Versionswechsel = neuer Cache). Beim Installieren wird jede Datei
+// frisch vom Server geholt (cache: 'reload'), sonst mischt der Browser-Cache (GitHub Pages: 10 min) alte Dateien
+// in die neue Version. Ausgeliefert wird nur aus dem Cache der eigenen Version.
 // Lore-Bilder: eigener Cache, einzeln geladen. Fehlende Bilder brechen die Installation nicht ab;
 // bei jedem App-Start mit Netz holt der Service Worker neue oder geänderte Bilder nach.
 const VERSION = '{version}';
@@ -59,7 +70,7 @@ async function cacheLore() {{
 }}
 
 self.addEventListener('install', (e) => {{
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(ASSETS))
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(ASSETS.map((u) => new Request(u, {{ cache: 'reload' }}))))
     .then(() => cacheLore().catch(() => {{}}))
     .then(() => self.skipWaiting()));
 }});
@@ -79,7 +90,7 @@ self.addEventListener('fetch', (e) => {{
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== location.origin) return;
   if (req.mode === 'navigate') {{
-    e.respondWith(caches.match('./index.html').then((r) => r || fetch(req)));
+    e.respondWith(caches.open(VERSION).then((c) => c.match('./index.html').then((r) => r || c.match('./'))).then((r) => r || fetch(req)));
     return;
   }}
   if (url.pathname.includes('/assets/lore/')) {{
@@ -89,13 +100,10 @@ self.addEventListener('fetch', (e) => {{
     }}))));
     return;
   }}
-  e.respondWith(caches.match(req, {{ ignoreSearch: true }}).then((hit) => hit || fetch(req).then((res) => {{
-    if (res.ok) {{
-      const copy = res.clone();
-      caches.open(VERSION).then((c) => c.put(req, copy));
-    }}
+  e.respondWith(caches.open(VERSION).then((c) => c.match(req, {{ ignoreSearch: true }}).then((hit) => hit || fetch(req).then((res) => {{
+    if (res.ok) c.put(req, res.clone());
     return res;
-  }})));
+  }}))));
 }});
 """
 open(sw_path, 'w', encoding='utf-8').write(sw)

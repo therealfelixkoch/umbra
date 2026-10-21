@@ -13,6 +13,9 @@ import { latestTest, selectStretches } from './mobility.js';
 import { weekCoverage, gapsFor } from './progress.js';
 import { weekStart } from './dates.js';
 import { activeMinutes, sessionIntensity, intensityFromRpe, trainingLoad } from './session.js';
+import { W as wristOf, blockForMission, blockEntries, wristAdjust, strengthVariant, flatHandOk } from './wrist.js';
+import { HANDS_SEQUENCE } from '../data/wrist.js';
+import { FT, feetSequence, sparTomorrow as feetSpar } from './feet.js';
 
 // Equipment und Einstellungen für ein Profil. Im Home Gym ersetzen Kurzhanteln die Kettlebells.
 export function profileContext(settings, profile) {
@@ -105,7 +108,7 @@ const MOBILITY_POOL = (getDef) => {
  * @param {{missionId:string, profile:'room'|'gym', data:object, today:string, getDef?:Function}} p
  */
 export function buildPlan({ missionId, profile, data, today, compact = false, slot = null, rotate = null,
-  plyoCap = false, getDef = defaultGetDef }) {
+  plyoCap = false, wristKind = null, getDef = defaultGetDef }) {
   const mission = MISSIONS[missionId];
   const { equipment, settings } = profileContext(data.settings, profile);
   const full = FULL_MISSIONS.includes(missionId);
@@ -128,6 +131,14 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
     return { load: snap(ladder, st?.load ?? def.startKg ?? ladder[0]), ladder };
   };
 
+  // Handgelenk-Modul: welcher Block gehört heute in diese Mission (oder die eigene Session)
+  const wrist = wristOf(data);
+  const wblock = missionId === 'WRIST' ? { kind: wristKind || 'strength', reason: '' }
+    : !data.engine.wristDeclined || data.engine.wristDeclined !== today ? blockForMission(data, missionId, today) : null;
+  const wBlock = wblock && isCompact && wblock.kind === 'strength' ? { kind: 'activation', reason: 'QUICK STRIKE: nur Handgelenk-Aktivierung.' } : wblock;
+  const wItems = wBlock ? wristItems({ data, profile, equipment, today, getDef, kind: wBlock.kind }) : [];
+  const wInfo = wBlock ? { kind: wBlock.kind, reason: wBlock.reason, variant: wBlock.kind === 'strength' ? strengthVariant(wrist) : null } : null;
+
   if (mission.format === 'sets') {
     const items = [];
     const focus = info.arc.id;
@@ -141,6 +152,7 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
       if (s.only && s.only !== profile) return;
       if (s.arcOnly && s.arcOnly !== focus) return;
       if (isCompact && !s.main) return;
+      if (s.prehab && wrist.on) return; // Handgelenk-Modul ersetzt das Unterarm-Prehab (Kraftblock bzw. Aktivierung)
       if (s.plyo && contrastOn) return; // In Arc II übernehmen die Kontrastpaare die Sprünge.
       const slotKey = `${missionId}:${i}`;
       // Tausch „für den Rest des Arcs“ gilt nur im Arc, in dem er gewählt wurde.
@@ -177,6 +189,12 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
         item.adjust = adj.reason;
         item.caution = !!adj.caution;
       }
+      // Handgelenk-Protokoll: Fäuste/Griffe statt flacher Hand, neutraler Griff (Hinweis, für heute ablehnbar)
+      const wa = !declined && wristAdjust(wrist, item.exId);
+      if (wa?.swap && resolveExercise(wa.swap, equipment, getDef) === wa.swap) {
+        const swapped = itemFor(wa.swap, { data, profile, sets: item.sets, getDef, arcN: arc.n });
+        item = { ...swapped, optional: item.optional, main: item.main, slotKey, originalKey: key, adjust: wa.note };
+      } else if (wa) item.wristNote = wa.note;
       if (topSet) {
         const ladder = item.ladder;
         item.topSet = true;
@@ -206,8 +224,12 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
           explosive: true, noFailure: true, rir: null, trend: null, lastTime: lastSetsFor(data.sessions, partner) });
       }
     });
+    // Handgelenk: Kraftblock ans Ende, Aktivierung nach dem Aufwärmen
+    if (wInfo?.kind === 'strength' || missionId === 'WRIST') items.push(...wItems);
+    else if (wInfo) items.splice(items.length ? 1 : 0, 0, ...wItems);
     // Plyo-Info nur, wenn die Mission heute wirklich einen Sprungplatz hat
-    return { ...base, items, plyo: items.some((it) => it.plyoStage) ? plyo : null };
+    return { ...base, items, plyo: items.some((it) => it.plyoStage) ? plyo : null, wrist: wInfo,
+      ...(missionId === 'WRIST' ? { name: WRIST_NAMES[wInfo.kind], focus: WRIST_FOCUS[wInfo.kind], minutes: WRIST_MIN[wInfo.kind] } : {}) };
   }
 
   if (mission.format === 'circuit') {
@@ -221,7 +243,8 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
       const { load } = loadFor(def, data.exState[stateKey(profile, id)]);
       return { exId: id, value: def.id === it.ex || def.mode === getDef(it.ex).mode ? it.value : def.range[0], load };
     }).filter(Boolean);
-    return { ...base, items, rounds, restBetween: src.restBetween, light: !!mission.light };
+    return { ...base, items, rounds, restBetween: src.restBetween, light: !!mission.light,
+      wrist: wInfo, wristPrelude: wItems.length ? wItems : undefined };
   }
 
   if (mission.format === 'amrap') {
@@ -241,10 +264,61 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
       warmup: mission.warmup || 0, cooldown: mission.cooldown || 0, rpeLog: !!mission.rpeLog };
   }
 
+  // HANDS: feste Reihenfolge, Timer (s) oder Wiederholungszähler je Schritt
+  if (mission.hands) {
+    const knuckles = wrist.on && !flatHandOk(wrist);
+    const seq = [];
+    for (const e of HANDS_SEQUENCE) {
+      for (let r = 1; r <= e.rounds; r++) {
+        seq.push({ exId: e.ex, sec: e.sec || null, reps: e.reps || null, round: r, of: e.rounds,
+          label: e.ex === 'h_quadruped' && knuckles ? 'auf den Knöcheln (Handgelenk-Protokoll)' : e.label || null });
+      }
+    }
+    const items = [...new Set(HANDS_SEQUENCE.map((e) => e.ex))].map((id) => ({ exId: id, value: HANDS_SEQUENCE.find((e) => e.ex === id).sec || HANDS_SEQUENCE.find((e) => e.ex === id).reps }));
+    return { ...base, items, seq, rounds: 1, work: 25, hands: true };
+  }
+
+  // FEET: Stufe aus dem Fuß-Check, einbeinige Übungen je Seite (schwächere Seite +1 Satz), Equipment-Ersatz
+  if (mission.feet) {
+    const f = FT(data);
+    const resolve = (id) => (profile === 'travel' ? travelExercise(id, equipment, getDef) : resolveExercise(id, equipment, getDef));
+    const r = feetSequence(f, { resolve, noJumps: f.stage >= 4 && feetSpar(data, today), getDef });
+    const items = [...new Set(r.seq.map((x) => x.exId))].map((id) => ({ exId: id, value: r.seq.find((x) => x.exId === id).sec || r.seq.find((x) => x.exId === id).reps }));
+    return { ...base, name: `FEET · Stufe ${f.stage}`, focus: `${r.name} · barfuß`, minutes: r.minutes, items, seq: r.seq, rounds: 1, work: 30,
+      feet: true, weak: r.weak, noJumps: r.swapped, stage: f.stage };
+  }
+
   // flow
   const scores = latestTest(data.mobility)?.scores;
   return { ...base, items: flowItems(mission, today, scores, getDef), rounds: mission.rounds, work: mission.work,
     personalized: !!scores };
+}
+
+export const WRIST_NAMES = { strength: 'HANDGELENK · Kraftblock', activation: 'HANDGELENK · Aktivierung', minimal: 'HANDGELENK · Minimal-Dosis', maintenance: 'HANDGELENK · Erhaltung' };
+const WRIST_FOCUS = { strength: 'Übungen der aktuellen Stufe', activation: 'Isometrie in 6 Richtungen, Pronator quadratus, ECU', minimal: 'Isometrie in 6 Richtungen und Gelenkgefühl', maintenance: 'Isometrie, Hammer-Drehung, Bottom-up Hold' };
+const WRIST_MIN = { strength: 12, activation: 4, minimal: 5, maintenance: 10 };
+
+/**
+ * Handgelenk-Block als Satz-Einträge. Übungen nach Equipment aufgelöst (ohne Hammer: Flasche usw.).
+ * Isometrie: ein Satz je Richtung, Holds über holdReps. Keine Double Progression: Steigerung über die Ampel (Stufen der Übung).
+ */
+export function wristItems({ data, profile, equipment, today, getDef = defaultGetDef, kind }) {
+  const w = wristOf(data);
+  const both = w.side === 'beide';
+  return blockEntries(w, kind, today).map((e) => {
+    const id = profile === 'travel' ? travelExercise(e.key, equipment, getDef) : resolveExercise(e.key, equipment, getDef);
+    if (!id) return null;
+    const def = getDef(id);
+    const base = itemFor(id, { data, profile, sets: e.sets, getDef });
+    const target = e.target ?? def.range[0];
+    const level = w.levels[e.key] || 0;
+    const item = { ...base, key: id, target, sets: e.sets, wrist: true, wristKey: e.key, rir: null, noFailure: true, trend: null,
+      levelLabel: def.levels ? def.levels[Math.min(level, def.levels.length - 1)] : null,
+      holdReps: e.holdReps || null, bothSides: both && def.mode === 'time' };
+    if (e.dirs) item.setPlan = e.dirs.map((d) => ({ value: target, load: 0, label: d }));
+    if (e.flat) item.wristNote = 'Flache Hand, Ampel beachten.';
+    return item;
+  }).filter(Boolean);
 }
 
 // Ein Satz-Eintrag für eine Übung (Zustand, Variante, Last, Ziel). Auch für den Übungstausch.
@@ -372,6 +446,7 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
 
   const session = { id: id || `s${now}`, day, kind: p.kind, missionId: p.missionId, profile: p.profile,
     compact: p.compact || undefined, slot: p.slot || undefined, arc: p.arc,
+    stage: p.feet ? p.stage : undefined, noJumps: p.feet && p.noJumps ? true : undefined,
     afterPause: p.gap != null && p.gap >= 8 ? true : undefined, gap: p.gap ?? undefined,
     modifier: p.modifier?.type || 'none', completion,
     minutes: activeMinutes([active.startedAt, ...(active.marks || []), now], { countGaps: !!active.countGaps }).minutes,
@@ -398,7 +473,7 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
       }
       // Progression nur bei normalen Einheiten, nie für explosive Kontrast-Partner
       const item = p.items[i];
-      if (item.explosive) return;
+      if (item.explosive || item.wrist) return; // Handgelenk-Übungen steigern über die Ampel, nicht per Double Progression
       if (p.modifier?.type && p.modifier.type !== 'none') return;
       const base = getDef(entry.key);
       const sk = stateKey(p.profile, entry.key);
@@ -441,6 +516,14 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
   if (session.intensity == null) delete session.intensity;
   const load = trainingLoad(session.intensity, session.minutes);
   if (load) session.load = load;
+  // Handgelenk: welcher Block lief, welche Modul-Übungen wurden gemacht (für Ampel und Dosis-Regeln)
+  if (p.wrist) {
+    session.wristBlock = p.wrist.kind;
+    session.wristKeys = p.format === 'sets'
+      ? p.items.map((it, i) => (it.wrist && active.log[i].sets.some((x) => x.done) ? it.wristKey : null)).filter(Boolean)
+      : (p.wristPrelude || []).map((it) => it.wristKey);
+  }
+  if (p.hands && active.feel) session.feel = active.feel; // Handgelenk-Gefühl 1–5 (optional)
   session.records = newRecords;
   session.xp = sessionXp(session);
 
@@ -451,7 +534,8 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
     : data.engine;
 
   return {
-    data: { ...data, exState, records, engine, sessions: [...data.sessions, session], active: null },
+    data: { ...data, exState, records, engine, sessions: [...data.sessions, session], active: null,
+      ...(p.wrist?.variant ? { wrist: { ...(data.wrist || {}), lastVariant: p.wrist.variant } } : {}) },
     session,
   };
 }

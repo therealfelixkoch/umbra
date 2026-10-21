@@ -56,6 +56,29 @@ Stufe 1–5 → Score 0/25/50/75/100. Priorität = (100 − Score) × Gewicht. F
 - In der Ansicht: Fortschritt über alle Wochen (trainiert ×, abgeschlossen ✓, aktuell in Gold), der Plan der aktuellen Woche zum Abhaken, „Einheit eintragen“ (ARENA-Eintrag mit Intensität und Dauer, verknüpft mit der Woche), „Woche abschließen“ (dann wird die nächste offene Woche aktuell).
 - Pauschal per Zeit eintragen geht weiterhin unter ARENA → Eintragen.
 
+### Baustein: Handgelenk-Modul (TFCC) und HANDS
+
+Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfehlung.
+
+- **Schalter** im Profil (Tab „Hand“): Seite wählen, Warnzeichen einmal bestätigen, danach direkt der Status-Check. AUS = nur Erhaltung (1–2 × pro Woche) und HANDS, alle Daten bleiben.
+- **Ampel:** nach Einheiten mit Handgelenk-Last „Handgelenk während 0–10“ (+ „Klicken mit Schmerz?“), im Check-in „Handgelenk heute 0–10“. Grün → nach 3 grünen Einheiten in Folge steigt die Übung eine Stufe (Flasche, Hebel, Leiter). Gelb → halten. Rot → 2–3 Tage nur Aktivierung (leicht) und HANDS, die Übungen eine Stufe zurück. Zwick-Meldung Handgelenk = Gelb. Steigt der Morgenschmerz von Woche zu Woche, schlägt die App eine Stufe zurück vor.
+- **Status-Check** wöchentlich (Karte auf Heute): Ruhezeichen, Griffkraft (überspringbar ohne Dynamometer), Push-off, Hammer-Drehung, Ulnar-Hebel, Rotation unter Last. Die App schlägt die Stufe vor, du bestätigst. Ausschalt-Vorschlag nach 3 Wochen alle Tests 0–1 ohne rote Tage, Hinweis bei 6 Wochen ohne Fortschritt.
+- **Blöcke:** Kraftblock am Ende von ASCENT, IMPACT, FORGE (ersetzt das Unterarm-Prehab und Dead Hang; Goblet Curls und Armübungen bleiben). Aktivierung im Aufwärmen von BEDROCK und INFILTRATION, vor der ARENA als Karte. Eigene Session an FLOW-/Ruhetagen. Minimal-Dosis bei „Nur 5 Minuten“. Ohne Hammer bzw. unterwegs: Flasche, Rucksack, eigene Hand.
+- **Dosis:** Kraftblock höchstens 3 × pro Woche, nie an zwei Tagen in Folge, nicht nach hartem ARENA-Abend, im Rot-Fenster nur Aktivierung. Für heute ablehnbar.
+- **Tausch im Training:** Liegestütz, Pike, Krabbeln auf Fäusten oder Griffen bis Test 2 grün (ab Stufe 4), neutraler Griff bei Klimmzügen und Rows, Hinweis bei Dips.
+- **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
+- **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
+
+### Baustein: FEET (Fußtraining barfuß)
+
+- **Unabhängig:** zählt nicht für Rotation, Arc-Woche oder Wochenziel. Dezente Karte auf „Heute“ (Stufe, Einheiten diese Woche, Empfehlung 3–5). Unterwegs und bei „Nur 5 Minuten“ hervorgehoben. Auch über „Andere Einheit“ und Profil → Gelenke → Fuß startbar.
+- **Stufen:** 1 Erwachen, 2 Aufrichten, 3 Tragen, 4 Federn, Erhaltung. Geführte Folge wie HANDS, einbeinige Übungen links und rechts als eigene Schritte. Die schwächere Seite (Fersenheben 3+ Wdh. oder Augen-zu-Stand 10+ s Unterschied) bekommt einen Satz mehr.
+- **Sparring:** Stufe 4 fragt „Morgen hartes Sparring?“. Bei Ja ohne Sprünge (langsame einbeinige Fersenhebungen statt Pogos, Seilspringen, Hops).
+- **Equipment-Ersatz:** ohne Ball Flasche, ohne Balance-Board Kissen, ohne Seil Schattenseil, ohne Band Hand als Widerstand, ohne Pipes weglassen.
+- **Fuß-Check alle 4 Wochen:** Fußabdruck-Foto (nur lokal in IndexedDB, nicht im JSON-Export, keine Auswertung, Vergleich nebeneinander), Zehenspreizen und Großzeh-Druck 1–3, einbeinige Fersenhebungen, Einbeinstand Augen zu und Gewölbe halten mit Stoppuhr. Die App schlägt die nächste Stufe vor, du bestätigst. Zurückschalten geht jederzeit.
+- **Profil → Gelenke → Fuß:** Stufe, Kurven pro Seite, Fußabdruck-Galerie, Barfuß-Zeit (optional, Start 2.500 Schritte/Tag, +500 pro Woche, Warnzeichen), Info „Wann zum Arzt“ (auch einmal vor der ersten Einheit).
+- **XP:** Einheit 5, Check 10, beide im Tagesdeckel. Debrief-Zeile „FEET: Stufe x → y · Fersenheben …“. Schema 6.
+
 ### Update v4 · Paket 2: TEMPER
 
 - **Eigener Bereich**, unabhängig von den Arcs: 5–10 Minuten für den Geist. Karte auf Heute unter der Tagesmission, Klingen-Emblem neben dem Rang (schärfer mit jeder Stufe).

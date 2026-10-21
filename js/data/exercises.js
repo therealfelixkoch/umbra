@@ -1,11 +1,13 @@
 // Kodex: alle Übungen, Varianten und Stretches als Daten.
 import { applyLadders } from './ladders.js';
+import { WRIST_EXERCISES } from './wrist.js';
+import { FEET_EXERCISES } from './feet.js';
 // Felder: id, name, cat, equipment, mode ('reps'|'time'|'amrap'|'fixed'), range [lo, hi],
 // load ('kb'|'belt'|'barbell'|'dumbbell'|'cable'|null), startKg, bodyweight, perSide, unit,
 // easier/harder (Progressionsstufen), alternatives, tags [[attribut, ausprägung], …],
 // cues (Ausführung), mistakes (typische Fehler), mt (Nutzen fürs Muay Thai), calibrate (Startwert-Schlüssel),
 // elbowLoad (0 keine, 1 mittel, 2 hoch), elbowAlt (ellbogenfreundliche Variante oder 'lessLoad' = weniger Zusatzgewicht),
-// rest (Pausenklasse: heavy 150 s · medium 90 s · light 60 s · explosive 90 s · warmup 30 s).
+// rest (Pausenklasse: heavy 150 s · medium 90 s · light 60 s · explosive 90 s · warmup 30 s · wrist 30 s).
 
 export const CATEGORIES = {
   aufwaermen: 'Aufwärmen',
@@ -17,6 +19,8 @@ export const CATEGORIES = {
   tragen: 'Tragen',
   kondition: 'Kondition & Zirkel',
   mobility: 'Fluss (Mobility)',
+  handgelenk: 'Handgelenk',
+  fuss: 'Fuß',
 };
 
 export const EQUIPMENT = {
@@ -40,6 +44,11 @@ export const EQUIPMENT = {
   bench: 'Hantelbank',
   chair: 'Bank / Stuhl',
   treadmill: 'Laufband',
+  hammer: 'Hammer',
+  ball: 'Ball (Tennis-/Massageball)',
+  balance_board: 'Balance Board',
+  slant: 'Schrägbrett',
+  pipes: 'Balance Pipes',
 };
 
 const E = [
@@ -781,6 +790,6 @@ const E = [
     mistakes: ['Knie anziehen statt höher springen'] },
 ];
 
-export const EXERCISES = Object.fromEntries(E.map((e) => [e.id, e]));
+export const EXERCISES = Object.fromEntries([...E, ...WRIST_EXERCISES, ...FEET_EXERCISES].map((e) => [e.id, e]));
 applyLadders(EXERCISES);
 export const getDef = (id) => EXERCISES[id];

@@ -1,4 +1,4 @@
-:root { --app-version: "umbra-v21"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
+:root { --app-version: "v23"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
 @font-face {
   font-family: 'Oxanium';
   src: url('../fonts/oxanium.woff2') format('woff2');
@@ -886,3 +886,47 @@ body.signal-pulse .clock, body.signal-pulse .rest-inner b, body.signal-pulse .bi
 .tone-row span:last-child { display: flex; flex-direction: column; }
 .tone-row small { color: var(--muted); font-size: 12px; }
 .tone-play { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; border: 1px solid var(--sys); color: var(--sys); font-size: 11px; }
+
+/* ——— Handgelenk-Modul und HANDS ——— */
+.pain-chips { display: grid; grid-template-columns: repeat(11, 1fr); gap: 3px; margin: 6px 0 10px; }
+.pain-chips button { height: 38px; border-radius: 8px; background: var(--surface2); border: 1px solid var(--line); color: var(--text); font: 700 14px/1 var(--display); padding: 0; }
+.pain-chips button.on { background: rgba(139, 125, 255, 0.25); border-color: var(--sys); color: #fff; }
+.pain-chips button.pc-mid.on { border-color: var(--gold); }
+.pain-chips button.pc-hi.on { border-color: #ff8a6b; }
+.wrist-ask { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); text-align: left; }
+.wrist-click { align-items: center; margin-bottom: 10px; }
+.wrist-click .chip { min-height: 34px; }
+.ampel-dots { display: grid; grid-template-columns: repeat(14, 1fr); gap: 4px; margin: 6px 0 10px; }
+.ampel-dots i { aspect-ratio: 1; border-radius: 50%; border: 1px solid var(--line); }
+.ampel-dots i.green { background: #3fd68a; border-color: #3fd68a; }
+.ampel-dots i.yellow { background: var(--gold); border-color: var(--gold); }
+.ampel-dots i.red { background: #ff8a6b; border-color: #ff8a6b; }
+.set-dir { display: block; font: 600 12px/1 var(--display); letter-spacing: 0.06em; color: var(--sys); margin: 2px 0 0 4px; }
+.wrist-tag { font-style: normal; font-size: 11px; color: var(--cyan); border: 1px solid rgba(79, 227, 255, 0.4); border-radius: 6px; padding: 1px 5px; margin-left: 4px; }
+.wrist-red { margin: 8px 2px; }
+.grip-row { display: grid; grid-template-columns: 60px repeat(3, 1fr); gap: 6px; align-items: center; margin: 6px 0; }
+.grip-in { width: 100%; min-height: 44px; border-radius: 10px; background: var(--surface2); border: 1px solid var(--line); color: var(--text); font-size: 16px; text-align: center; }
+table.mini { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.mini th, table.mini td { padding: 6px 4px; border-bottom: 1px solid var(--line); text-align: left; }
+table.mini th { font-size: 11px; color: var(--muted); font-weight: 600; }
+.reps-unit { font-size: 18px; color: var(--muted); }
+.wrist-prelude { margin: 8px 0 12px; padding: 10px; border-radius: 12px; background: var(--bg2); }
+.screen-profil .seg button { font-size: 12.5px; padding: 0 2px; }
+
+/* FEET */
+.side-tag { display: inline-block; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--sys); margin-left: 6px; vertical-align: middle; }
+.side-tag.extra { color: var(--gold, var(--sys)); }
+.feet-card.quiet { opacity: .85; }
+.feet-card > div { min-width: 0; }
+.feet-spar { margin-top: 6px; align-items: center; flex-wrap: wrap; }
+.feet-spar small { margin-right: 4px; }
+.seg.sub { margin-top: 8px; }
+.seg.sub button { min-height: 34px; }
+.prints { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; margin: 8px 0; }
+.prints figure { margin: 0; }
+.prints img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); background: var(--surface2); display: block; }
+.prints figcaption { font-size: 12px; color: var(--muted); text-align: center; margin-top: 2px; }
+.sw-row { display: grid; grid-template-columns: 56px 44px 1fr 44px auto; align-items: center; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.sw-row .step { min-height: 44px; }
+.sw-val { font-size: 22px; text-align: center; }
+.cyan-text { color: var(--cyan, var(--sys)); }

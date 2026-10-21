@@ -22,8 +22,10 @@ import review from './ui/review.js';
 import debrief from './ui/debrief.js';
 import intro from './ui/intro.js';
 import temper from './ui/temper.js';
+import { wristCheckScreen, wristActions } from './ui/wrist.js';
+import { feetCheckScreen, feetActions } from './ui/feet.js';
 
-const SCREENS = { heute: today, training, arena, kodex, profil: profile, onboarding, check, review, debrief, intro, temper };
+const SCREENS = { heute: today, training, arena, kodex, profil: profile, onboarding, check, review, debrief, intro, temper, wristcheck: wristCheckScreen, feetcheck: feetCheckScreen };
 const TABS = [['heute', 'Heute'], ['arena', 'Arena'], ['kodex', 'Kodex'], ['profil', 'Profil']];
 
 const app = {
@@ -111,7 +113,7 @@ function render() {
   let route = app.route;
   if (!app.data.settings.onboarded) route = 'onboarding';
   const screen = SCREENS[route];
-  const showTabs = !['onboarding', 'training', 'check', 'review', 'debrief', 'intro', 'temper'].includes(route);
+  const showTabs = !['onboarding', 'training', 'check', 'review', 'debrief', 'intro', 'temper', 'wristcheck', 'feetcheck'].includes(route);
   root.innerHTML = `<main class="screen screen-${route}">${screen.render(ctx)}</main>${showTabs ? tabbar(route) : ''}`;
   screen.mount?.(ctx, root);
   animateKK();
@@ -206,6 +208,9 @@ function renderModal() {
 }
 
 const GLOBAL = {
+  ...wristActions,
+  ...feetActions,
+  start: (c, d) => today.actions.start(c, d), // HANDS/FEET auch aus dem Profil
   go: (c, d) => c.go(d.to, d.param),
   'close-modal': () => {
     ctx.modal(null);

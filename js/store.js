@@ -35,6 +35,29 @@ export function save(data) {
   return pending;
 }
 
+// Fotos (Fußabdruck) nur lokal, getrennt vom Datendokument: nicht im JSON-Export
+export const putPhoto = (id, dataUrl) => tx('readwrite', (s) => s.put(dataUrl, `photo:${id}`));
+export const getPhoto = (id) => tx('readonly', (s) => s.get(`photo:${id}`));
+
+/** Bild verkleinern (längste Kante 720 px, JPEG), damit der Speicher klein bleibt. */
+export function shrinkImage(file, max = 720) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const cv = document.createElement('canvas');
+      cv.width = Math.round(img.width * k);
+      cv.height = Math.round(img.height * k);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      URL.revokeObjectURL(url);
+      resolve(cv.toDataURL('image/jpeg', 0.78));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Bild konnte nicht gelesen werden.')); };
+    img.src = url;
+  });
+}
+
 export async function requestPersist() {
   try {
     if (navigator.storage?.persisted && await navigator.storage.persisted()) return true;

@@ -11,6 +11,8 @@ import { showsElbowTap, reportElbow } from '../engine/signals.js';
 import { quoteAfterMission } from '../engine/story.js';
 import { guardianImage } from './lore.js';
 import { ladderLine } from './ladder.js';
+import { painPrompt } from './wrist.js';
+import { FEET_SIGNS } from '../data/feet.js';
 import { breathAt, slowPattern } from '../engine/breath.js';
 import { book1Reached } from '../engine/temper.js';
 import { logDecision } from '../engine/rulelog.js';
@@ -158,7 +160,7 @@ const save = (c) => {
 // Zeitübungen und Runden-Übungen (Sack, Seil in Minuten) bekommen einen Timer in der Karte.
 const timed = (def) => (def.mode === 'time' && def.cat !== 'mobility') || (def.mode === 'fixed' && def.unit === 'min');
 const timerTarget = (def, s) => (def.mode === 'fixed' ? def.range[0] * 60 : s.value);
-const PHASE_NAME = { work: 'Los', side1: 'Seite 1', switch: 'Seitenwechsel', side2: 'Seite 2', rest: 'Pause' };
+const PHASE_NAME = { work: 'Los', side1: 'Seite 1', switch: 'Seitenwechsel', side2: 'Seite 2', rest: 'Pause', relax: 'Locker lassen' };
 
 // Phasenwechsel im Übungs-Timer: Signal, bei Runden die fertige Runde abhaken
 function cardPhaseChange(c, a, ct, st) {
@@ -168,7 +170,7 @@ function cardPhaseChange(c, a, ct, st) {
     const s = a.log[ct.i].sets[ct.ks[prev.round - 1]];
     if (s) { s.done = true; s.sec = prev.sec; }
   }
-  signal(st.phase === 'rest' || st.phase === 'switch' ? 2 : 1);
+  signal(st.phase === 'rest' || st.phase === 'switch' || st.phase === 'relax' ? 2 : 1);
   save(c);
 }
 
@@ -189,7 +191,8 @@ function bigTimerView(a, ct, def) {
   return `<div class="bigtimer phase-${st.phase}">
     <small class="bigtimer-count">${counter}</small>
     <h1>${esc(def.name)}</h1>
-    <b class="bigtimer-phase">${st.phase === 'work' && !ct.rounds ? '' : PHASE_NAME[st.phase]}</b>
+    <b class="bigtimer-phase">${st.phase === 'work' && !ct.rounds && !st.of ? '' : `${PHASE_NAME[st.phase]}${st.of > 1 ? ` · Hold ${st.hold}/${st.of}` : ''}`}</b>
+    ${a.log[ct.i].sets[ct.k]?.label && !['Top-Satz', 'Backdown'].includes(a.log[ct.i].sets[ct.k].label) ? `<p class="bigtimer-hint">${esc(a.log[ct.i].sets[ct.k].label)}</p>` : ''}
     <b class="bigtimer-clock num${st.over ? ' over' : ''}" data-bigclock>${clock}</b>
     ${st.phase === 'switch' ? '<p class="bigtimer-hint">Seite wechseln, gleich geht es weiter.</p>' : ''}
     <button class="btn primary big wide" data-act="t-timer-stop" data-k="${ct.k}">${ct.rounds ? 'Stopp' : 'Stopp · Zeit loggen'}</button>
@@ -227,7 +230,9 @@ function setsView(c, a) {
   const hasTimer = timed(def);
   const ct = a.cardTimer?.i === i ? a.cardTimer : null;
   if (ct?.phases) return bigTimerView(a, ct, def);
-  const rir = fixed ? '' : it.explosive
+  const wristPct = { 1: '20–30 %', 2: '30–50 %', 3: 'ca. 50–70 %', 4: 'ca. 70 %' }[c.data.wrist?.stage || 2];
+  const rir = it.wrist ? `<p class="rir">${def.dirs ? `Isometrie mit ${wristPct} Kraft, ohne sichtbare Bewegung. ` : ''}Schmerz auf der Kleinfingerseite höchstens 2 (Ampel grün).</p>`
+    : fixed ? '' : it.explosive
     ? '<p class="rir">Kontrast: jede Wiederholung maximal explosiv, volle Pause. Stopp, sobald die Explosivität nachlässt.</p>'
     : it.topSet ? '<p class="rir">Top-Satz: 3–5 Wdh., 1 Wdh. im Tank. Backdown: 6–10 Wdh. mit ca. 18 % weniger Last.</p>'
       : def.mode === 'amrap' ? `<p class="rir">${it.noFailure ? `Ein Satz, ${r} Wdh. im Tank.` : 'Ein Satz bis kurz vor Versagen, saubere Technik.'}</p>`
@@ -255,7 +260,8 @@ function setsView(c, a) {
     }
     const step = def.mode === 'time' ? 5 : 1;
     const sides = def.perSide && def.mode === 'reps';
-    return `<div class="set-wrap${s.done ? ' done' : ''}"><div class="set-row${s.done ? ' done' : ''}${isNext ? ' next' : ''}"><span class="set-n">${s.label ? `<i class="set-tag">${s.label === 'Top-Satz' ? 'TOP' : 'BD'}</i>` : k + 1}</span>
+    const tag = s.label === 'Top-Satz' ? 'TOP' : s.label === 'Backdown' ? 'BD' : null;
+    return `<div class="set-wrap${s.done ? ' done' : ''}">${s.label && !tag ? `<small class="set-dir">${esc(s.label)}${it.holdReps > 1 ? ` · ${it.holdReps} × ${s.value} s` : ''}</small>` : ''}<div class="set-row${s.done ? ' done' : ''}${isNext ? ' next' : ''}"><span class="set-n">${tag ? `<i class="set-tag">${tag}</i>` : k + 1}</span>
       <div class="set-mid">${sides
         ? `<div class="sides">${stepper('t-side', `${s.left ?? s.value}`, 'links', { idx: `${k}:L` })}${stepper('t-side', `${s.right ?? s.value}`, 'rechts', { idx: `${k}:R` })}</div>`
         : stepper('t-val', `${s.value}`, def.mode === 'time' ? 's' : 'Wdh.', { idx: `${k}:${step}`, big: true })}${lastLine}</div>
@@ -294,6 +300,9 @@ function setsView(c, a) {
       </div>${trendBadge(it.trend)}`}
       ${it.adjust ? `<p class="note">${esc(it.adjust)}</p>` : ''}
       ${it.tempo ? '<p class="note">Tempo: 3 s ablassen, 1 s Pause in der Dehnung, dann kraftvoll hoch.</p>' : ''}
+      ${it.levelLabel ? `<p class="note">Stufe der Übung: <b>${esc(it.levelLabel)}</b>. Drei grüne Einheiten in Folge, dann geht es eine Stufe weiter.</p>` : ''}
+      ${it.wristNote ? `<p class="note">${esc(it.wristNote)}</p>` : ''}
+      ${it.bothSides ? '<p class="muted small">Beide Seiten nacheinander.</p>' : ''}
       ${rir}
       ${hasTimer ? '<p class="muted small">Timer starten, Bildschirm anlassen für das Signal. Stopp loggt die echte Zeit.</p>' : ''}
       ${loadRow}
@@ -354,6 +363,7 @@ function circuitView(c, a) {
       <div class="rounds">${Array.from({ length: p.rounds }, (_, k) => `<i class="${k < done ? 'on' : ''}"></i>`).join('')}</div>
       <p class="t-target">${done < p.rounds ? `Runde ${done + 1} von ${p.rounds}` : 'Alle Runden geschafft'}${p.light ? ' · ruhiges Tempo' : ''}</p>
       <p class="rir">Übungen ohne Pause nacheinander. ${p.restBetween / 60} min Pause nach jeder Runde.</p>
+      ${p.wristPrelude ? `<div class="wrist-prelude"><div class="label">Vorher · Handgelenk-Aktivierung (3–4 min)</div>${itemList({ items: p.wristPrelude.map((x) => ({ exId: x.exId, value: x.target })) })}</div>` : ''}
       ${itemList(p)}
     </section>
     <footer class="t-nav">${done < p.rounds
@@ -425,6 +435,7 @@ function ivLogView(c, a) {
 
 // ——— FLOW ———
 function flowSeq(p) {
+  if (p.seq) return p.seq; // HANDS: feste Folge mit Timer- und Wiederholungsschritten
   const seq = [];
   for (let r = 0; r < p.rounds; r++) p.items.forEach((it) => seq.push({ ...it, round: r + 1 }));
   return seq;
@@ -439,7 +450,9 @@ function advanceFlow(c, auto) {
     a.roundsDone = a.plan.rounds;
     signal(3);
   } else {
-    a.flow = { i, endAt: Date.now() + a.plan.work * 1000 };
+    const st = seq[i];
+    // Wiederholungsschritt (HANDS): keine Uhr, weiter per Tipp
+    a.flow = st.reps && !st.sec ? { i } : { i, endAt: Date.now() + (st.sec || a.plan.work) * 1000 };
     if (auto) beep(1, 660);
   }
   save(c);
@@ -449,6 +462,7 @@ function flowView(c, a) {
   const p = a.plan;
   const seq = flowSeq(p);
   const f = a.flow;
+  if (p.hands || p.feet) return handsView(c, a, seq, f);
   if (!f) {
     return `${head(c, a, `${seq.length}×`, 0)}
       <section class="t-card"><p class="t-target">${p.items.length} Positionen à ${p.work} s, ${p.rounds} Runden</p>
@@ -475,6 +489,51 @@ function flowView(c, a) {
     <footer class="t-nav"><button class="btn" data-act="t-flow-pause">${f.paused ? 'Weiter' : 'Pause'}</button><button class="btn primary grow" data-act="t-flow-skip">Nächste</button></footer>`;
 }
 
+// HANDS: geführte Folge, Timer für Dehnungen, Wiederholungszähler für alles andere
+function handsView(c, a, seq, f) {
+  const p = a.plan;
+  if (!f) {
+    const first = p.feet ? !c.data.settings.feetIntroSeen : !c.data.settings.handsIntroSeen;
+    const intro = p.feet ? 'Ein Wächter, der nicht steht, fällt.' : 'Ein Kämpfer ist nur so stark wie seine Hände.';
+    return `${head(c, a, `${seq.length}`, 0)}
+      <section class="t-card">${first ? `<p class="lore">${intro}</p>` : ''}
+      ${p.feet && first ? `<details class="info-card" open><summary>Wann zum Arzt</summary><ul class="cues">${FEET_SIGNS.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></details>` : ''}
+      <p class="t-target">${p.feet ? `${esc(p.focus)} · ca. ${p.minutes} min` : '5 Minuten für Hände und Handgelenke'}</p>
+      ${p.weak ? `<p class="note">Die ${p.weak === 'l' ? 'linke' : 'rechte'} Seite ist laut Fuß-Check schwächer und bekommt bei einbeinigen Übungen einen Satz mehr.</p>` : ''}
+      ${p.noJumps ? '<p class="note">Morgen hartes Sparring: heute ohne Sprünge, dafür schweres einbeiniges Fersenheben.</p>' : ''}
+      <ol class="ex-list big">${p.items.map((it) => { const e = seq.find((x) => x.exId === it.exId); const n = seq.filter((x) => x.exId === it.exId).length;
+        return `<li><button class="link" data-act="t-info" data-id="${it.exId}">${esc(getDef(it.exId).name)}</button><span>${n > 1 ? `${n} × ` : ''}${e.sec ? `${e.sec} s` : `${e.reps}`}</span></li>`; }).join('')}</ol>
+      <p class="muted small">${p.feet ? 'Barfuß, Zehen bleiben lang. Einbeinig: Wand in Reichweite.' : 'Dehnungen nicht zusätzlich Richtung Kleinfinger kippen. Alles im schmerzfreien Bereich.'}</p></section>
+      <footer class="t-nav"><button class="btn primary grow" data-act="t-flow-start">${p.feet ? 'FEET' : 'HANDS'} starten</button></footer>`;
+  }
+  if (f.done && p.feet) {
+    return `${head(c, a, '✓', 1)}<section class="t-card center"><p class="t-target">FEET erledigt.</p><p class="muted">Stufe ${p.stage} · ${esc(p.focus)}</p></section>
+      <footer class="t-nav"><button class="btn gold grow" data-act="t-finish">Abschließen</button></footer>`;
+  }
+  if (f.done) {
+    return `${head(c, a, '✓', 1)}<section class="t-card center"><p class="t-target">HANDS erledigt.</p>
+      <div class="label">Handgelenk-Gefühl (optional)</div>
+      <div class="effort-chips mood">${[1, 2, 3, 4, 5].map((v) => `<button class="${a.feel === v ? 'on' : ''}" data-act="t-hands-feel" data-v="${v}">${v}</button>`).join('')}</div>
+      <div class="effort-scale"><span>steif</span><span>frei</span></div></section>
+      <footer class="t-nav"><button class="btn gold grow" data-act="t-finish">Abschließen</button></footer>`;
+  }
+  const cur = seq[f.i];
+  const def = getDef(cur.exId);
+  const next = seq[f.i + 1];
+  const timed = !!cur.sec;
+  const left = timed ? (f.paused ? f.left : (f.endAt - Date.now()) / 1000) : 0;
+  return `${head(c, a, `${f.i + 1}/${seq.length}`, f.i / seq.length)}
+    <section class="t-card center flow">
+      <small class="muted">${cur.side ? `<b class="side-tag">${cur.side === 'l' ? 'Links' : 'Rechts'}</b> · ` : ''}${cur.of > 1 ? `Satz ${cur.round} von ${cur.of}` : '&nbsp;'}${cur.extra ? ' · Extra-Satz schwächere Seite' : ''}</small>
+      <h1>${esc(def.name)}</h1>
+      ${timed ? `<b class="clock num" ${f.paused ? '' : `data-clock="${f.endAt}"`}>${fmt(left)}</b>` : `<b class="clock num">${cur.reps}<small class="reps-unit"> Wdh.</small></b>`}
+      ${cur.label ? `<p class="note">${esc(cur.label)}</p>` : ''}
+      <ul class="cues">${def.cues.slice(0, 3).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+      ${next ? `<p class="muted">Als Nächstes: ${esc(getDef(next.exId).name)}</p>` : ''}
+    </section>
+    <footer class="t-nav">${timed ? `<button class="btn" data-act="t-flow-pause">${f.paused ? 'Weiter' : 'Pause'}</button>` : ''}<button class="btn primary grow" data-act="t-flow-skip">${timed ? 'Nächste' : 'Fertig →'}</button></footer>`;
+}
+
 // ——— Abschluss ———
 function finish(c) {
   const before = rankFor(totalXp(c.data));
@@ -494,7 +553,8 @@ function finish(c) {
     const def = getDef(r.exId);
     return `<li>${esc(def.name)}: ${r.value}${def.mode === 'time' ? ' s' : ''}${r.load ? ` · ${esc(loadText(def, r.load))}` : ''}</li>`;
   }).join('');
-  const title = s.kind === 'flow' ? 'FLOW abgeschlossen.' : s.completion >= 0.999 ? 'Mission abgeschlossen.' : 'Einsatz verbucht.';
+  const title = s.kind === 'flow' ? 'FLOW abgeschlossen.' : s.kind === 'hands' ? 'HANDS erledigt.' : s.kind === 'feet' ? 'FEET erledigt.' : s.kind === 'wrist' ? 'Handgelenk-Block erledigt.'
+    : s.completion >= 0.999 ? 'Mission abgeschlossen.' : 'Einsatz verbucht.';
   const rankUp = after.index > before.index;
   const quote = quoteAfterMission(c.data, s);
   c.go('heute');
@@ -506,6 +566,7 @@ function finish(c) {
       ${s.load ? `<div><dt>Trainingslast</dt><dd class="num">${s.load}</dd></div>` : ''}</dl>
     ${s.completion < 0.999 && s.kind === 'mission' ? `<p class="muted">${Math.round(s.completion * 100)} % geschafft. Zählt trotzdem.</p>` : ''}
     ${rec ? `<div class="record"><b>Rekord gebrochen</b><ul>${rec}</ul></div>` : ''}
+    ${painPrompt(c, s)}
     ${quote ? `<blockquote class="quote">„${esc(quote.text)}“<cite>${esc(quote.person)} · ${esc(quote.source)}</cite></blockquote>` : ''}`,
   [['close-modal', 'Weiter', 'primary']], rankUp ? 'gold aura' : rec ? 'gold' : 'sys');
 }
@@ -697,7 +758,8 @@ const training = {
       // Runden-Übung (Sack, Seil in Minuten): alle offenen Runden am Stück mit 1 min Pause
       const ks = def.mode === 'fixed' ? sets.map((s, j) => (!s.done && j >= k ? j : -1)).filter((j) => j >= 0) : [k];
       const rounds = def.mode === 'fixed' && ks.length > 1;
-      const phases = exercisePhases({ target, perSide: def.perSide && def.mode === 'time', rounds: rounds ? ks.length : 0, rest: 60 });
+      const it0 = a.plan.items[a.index];
+      const phases = exercisePhases({ target, perSide: (def.perSide || it0.bothSides) && def.mode === 'time', rounds: rounds ? ks.length : 0, rest: 60, reps: it0.holdReps || 1 });
       a.cardTimer = { i: a.index, k, ks, rounds, phases, startAt: Date.now(), seen: 0, target };
       keepAwake(true);
       signal(1);
@@ -809,7 +871,16 @@ const training = {
       a.ivLog.rpe[Number(d.k)] = Number(d.v);
       save(c);
     },
-    't-flow-start': (c) => { c.data.active.flow = { i: 0, endAt: Date.now() + c.data.active.plan.work * 1000 }; save(c); },
+    't-flow-start': (c) => {
+      const a = c.data.active;
+      const st = flowSeq(a.plan)[0];
+      unlockAudio();
+      a.flow = st.reps && !st.sec ? { i: 0 } : { i: 0, endAt: Date.now() + (st.sec || a.plan.work) * 1000 };
+      if (a.plan.hands && !c.data.settings.handsIntroSeen) c.data.settings = { ...c.data.settings, handsIntroSeen: true };
+      if (a.plan.feet && !c.data.settings.feetIntroSeen) c.data.settings = { ...c.data.settings, feetIntroSeen: true };
+      save(c);
+    },
+    't-hands-feel': (c, d) => { c.data.active.feel = Number(d.v); save(c); },
     't-flow-skip': (c) => advanceFlow(c, false),
     't-flow-pause': (c) => {
       const f = c.data.active.flow;

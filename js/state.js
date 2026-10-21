@@ -5,7 +5,7 @@ import { sessionXp } from './engine/game.js';
 import { toDay } from './engine/dates.js';
 import { effortToRpe, sessionIntensity, intensityFromRpe, trainingLoad } from './engine/session.js';
 
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 6;
 
 export function defaultData() {
   return {
@@ -14,7 +14,7 @@ export function defaultData() {
     settings: {
       onboarded: false,
       equipment: {
-        room: ['bag', 'bar', 'dipbars', 'box', 'kb'],
+        room: ['bag', 'bar', 'dipbars', 'box', 'kb', 'hammer'],
         gym: ['barbell', 'rack', 'dumbbells', 'cable', 'rower', 'bar'],
       },
       kbWeights: [8, 12, 16, 20, 24],
@@ -40,6 +40,8 @@ export function defaultData() {
     sideQuests: {}, // gewählte Side Quest je Woche
     bmt: { name: 'Bang Muay Thai', program: 'Jahr 1', weeks: [], current: null }, // eigenes Muay-Thai-Programm
     techChecks: {}, // Technik-Check je Monat (YYYY-MM)
+    wrist: { on: false, side: null, stage: null, startStage: null, onSince: null, stageLog: [], checks: [], pain: [], levels: {}, greens: {}, redFrom: null, lastVariant: null, flags: {}, ended: null }, // Handgelenk-Modul
+    feet: { stage: 1, stageLog: [], checks: [], steps: {}, flags: {} }, // FEET (Fotos liegen separat in IndexedDB)
     active: null,
   };
 }
@@ -104,6 +106,20 @@ MIGRATIONS[3] = (raw) => {
     ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v4', day: toDay(), suggestion: 'effort_to_rpe', decision: 'applied' }] };
 };
 
+MIGRATIONS[4] = (raw) => {
+  // v4 → v5: Handgelenk-Modul (AUS) und HANDS. Hammer als Equipment im eigenen Raum (vorhanden).
+  const eq = raw.settings?.equipment || {};
+  const room = eq.room ? [...new Set([...eq.room, 'hammer'])] : eq.room;
+  return { ...raw, schemaVersion: 5, settings: { ...raw.settings, equipment: { ...eq, ...(room ? { room } : {}) } },
+    ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v5', day: toDay(), suggestion: 'wrist_module', decision: 'applied' }] };
+};
+
+MIGRATIONS[5] = (raw) => ({
+  // v5 → v6: FEET-Modul (Stufe 1, kein Check). Nichts sonst ändert sich.
+  ...raw, schemaVersion: 6, feet: raw.feet || { stage: 1, stageLog: [], checks: [], steps: {}, flags: {} },
+  ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v6', day: toDay(), suggestion: 'feet_module', decision: 'applied' }],
+});
+
 export function migrate(raw) {
   let doc = raw;
   let v = doc.schemaVersion || 1;
@@ -137,5 +153,7 @@ export function normalize(input) {
     sideQuests: raw.sideQuests || {},
     bmt: raw.bmt?.weeks ? raw.bmt : { name: 'Bang Muay Thai', program: 'Jahr 1', weeks: [], current: null },
     techChecks: raw.techChecks && typeof raw.techChecks === 'object' ? raw.techChecks : {},
+    wrist: { ...d.wrist, ...(raw.wrist || {}) },
+    feet: { ...d.feet, ...(raw.feet || {}) },
   };
 }
