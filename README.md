@@ -229,8 +229,14 @@ Du brauchst keine Programmierkenntnisse. Alles läuft im Browser, ohne Terminal.
 
 ### 6. Updates einspielen
 
-1. Geänderte Dateien wie in Schritt 3 erneut hochladen (gleiche Namen werden überschrieben), vorher `VERSION` in `sw.js` hochzählen.
-2. Auf dem iPhone die App öffnen, ganz schließen und wieder öffnen. Beim zweiten Start ist die neue Version da.
+1. Vorher in der App exportieren (Profil → Setup → Exportieren).
+2. Geänderte Dateien wie in Schritt 3 hochladen. Die Version in `sw.js` zählt `tools/build_sw.py` hoch, sie steht auch in `js/version.js` und oben in `css/app.css`.
+3. Gelöschte Dateien auf GitHub einzeln löschen (Hochladen überschreibt nur, entfernt nie).
+4. **2–3 Minuten warten**, bis GitHub Pages fertig ist (Repo → Actions: grüner Haken).
+5. Auf dem iPhone die App öffnen, ganz schließen, wieder öffnen.
+6. Sieht etwas komisch aus: **Profil → Setup → App-Dateien neu laden**. Startet die App gar nicht, erscheint nach 6 Sekunden derselbe Knopf. Deine Daten bleiben dabei immer erhalten.
+
+Hintergrund: Der Service Worker holt beim Update jede Datei frisch vom Server und liefert nur aus dem Cache der eigenen Version. Passen JavaScript- und CSS-Stand trotzdem nicht zusammen, repariert sich die App beim Start einmal selbst.
 
 ### 7. Backups
 

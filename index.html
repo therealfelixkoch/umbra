@@ -23,5 +23,22 @@
   <div id="modal"></div>
   <noscript>UMBRA braucht JavaScript.</noscript>
   <script type="module" src="js/app.js"></script>
+  <script>
+    // Notfall: Startet die App nach 6 s nicht (z. B. halb geladenes Update), Reparatur anbieten.
+    // Leert nur die App-Dateien im Cache. Deine Trainingsdaten bleiben erhalten.
+    setTimeout(function () {
+      if (document.documentElement.dataset.booted || document.getElementById('app').innerHTML.trim()) return;
+      document.getElementById('app').innerHTML = '<div style="padding:40px 20px;font:16px/1.5 system-ui;color:#dfe6f3;text-align:center">'
+        + '<p><b>UMBRA startet nicht richtig.</b></p><p style="color:#8a93a8">Vermutlich wurde ein Update nur halb geladen. Deine Daten bleiben erhalten.</p>'
+        + '<button id="umbra-fix" style="margin-top:16px;padding:14px 22px;border-radius:12px;border:0;background:#8b7dff;color:#06070b;font-weight:700;font-size:16px">App-Dateien neu laden</button></div>';
+      document.getElementById('umbra-fix').onclick = function () {
+        var done = function () { location.replace(location.pathname); };
+        var jobs = [];
+        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) { return Promise.all(rs.map(function (r) { return r.unregister(); })); }));
+        if (window.caches) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.filter(function (k) { return k !== 'umbra-lore'; }).map(function (k) { return caches.delete(k); })); }));
+        Promise.all(jobs).then(done, done);
+      };
+    }, 6000);
+  </script>
 </body>
 </html>

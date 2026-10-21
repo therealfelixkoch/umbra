@@ -1,3 +1,4 @@
+:root { --app-version: "umbra-v17"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
 @font-face {
   font-family: 'Oxanium';
   src: url('../fonts/oxanium.woff2') format('woff2');

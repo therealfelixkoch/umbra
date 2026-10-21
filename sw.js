@@ -1,8 +1,10 @@
 // Service Worker – erzeugt von tools/build_sw.py, nicht von Hand ändern.
-// App-Dateien: komplett vorab gecacht (Versionswechsel = neuer Cache).
+// App-Dateien: komplett vorab gecacht (Versionswechsel = neuer Cache). Beim Installieren wird jede Datei
+// frisch vom Server geholt (cache: 'reload'), sonst mischt der Browser-Cache (GitHub Pages: 10 min) alte Dateien
+// in die neue Version. Ausgeliefert wird nur aus dem Cache der eigenen Version.
 // Lore-Bilder: eigener Cache, einzeln geladen. Fehlende Bilder brechen die Installation nicht ab;
 // bei jedem App-Start mit Netz holt der Service Worker neue oder geänderte Bilder nach.
-const VERSION = 'umbra-v16';
+const VERSION = 'umbra-v17';
 const LORE_CACHE = 'umbra-lore';
 const ASSETS = [
   './',
@@ -76,6 +78,7 @@ const ASSETS = [
   './js/ui/training.js',
   './js/ui/voice.js',
   './js/ui/week.js',
+  './js/version.js',
   './manifest.webmanifest',
 ];
 const LORE = [
@@ -129,7 +132,7 @@ async function cacheLore() {
 }
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(ASSETS))
+  e.waitUntil(caches.open(VERSION).then((c) => c.addAll(ASSETS.map((u) => new Request(u, { cache: 'reload' }))))
     .then(() => cacheLore().catch(() => {}))
     .then(() => self.skipWaiting()));
 });
@@ -149,7 +152,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== location.origin) return;
   if (req.mode === 'navigate') {
-    e.respondWith(caches.match('./index.html').then((r) => r || fetch(req)));
+    e.respondWith(caches.open(VERSION).then((c) => c.match('./index.html').then((r) => r || c.match('./'))).then((r) => r || fetch(req)));
     return;
   }
   if (url.pathname.includes('/assets/lore/')) {
@@ -159,11 +162,8 @@ self.addEventListener('fetch', (e) => {
     }))));
     return;
   }
-  e.respondWith(caches.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((res) => {
-    if (res.ok) {
-      const copy = res.clone();
-      caches.open(VERSION).then((c) => c.put(req, copy));
-    }
+  e.respondWith(caches.open(VERSION).then((c) => c.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((res) => {
+    if (res.ok) c.put(req, res.clone());
     return res;
-  })));
+  }))));
 });

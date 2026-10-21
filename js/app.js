@@ -10,6 +10,7 @@ import { victoryPanels, retreatPanels, nemesisPanels } from './engine/story.js';
 import { debriefStats } from './engine/debrief.js';
 import { comicPanels, bindPanels } from './ui/lore.js';
 import { XP_CONFIG } from './data/xp-config.js';
+import { APP_VERSION } from './version.js';
 import today from './ui/today.js';
 import training from './ui/training.js';
 import arena from './ui/arena.js';
@@ -79,6 +80,25 @@ export const ctx = {
   },
   render: () => render(),
 };
+
+// App-Dateien neu laden: Service Worker abmelden, Datei-Caches leeren (Lore-Bilder bleiben), neu starten.
+// Deine Trainingsdaten liegen in IndexedDB und werden dabei nicht angefasst.
+export async function repairApp() {
+  try {
+    const regs = await navigator.serviceWorker?.getRegistrations?.() || [];
+    await Promise.all(regs.map((r) => r.unregister()));
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k !== 'umbra-lore').map((k) => caches.delete(k)));
+  } catch { /* nicht verfügbar */ }
+  location.replace(location.pathname + location.hash);
+}
+window.__umbraRepair = repairApp;
+
+// Passen JavaScript- und CSS-Stand nach einem Update nicht zusammen (gemischter Cache), einmal selbst reparieren.
+function versionMismatch() {
+  const css = getComputedStyle(document.documentElement).getPropertyValue('--app-version').trim().replace(/["']/g, '');
+  return css !== APP_VERSION;
+}
 
 function parseHash() {
   const [route, param] = location.hash.replace(/^#/, '').split('/');
@@ -234,6 +254,12 @@ document.addEventListener('visibilitychange', () => {
 
 async function boot() {
   parseHash();
+  const dev = location.hostname === 'localhost' && !location.search.includes('sw');
+  if (!dev && versionMismatch()) {
+    let tried = false;
+    try { tried = sessionStorage.getItem('umbra-repair') === APP_VERSION; sessionStorage.setItem('umbra-repair', APP_VERSION); } catch { /* privat */ }
+    if (!tried) { repairApp(); return; }
+  }
   try {
     app.data = await store.load();
   } catch (e) {
@@ -246,7 +272,7 @@ async function boot() {
   render();
   store.requestPersist();
   // Lokal (Entwicklung) nur mit ?sw, damit Änderungen sofort sichtbar sind.
-  const dev = location.hostname === 'localhost' && !location.search.includes('sw');
+  document.documentElement.dataset.booted = APP_VERSION;
   if ('serviceWorker' in navigator && location.protocol !== 'file:' && !dev) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
     // Neu hochgeladene Lore-Bilder für offline nachladen (fehlende werden übersprungen).

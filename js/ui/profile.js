@@ -21,6 +21,7 @@ import { latestTest } from '../engine/mobility.js';
 import { weekView, attributeRanks, ascensionGrid, RANK_LORE } from './week.js';
 import { ASCENSIONS, highestAscension } from '../engine/progress.js';
 import { guardianImage } from './lore.js';
+import { APP_VERSION } from '../version.js';
 import { bladeEmblem } from './temper.js';
 import { bladeTier } from '../engine/temper.js';
 import { journalView, xpSourceView, journalActions, journalChange } from './journal.js';
@@ -159,6 +160,8 @@ export default {
         <p class="muted small">Letzte Sicherung: ${s.lastBackupAt ? formatDay(s.lastBackupAt.slice(0, 10)) : 'noch nie'}</p>
         <div class="row gap"><button class="btn primary grow" data-act="p-export">Exportieren</button>
         <label class="btn grow">Importieren<input type="file" accept="application/json,.json" data-change="import" hidden></label></div>
+        <button class="btn ghost wide" data-act="p-repair">App-Dateien neu laden</button>
+        <p class="muted small">Hilft, wenn nach einem Update etwas komisch aussieht. Lädt nur die App neu, deine Daten bleiben. Version ${APP_VERSION}.</p>
         <button class="btn ghost wide danger" data-act="p-reset">Alle Daten löschen</button></section>
       <p class="foot muted">UMBRA · Daten nur auf diesem Gerät.</p>`;
   },
@@ -218,6 +221,7 @@ export default {
       setSettings(c, { ownQuotes: [...(c.data.settings.ownQuotes || []), q] });
     },
     'q-del': (c, d) => setSettings(c, { ownQuotes: (c.data.settings.ownQuotes || []).filter((q) => q.id !== d.id) }),
+    'p-repair': () => window.__umbraRepair?.(),
     'p-rest-reset': (c) => setSettings(c, { restAdjust: {} }),
     'p-sound': (c, d) => setSettings(c, { sound: d.v === '1' }),
     'p-export': async (c) => {
