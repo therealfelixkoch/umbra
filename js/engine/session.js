@@ -25,7 +25,7 @@ export function rirOutcome(sets, planned) {
  */
 export function activeMinutes(marks, { countGaps = false, gapMin = GAP_MIN } = {}) {
   const ts = [...marks].filter(Number.isFinite).sort((a, b) => a - b);
-  if (ts.length < 2) return { minutes: 0, gaps: [] };
+  if (ts.length < 2) return { minutes: 0, ms: 0, gaps: [] };
   let ms = 0;
   const gaps = [];
   for (let i = 1; i < ts.length; i++) {
@@ -36,7 +36,7 @@ export function activeMinutes(marks, { countGaps = false, gapMin = GAP_MIN } = {
     }
     ms += d;
   }
-  return { minutes: Math.round(ms / 60000), gaps };
+  return { minutes: Math.round(ms / 60000), ms, gaps };
 }
 
 /** Session-Intensität: RPE 1–10 der Übungen, gewichtet nach erledigten Sätzen, eine Nachkommastelle. */

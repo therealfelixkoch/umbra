@@ -21,16 +21,19 @@ Persönliche Trainings-App fürs iPhone. Du öffnest sie, beantwortest vier Frag
 | **Kodex** | 96 Übungen und Stretches, durchsuchbar, filterbar nach Kategorie und Ausprägung (Farbe) |
 | **Profil** | Rang, Kampfkraft, Wochen-Streak mit Schild, Deload-Knopf, Bestleistungen, Verlauf, Equipment, KB-Gewichte, Körpergewicht, Pausenzeit, Export/Import |
 
-### Entscheidungsregeln (in dieser Reihenfolge)
+### Entscheidungsregeln (Stand 22.10.2026: Rotation strikt, du entscheidest die Dauer)
 
-0. Heute Abend Arena = Ja und keine Morgeneinheit gewünscht → nur Fluss (Arena reicht). Mit „Zusätzlich Morgeneinheit: Ja“ fragt die App nach Ort und Zeit und plant normal
-1. „Nur Mobility“ → Fluss + Spaziergang
-2. 3 harte Tage am Stück (Arena oder volle Mission) → Ruhetag (überstimmbar)
-3. Platt **und** gestern hartes Sparring → nur Fluss
-4. Platt **oder** gestern hartes Sparring → Infiltration leicht (bei 15 min: Kurzeinsatz)
-5. Nur 15 Minuten → Kurzeinsatz
-6. Heute Abend Arena (Ja/Vielleicht) und B ist dran → nächste Einheit, die nicht B ist; B bleibt vorn
-7. Sonst → nächste Mission der Rotation
+Check-in fragt getrennt **Wie viel Zeit?** (volle Einheit · 30 min · 15 min · 5 min · Nur Mobility) und **Wo?** (Eigener Raum · Home Gym · Unterwegs).
+
+0. Heute Abend Arena = Ja und keine Morgeneinheit gewünscht → nur FLOW (Arena reicht). Mit „Zusätzlich Morgeneinheit: Ja“ plant die App normal
+1. 5 min → HANDS · Nur Mobility → FLOW + Spaziergang
+2. 15 min → SHADOWSTEP (zählt für die Woche, die Rotation bleibt stehen)
+3. Sonst → **nächster Platz der Rotation A → B → C → D → FORGE**, an keine Wochentage gebunden. 30 min = Kompakt dieser Mission
+4. FORGE braucht das Home Gym. Bist du woanders, kommt der nächste Platz dran und FORGE bleibt vorgemerkt. Im Home Gym laufen A–D mit ihren Gym-Übungen
+5. Pause 5–14 Tage → Einstieg mit dem Platz, der am längsten liegt
+6. Arc III: 4x4 statt D (einmal pro Woche) · unterwegs Hotel-Zirkel statt D
+
+**Hinweise statt Tausch:** 3 harte Tage am Stück, platt, gestern hartes Sparring, gestern High-Tag vor einem High-Platz (B, FORGE, 4x4) oder Arena heute Abend vor BEDROCK tauschen keine Mission mehr. Sie erscheinen als Hinweis unter „Wie viel Zeit?“ mit einer Empfehlung (30 min, 15 min oder Mobility). Du entscheidest.
 
 **Rotation als Warteschlange:** Die erledigte Mission wandert ans Ende. Wenn du C statt B machst, bleibt B vorne. Infiltration leicht und Kurzeinsatz drehen die Rotation nicht weiter.
 
@@ -68,6 +71,14 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **Tausch im Training:** Liegestütz, Pike, Krabbeln auf Fäusten oder Griffen bis Test 2 grün (ab Stufe 4), neutraler Griff bei Klimmzügen und Rows, Hinweis bei Dips.
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
+
+### Update 22.10.2026
+
+- **Tageszitat** oben auf „Heute“, jeden Tag ein anderes, keine Wiederholung vor Ablauf der Liste. Quellen: Bibel (Luther 1912), Sun Tzu und Musashi (eigene Übersetzung gemeinfreier Fassungen), Kämpfer (nur mit Quelle; „überliefert“, wo der Wortlaut nicht gesichert ist), Krieger, Stoiker. Profil → Setup: Tageszitat an/aus, Quellen einzeln abschaltbar, einzelne Zitate ausblendbar.
+- **Aufwärmsätze (Ramping)** vor schweren Grundübungen mit Last (Langhantel, Kurzhantel, Gürtel, KB): Die erste schwere Übung der Einheit bekommt die volle Rampe (leere Stange ab 50 kg, ca. 45 % × 8, 70 % × 3, 85 % × 1), jede weitere einen Feeder-Satz (ca. 70 % × 3). Zählt nicht als Satz, rechnet mit dem eingestellten Gewicht.
+- **Supersets (freiwillig):** Bei passenden Paaren (Drücken ↔ Ziehen, Drücken ↔ hintere Schulter, Wade ↔ Schienbein, Nacken hinten ↔ vorne, Rumpf ↔ Arme, Schulter ↔ Rumpf) erscheint „Superset“. Dann wechseln die Sätze ab: 20 s Wechsel, volle Pause nach dem Paar.
+- **Gesamt-Timer** oben rechts in jeder Einheit (lange Unterbrechungen zählen nicht, wie beim Verbuchen).
+- Schema 7 (FORGE in die Queue hinter INFILTRATION).
 
 ### Baustein: FEET (Fußtraining barfuß)
 
@@ -147,9 +158,9 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 
 - **Arcs (6 Wochen):** IRONROOT (I) → IGNITION (II) → ENDLESS NIGHT (III) → STILL WATER (IV), dann von vorn. Eine Kalenderwoche schiebt den Arc nur weiter, wenn darin 2 volle Missionen stattfanden (Kompakt zählt, Kurzeinsatz nicht). RIR-Ziel: Woche 1 → 3, 2–3 → 2, 4–5 → 1 (letzter Satz darf ans Versagen), Woche 6 = Deload (halbe Sätze) und Mobility-Re-Test. Ersetzt den alten Deload-Zähler.
 - **Varianten** wechseln nur beim Arc-Wechsel: Hauptübungen zur vorgemerkten Stufe, Nebenplätze mit Variantenliste rotieren. Ausnahme: Stagnation Stufe 1.
-- **Belastungsklassen:** High (hartes Sparring, B, FORGE, 4x4), Normal (A, C, D), Low (Technik, D leicht, Kurzeinsatz, Kompakt, Fluss). Nie zwei High-Tage in Folge, die High-Einheit bleibt vorgemerkt.
+- **Belastungsklassen:** High (hartes Sparring, B, FORGE, 4x4), Normal (A, C, D), Low (Technik, D leicht, Kurzeinsatz, Kompakt, Fluss). Zwei High-Tage in Folge: nur Hinweis mit Empfehlung 30 min (seit 22.10.2026).
 - **Neue Check-in-Option „Nur 30 Minuten“** = QUICK STRIKE: Hauptübungen, je 2 Sätze, zählt für Rotation und Arc-Woche.
-- **Home Gym = FORGE:** ersetzt die nächste Mission auf ihrem Rotationsplatz. Kontrastpaar Barbell Deadlift ↔ Vertical Jump, Push Press bzw. Barbell Bench Press, Single-Arm Dumbbell Row, Explosive Step-ups, in Arc III plus Rowing 4x4.
+- **FORGE = 5. Platz der Rotation** (nur im Home Gym, seit 22.10.2026; vorher ersetzte FORGE jeden Home-Gym-Tag). Kontrastpaar Barbell Deadlift ↔ Vertical Jump, Push Press bzw. Barbell Bench Press, Single-Arm Dumbbell Row, Explosive Step-ups, in Arc III plus Rowing 4x4.
 - **Arc II:** Kontrastpaare (schwer ↔ explosiv) und Top-Satz + Backdown (−18 %), Progression nur über den Top-Satz. **Arc III:** 4x4 ersetzt einmal pro Woche D. **Arc IV:** ein Satz weniger, belastete Mobility (Copenhagen Plank, Long Lunge Hold, Kettlebell Windmill …).
 - **Plyo-Stufen 1–5** je Arc-Woche auf dem Sprungplatz von B. Steht Stufe 4–5 an, fragt die App, ob morgen hartes Sparring geplant ist, dann bleibt es bei Stufe 3.
 - **Stagnation:** Stufe 1 (eine Übung: 3 Einheiten ohne Fortschritt oder 2× unter Arc-Bestwert) → Vorschlag Variante. Stufe 2 (≥ 3 Muster) → Vorschlag Deload-Woche. Nicht in Woche 1 und nicht in den ersten 2 Einheiten nach einer Pause.

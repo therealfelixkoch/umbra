@@ -4,7 +4,7 @@
 // in die neue Version. Ausgeliefert wird nur aus dem Cache der eigenen Version.
 // Lore-Bilder: eigener Cache, einzeln geladen. Fehlende Bilder brechen die Installation nicht ab;
 // bei jedem App-Start mit Netz holt der Service Worker neue oder geänderte Bilder nach.
-const VERSION = 'v23';
+const VERSION = 'v24';
 const LORE_CACHE = 'umbra-lore';
 const ASSETS = [
   './',
@@ -57,6 +57,7 @@ const ASSETS = [
   './js/engine/stagnation.js',
   './js/engine/story.js',
   './js/engine/temper.js',
+  './js/engine/warmup.js',
   './js/engine/wrist.js',
   './js/state.js',
   './js/store.js',

@@ -5,7 +5,7 @@ import { sessionXp } from './engine/game.js';
 import { toDay } from './engine/dates.js';
 import { effortToRpe, sessionIntensity, intensityFromRpe, trainingLoad } from './engine/session.js';
 
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export function defaultData() {
   return {
@@ -119,6 +119,15 @@ MIGRATIONS[5] = (raw) => ({
   ...raw, schemaVersion: 6, feet: raw.feet || { stage: 1, stageLog: [], checks: [], steps: {}, flags: {} },
   ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v6', day: toDay(), suggestion: 'feet_module', decision: 'applied' }],
 });
+
+MIGRATIONS[6] = (raw) => {
+  // v6 → v7: FORGE wird 5. Platz der Rotation (direkt nach INFILTRATION). Home Gym macht sonst A–D mit Gym-Übungen.
+  const q = (raw.engine?.queue || ['A', 'B', 'C', 'D']).filter((m) => m !== 'FORGE');
+  const i = q.indexOf('D');
+  const queue = i < 0 ? [...q, 'FORGE'] : [...q.slice(0, i + 1), 'FORGE', ...q.slice(i + 1)];
+  return { ...raw, schemaVersion: 7, engine: { ...raw.engine, queue },
+    ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v7', day: toDay(), suggestion: 'forge_slot', decision: 'applied' }] };
+};
 
 export function migrate(raw) {
   let doc = raw;

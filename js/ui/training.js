@@ -13,6 +13,7 @@ import { guardianImage } from './lore.js';
 import { ladderLine } from './ladder.js';
 import { painPrompt } from './wrist.js';
 import { FEET_SIGNS } from '../data/feet.js';
+import { rampable, rampSets, firstRampIndex, supersetOptions, supersetNext, SUPERSET_REST } from '../engine/warmup.js';
 import { breathAt, slowPattern } from '../engine/breath.js';
 import { book1Reached } from '../engine/temper.js';
 import { logDecision } from '../engine/rulelog.js';
@@ -78,6 +79,8 @@ function tick(c) {
   const a = c.data.active;
   if (!a || location.hash.replace('#', '') !== 'training') return;
   const now = Date.now();
+  const el = document.querySelector('[data-elapsed]');
+  if (el && a.startedAt) el.textContent = elapsedOf(a, now);
   const p = a.plan;
   if (p.format === 'flow' && a.flow?.endAt && !a.flow.paused) {
     if (now >= a.flow.endAt) {
@@ -275,6 +278,8 @@ function setsView(c, a) {
       <button class="fix-toggle${it.fixed ? ' on' : ''}" data-act="t-fix" aria-pressed="${!!it.fixed}">${it.fixed ? '■ fix' : '□ fix'}</button></span>
     ${stepper('t-load', kg(open.load), 'kg')}</div>
     ${it.fixed ? '<p class="muted small">Gewicht fix: Die App steigert über mehr Wdh., dann +1 Satz, dann langsameres Tempo, dann die schwerere Stufe.</p>' : ''}` : '';
+  const ramp = rampBlock(c, a, i, it, def, open);
+  const ss = supersetBlock(a, i);
   const allDone = entry.sets.every((s) => s.done);
   const effort = allDone ? `<div class="effort${entry.rpe ? ' set' : ''}"><small>Wie hart war das? RPE</small>
     <div class="rpe-chips">${Array.from({ length: 10 }, (_, k) => k + 1).map((v) => `<button class="${entry.rpe === v ? 'on' : ''}" data-act="t-rpe" data-v="${v}">${v}</button>`).join('')}</div>
@@ -305,7 +310,9 @@ function setsView(c, a) {
       ${it.bothSides ? '<p class="muted small">Beide Seiten nacheinander.</p>' : ''}
       ${rir}
       ${hasTimer ? '<p class="muted small">Timer starten, Bildschirm anlassen für das Signal. Stopp loggt die echte Zeit.</p>' : ''}
+      ${ss}
       ${loadRow}
+      ${ramp}
       ${is4x4(def) ? card4x4(a, i, entry) : `<div class="sets">${rows}</div>`}
       ${effort}
       ${showsElbowTap(def) && entry.sets.some((s) => s.done)
@@ -316,6 +323,35 @@ function setsView(c, a) {
       ${isLast ? '<button class="btn gold grow" data-act="t-finish">Mission abgeschlossen</button>'
         : '<button class="btn primary grow" data-act="t-next">Nächste Übung →</button>'}
     </footer>`;
+}
+
+// Aufwärmsätze vor schweren Grundübungen: zählen nicht, kein Log. Volle Rampe nur bei der ersten.
+function rampBlock(c, a, i, it, def, open) {
+  if (!rampable(def, it) || a.log[i].sets.some((s) => s.done)) return '';
+  const sets = rampSets(def, open.load ?? it.load, { first: firstRampIndex(a.plan.items, getDef) === i, kbWeights: c.data.settings.kbWeights || [] });
+  if (!sets.length) return '';
+  const done = a.ramp?.[i] || [];
+  const all = sets.every((_, k) => done[k]);
+  const txt = (s) => (def.load === 'belt' ? (s.load ? `+${kg(s.load)} kg` : 'Körpergewicht') : `${kg(s.load)} kg`);
+  return `<details class="ramp"${all ? '' : ' open'}><summary>Aufwärmsätze ${all ? '✓' : `· ${sets.length}`}</summary>
+    ${sets.map((s, k) => `<div class="ramp-row${done[k] ? ' done' : ''}"><span>${txt(s)} × ${s.reps}<small>${esc(s.label)}</small></span>
+      <button class="check" data-act="t-ramp" data-k="${k}" aria-label="Aufwärmsatz erledigt">✓</button></div>`).join('')}
+    <p class="muted small">Zählt nicht als Satz. Locker, schnell, kurze Pausen. Gewicht oben anpassen, die Rampe rechnet mit.</p></details>`;
+}
+
+// Freiwilliges Superset: Vorschlag am Übungspaar, Sätze wechseln ab
+const pairOf = (a, i) => supersetOptions(a.plan.items).find((o) => o.a === i || o.b === i) || null;
+const activePair = (a, i) => { const o = pairOf(a, i); return o && a.supersets?.includes(`${o.a}:${o.b}`) ? o : null; };
+function supersetBlock(a, i) {
+  const o = pairOf(a, i);
+  if (!o) return '';
+  const other = getDef(a.plan.items[o.a === i ? o.b : o.a].exId).name;
+  if (activePair(a, i)) {
+    return `<div class="superset on"><div><span class="ss-tag">SUPERSET</span> mit ${esc(other)}<small>${esc(o.why)} · ${SUPERSET_REST} s Wechsel, Pause nach dem Paar</small></div>
+      <button class="btn small ghost" data-act="t-superset" data-v="off">Beenden</button></div>`;
+  }
+  return `<div class="superset"><div>Zeit sparen: als Superset mit <b>${esc(other)}</b>?<small>${esc(o.why)} · Sätze wechseln ab</small></div>
+    <button class="btn small" data-act="t-superset" data-v="on">Superset</button></div>`;
 }
 
 // 4x4 in der Übungskarte (FORGE, Arc III): Phasen-Timer, danach RPE pro Intervall
@@ -340,9 +376,13 @@ function card4x4(a, i, entry) {
 
 const formatShort = (day) => { const [, m, d] = day.split('-'); return `${Number(d)}.${Number(m)}.`; };
 
+// Gesamtzeit der Einheit (lange Unterbrechungen zählen nicht, wie beim Verbuchen)
+const elapsedOf = (a, now = Date.now()) => fmt(Math.floor(activeMinutes([a.startedAt, ...(a.marks || []), now]).ms / 1000));
+
 function head(c, a, counter, comp) {
   return `<header class="t-head"><button class="icon-btn" data-act="t-menu" aria-label="Menü">☰</button>
-    <div><small>${a.plan.modifier?.type === 'deload' ? 'Deload' : a.plan.modifier?.type === 'comeback' ? 'Wiedereinstieg' : 'Mission'}</small><b>${esc(a.plan.name)}</b></div><span class="num">${counter}</span></header>
+    <div><small>${a.plan.modifier?.type === 'deload' ? 'Deload' : a.plan.modifier?.type === 'comeback' ? 'Wiedereinstieg' : 'Mission'}</small><b>${esc(a.plan.name)}</b></div>
+    <span class="t-head-r"><b class="num t-elapsed" data-elapsed aria-label="Gesamtzeit">${elapsedOf(a)}</b><small class="num">${counter}</small></span></header>
     <div class="t-progress"><i style="width:${Math.round(comp * 100)}%"></i></div>`;
 }
 
@@ -685,6 +725,19 @@ const training = {
         if (sets[k].rir == null && it.rir != null && !it.explosive && getDef(entry.exId).mode !== 'fixed') sets[k].rir = it.rir;
         if (a.cardTimer?.i === a.index && a.cardTimer.k === k) a.cardTimer = null;
       }
+      const pair = sets[k].done ? activePair(a, a.index) : null;
+      if (pair) {
+        const nx = supersetNext(a.log, pair, a.index);
+        if (nx.rest) {
+          const defs = [pair.a, pair.b].map((x) => getDef(a.log[x].exId));
+          const sec = nx.rest === 'switch' ? SUPERSET_REST
+            : Math.max(...defs.map((df, x) => restFor(df, { adjust: c.data.settings.restAdjust?.[a.log[[pair.a, pair.b][x]].exId] || 0 })));
+          a.index = nx.index;
+          startRest(sec, nx.rest === 'switch' ? `Wechsel · ${getDef(a.log[nx.index].exId).name}` : `Pause · Superset, gleich: ${getDef(a.log[nx.index].exId).name}`, entry.exId);
+          save(c);
+          return;
+        }
+      }
       const lastOverall = a.index === a.plan.items.length - 1 && sets.every((s) => s.done);
       if (sets[k].done && !lastOverall) {
         const def = getDef(entry.exId);
@@ -698,6 +751,23 @@ const training = {
           rest.resetOffer = it.main && sets.filter((s) => !s.done).length === 1 && c.data.settings.temperResetHint !== false && book1Reached(c.data) >= 26;
         }
       }
+      save(c);
+    },
+    't-ramp': (c, d) => {
+      const a = c.data.active;
+      a.ramp ||= {};
+      const row = a.ramp[a.index] || [];
+      row[Number(d.k)] = !row[Number(d.k)];
+      a.ramp[a.index] = row;
+      save(c);
+    },
+    't-superset': (c, d) => {
+      const a = c.data.active;
+      const o = pairOf(a, a.index);
+      if (!o) return;
+      const key = `${o.a}:${o.b}`;
+      a.supersets = (a.supersets || []).filter((x) => x !== key);
+      if (d.v === 'on') { a.supersets.push(key); a.index = o.a; }
       save(c);
     },
     't-c4-start': (c) => { unlockAudio(); const a = c.data.active; a.cardIv = { i: a.index, startAt: Date.now(), pausedMs: 0, seen: 0 }; signal(1); save(c); },

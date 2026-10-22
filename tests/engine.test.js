@@ -1,5 +1,5 @@
 import { describe, it, expect } from './runner.js';
-import { decide, advanceQueue } from '../js/engine/decide.js';
+import { decide, advanceQueue, nextSlot } from '../js/engine/decide.js';
 import { hardStreak, gapDays, plattCount } from '../js/engine/history.js';
 import { initialEngine, modifierFor, completeMission, startDeload, shouldSuggestDeload, rotateFrom } from '../js/engine/cycle.js';
 import { progress, initialState, ladderFor, stepLoad, applyLadderChoice } from '../js/engine/progression.js';
@@ -25,7 +25,7 @@ import { EXERCISES } from '../js/data/exercises.js';
 
 const T = '2026-10-16'; // Freitag
 const ci = (o = {}) => ({ yesterdayMT: 'none', feeling: 'normal', tonightMT: 'no', where: 'room', ...o });
-const Q = ['A', 'B', 'C', 'D'];
+const Q = ['A', 'B', 'C', 'D', 'FORGE'];
 const mission = (day, missionId, extra = {}) => ({ day, kind: 'mission', missionId, ...extra });
 const arena = (day, intensity = 'hard') => ({ day, kind: 'arena', intensity, minutes: 60 });
 
@@ -52,50 +52,56 @@ describe('Entscheidung', () => {
     expect(decide({ checkin: ci({ tonightMT: 'maybe' }), hardStreak: 0, queue: Q }).rule).toBe(7);
   });
   it('Regel 1: Nur Mobility → Fluss + Spaziergang', () => {
-    const r = decide({ checkin: ci({ where: 'mobility', feeling: 'platt' }), hardStreak: 5, queue: Q });
+    const r = decide({ checkin: ci({ time: 'mobility', feeling: 'platt' }), hardStreak: 5, queue: Q });
     expect(r.rule).toBe(1);
     expect(r.missionId).toBe('FLOW');
     expect(r.walk).toBe(true);
+    expect(decide({ checkin: ci({ where: 'mobility' }), hardStreak: 0, queue: Q }).missionId).toBe('FLOW'); // alter Check-in
   });
-  it('Regel 2: 3 harte Tage → Ruhetag, überstimmbar', () => {
+  it('3 harte Tage: kein Ruhetag-Zwang, nur Hinweis mit Empfehlung', () => {
     const r = decide({ checkin: ci(), hardStreak: 3, queue: Q });
-    expect(r.rule).toBe(2);
-    expect(r.kind).toBe('rest');
-    expect(r.canOverride).toBe(true);
-    const o = decide({ checkin: ci(), hardStreak: 3, queue: Q, overrideRest: true });
-    expect(o.rule).toBe(7);
+    expect(r.kind).toBe('mission');
+    expect(r.missionId).toBe(Q[0]);
+    expect(r.hint.suggest).toBe('mobility');
   });
-  it('Regel 3: Platt + hartes Sparring → nur Fluss', () => {
-    const r = decide({ checkin: ci({ feeling: 'platt', yesterdayMT: 'hard' }), hardStreak: 1, queue: Q });
-    expect(r.rule).toBe(3);
-    expect(r.kind).toBe('flow');
+  it('Platt oder Sparring: Mission bleibt, Hinweis empfiehlt kürzer', () => {
+    expect(decide({ checkin: ci({ feeling: 'platt' }), hardStreak: 0, queue: Q }).missionId).toBe(Q[0]);
+    expect(decide({ checkin: ci({ feeling: 'platt' }), hardStreak: 0, queue: Q }).hint.suggest).toBe('express');
+    expect(decide({ checkin: ci({ yesterdayMT: 'hard' }), hardStreak: 0, queue: Q }).hint.suggest).toBe('kompakt');
+    expect(decide({ checkin: ci({ feeling: 'platt', yesterdayMT: 'hard' }), hardStreak: 0, queue: Q }).hint.suggest).toBe('mobility');
   });
-  it('Regel 4: Platt ODER Sparring → D leicht, bei 15 min Express', () => {
-    expect(decide({ checkin: ci({ feeling: 'platt' }), hardStreak: 0, queue: Q }).missionId).toBe('D_LIGHT');
-    expect(decide({ checkin: ci({ yesterdayMT: 'hard' }), hardStreak: 0, queue: Q }).missionId).toBe('D_LIGHT');
-    expect(decide({ checkin: ci({ feeling: 'platt', where: 'express' }), hardStreak: 0, queue: Q }).missionId).toBe('EXPRESS');
-  });
-  it('Regel 5: Nur 15 Minuten → Express', () => {
-    const r = decide({ checkin: ci({ where: 'express' }), hardStreak: 0, queue: Q });
+  it('Regel 5: 15 Minuten → SHADOWSTEP, Rotation bleibt', () => {
+    const r = decide({ checkin: ci({ time: 'express' }), hardStreak: 0, queue: ['B', 'C', 'D', 'FORGE', 'A'] });
     expect(r.rule).toBe(5);
     expect(r.missionId).toBe('EXPRESS');
+    expect(r.next).toBe('B');
+    expect(decide({ checkin: ci({ where: 'express' }), hardStreak: 0, queue: Q }).missionId).toBe('EXPRESS'); // alter Check-in
   });
-  it('Regel 6: Arena heute Abend + B ist dran → nächste Nicht-B-Einheit', () => {
-    const r = decide({ checkin: ci({ tonightMT: 'yes', morning: true }), hardStreak: 0, queue: ['B', 'C', 'D', 'A'] });
-    expect(r.rule).toBe(6);
-    expect(r.missionId).toBe('C');
-    expect(decide({ checkin: ci({ tonightMT: 'maybe' }), hardStreak: 0, queue: ['B', 'C', 'D', 'A'] }).missionId).toBe('C');
+  it('ARENA heute Abend + B dran: B bleibt, Hinweis', () => {
+    const r = decide({ checkin: ci({ tonightMT: 'yes', morning: true }), hardStreak: 0, queue: ['B', 'C', 'D', 'FORGE', 'A'] });
+    expect(r.missionId).toBe('B');
+    expect(r.hint.lines.length).toBe(1);
+    expect(r.hint.suggest).toBe('kompakt');
   });
-  it('Regel 6 greift nicht, wenn nicht B dran ist', () => {
-    expect(decide({ checkin: ci({ tonightMT: 'yes', morning: true }), hardStreak: 0, queue: ['C', 'D', 'A', 'B'] }).missionId).toBe('C');
-  });
-  it('Regel 7: nächste Einheit, im Home Gym als FORGE auf diesem Platz', () => {
-    const r = decide({ checkin: ci({ where: 'gym' }), hardStreak: 0, queue: ['D', 'A', 'B', 'C'] });
+  it('Home Gym: nächste Mission mit Gym-Übungen, kein FORGE-Ersatz', () => {
+    const r = decide({ checkin: ci({ where: 'gym' }), hardStreak: 0, queue: ['D', 'FORGE', 'A', 'B', 'C'] });
     expect(r.rule).toBe(7);
-    expect(r.missionId).toBe('FORGE');
-    expect(r.slot).toBe('D');
+    expect(r.missionId).toBe('D');
     expect(r.profile).toBe('gym');
-    expect(decide({ checkin: ci(), hardStreak: 0, queue: ['D', 'A', 'B', 'C'] }).missionId).toBe('D');
+  });
+  it('FORGE ist 5. Platz, nur im Home Gym, sonst vorgemerkt', () => {
+    const q = ['FORGE', 'A', 'B', 'C', 'D'];
+    expect(decide({ checkin: ci({ where: 'gym' }), hardStreak: 0, queue: q }).missionId).toBe('FORGE');
+    const room = decide({ checkin: ci(), hardStreak: 0, queue: q });
+    expect(room.missionId).toBe('A');
+    expect(completeMission({ ...initialEngine(T), queue: q }, { missionId: 'A' }).queue).toEqual(['FORGE', 'B', 'C', 'D', 'A']);
+    expect(nextSlot(q, 'room')).toBe('A');
+  });
+  it('Zeit wählst du: 30 min = Kompakt der nächsten Mission', () => {
+    const r = decide({ checkin: ci({ where: 'gym', time: 'kompakt' }), hardStreak: 1, queue: ['B', 'C', 'D', 'FORGE', 'A'], yesterday: 'high' });
+    expect(r.missionId).toBe('B');
+    expect(r.compact).toBe(true);
+    expect(r.profile).toBe('gym');
   });
   it('jede Empfehlung hat eine Begründung', () => {
     const r = decide({ checkin: ci(), hardStreak: 0, queue: Q });
@@ -345,7 +351,7 @@ describe('Verbuchen', () => {
     const d = defaultData();
     const { data, session } = run(d, 'A', (a) => a.log.forEach((e) => e.sets.forEach((s) => { s.done = true; })));
     expect(session.completion).toBe(1);
-    expect(data.engine.queue).toEqual(['B', 'C', 'D', 'A']);
+    expect(data.engine.queue).toEqual(['B', 'C', 'D', 'FORGE', 'A']);
     expect(data.exState.pullup_tactical.target).toBe(6);
     expect(session.xp).toBe(100); // v3: volle Mission pauschal 100
   });
@@ -353,7 +359,7 @@ describe('Verbuchen', () => {
     const { session, data } = run(defaultData(), 'C', (a) => { a.log[1].sets[0].done = true; });
     expect(session.completion > 0 && session.completion < 1).toBe(true);
     expect(session.xp < 100).toBe(true);
-    expect(data.engine.queue[3]).toBe('C');
+    expect(data.engine.queue[4]).toBe('C');
   });
   it('D leicht dreht die Rotation nicht', () => {
     const { data } = run(defaultData(), 'D_LIGHT', (a) => { a.roundsDone = 2; });
@@ -764,28 +770,19 @@ describe('Belastungsklassen', () => {
     expect(yesterdayClass([], T, 'hard')).toBe('high');
     expect(yesterdayClass([], T, 'none')).toBe(null);
   });
-  it('nicht zwei High-Tage in Folge, High bleibt vorgemerkt', () => {
-    const r = decide({ checkin: ci(), hardStreak: 1, queue: ['B', 'C', 'D', 'A'], yesterday: 'high' });
-    expect(r.rule).toBe(8);
-    expect(r.missionId).toBe('C');
-    expect(completeMission(initialEngine(T), { missionId: 'C' }).queue[0]).toBe('A');
-    const q = advanceQueue(['B', 'C', 'D', 'A'], 'C');
-    expect(q[0]).toBe('B');
-  });
-  it('Kompakt ist Low und darf nach High-Tag laufen', () => {
-    const r = decide({ checkin: ci({ where: 'kompakt' }), hardStreak: 1, queue: ['B', 'C', 'D', 'A'], yesterday: 'high' });
+  it('nach High-Tag: High-Platz bleibt, Hinweis empfiehlt 30 min', () => {
+    const r = decide({ checkin: ci(), hardStreak: 1, queue: ['B', 'C', 'D', 'FORGE', 'A'], yesterday: 'high' });
     expect(r.missionId).toBe('B');
-    expect(r.compact).toBe(true);
+    expect(r.hint.suggest).toBe('kompakt');
+    expect(advanceQueue(['B', 'C', 'D', 'FORGE', 'A'], 'B')).toEqual(['C', 'D', 'FORGE', 'A', 'B']);
   });
-  it('Home Gym → FORGE auf dem nächsten Platz, nach High-Tag stattdessen Normal', () => {
-    const f = decide({ checkin: ci({ where: 'gym' }), hardStreak: 0, queue: ['A', 'B', 'C', 'D'] });
-    expect(f.missionId).toBe('FORGE');
-    expect(f.slot).toBe('A');
-    const g = decide({ checkin: ci({ where: 'gym' }), hardStreak: 0, queue: ['A', 'B', 'C', 'D'], yesterday: 'high' });
-    expect(loadClass({ kind: 'mission', missionId: g.missionId })).toBe('normal');
+  it('FORGE belegt seinen eigenen Rotationsplatz', () => {
+    expect(completeMission(initialEngine(T), { missionId: 'FORGE' }).queue).toEqual(['A', 'B', 'C', 'D', 'FORGE']);
+    expect(completeMission({ ...initialEngine(T), queue: ['FORGE', 'A', 'B', 'C', 'D'] }, { missionId: 'FORGE' }).queue).toEqual(['A', 'B', 'C', 'D', 'FORGE']);
   });
-  it('FORGE belegt den Rotationsplatz', () => {
-    expect(completeMission(initialEngine(T), { missionId: 'FORGE', slot: 'A' }).queue).toEqual(['B', 'C', 'D', 'A']);
+  it('Migration v6 → v7: FORGE hinter INFILTRATION in die Queue', () => {
+    const m = normalize({ schemaVersion: 6, settings: {}, sessions: [], engine: { queue: ['A', 'B', 'D', 'C'] } });
+    expect(m.engine.queue).toEqual(['A', 'B', 'D', 'FORGE', 'C']);
   });
   it('Arc III: 4x4 ersetzt D einmal pro Woche', () => {
     const r = decide({ checkin: ci(), hardStreak: 0, queue: ['D', 'A', 'B', 'C'], fourByFourDue: true });
@@ -805,8 +802,8 @@ describe('Pausen (Update v2)', () => {
     expect(r.missionId).toBe('B');
     expect(r.rotate).toBe('restart');
     expect(modifierFor(initialEngine(T), 6).type).toBe('none');
-    expect(completeMission(initialEngine(T), { missionId: 'B', rotate: 'restart' }).queue).toEqual(['C', 'D', 'A', 'B']);
-    expect(rotateFrom('C')).toEqual(['D', 'A', 'B', 'C']);
+    expect(completeMission(initialEngine(T), { missionId: 'B', rotate: 'restart' }).queue).toEqual(['C', 'D', 'FORGE', 'A', 'B']);
+    expect(rotateFrom('C')).toEqual(['D', 'FORGE', 'A', 'B', 'C']);
   });
   it('8–14 Tage: überfälliges Muster plus −10 % und ein Satz weniger', () => {
     const r = decide({ checkin: ci({ tonightMT: 'no' }), hardStreak: 0, queue: Q, gap: 10, lastDone: last });
@@ -868,7 +865,7 @@ describe('Kompakt, Plyo, Kontrast, Top-Satz, Arc IV', () => {
     const d = defaultData();
     const plan = buildPlan({ missionId: 'A', profile: 'room', data: d, today: T, compact: true });
     const r = finishSession(d, createActive(plan, T, 0), { now: 1 });
-    expect(r.data.engine.queue[3]).toBe('A');
+    expect(r.data.engine.queue[4]).toBe('A');
     expect(r.session.compact).toBe(true);
   });
   it('Plyo-Info nur bei Missionen mit Sprungplatz', () => {
@@ -987,10 +984,10 @@ describe('Stagnation', () => {
 });
 
 describe('Überstimmbar und protokolliert', () => {
-  it('keine Regel liefert eine Sperre: Ruhetag ist überstimmbar', () => {
+  it('keine Regel liefert eine Sperre: viele harte Tage geben nur einen Hinweis', () => {
     const r = decide({ checkin: ci(), hardStreak: 4, queue: Q });
-    expect(r.canOverride).toBe(true);
-    expect(decide({ checkin: ci(), hardStreak: 4, queue: Q, overrideRest: true }).kind).toBe('mission');
+    expect(r.kind).toBe('mission');
+    expect(r.hint.lines.length > 0).toBe(true);
   });
   it('jede Empfehlung hat eine Begründung, keine hat eine Sperre', () => {
     const variants = [ci(), ci({ where: 'gym' }), ci({ where: 'kompakt' }), ci({ feeling: 'platt' }), ci({ where: 'mobility' }), ci({ tonightMT: 'yes' })];
@@ -1022,10 +1019,10 @@ describe('Migration v1 → v2', () => {
     expect(m.exState.dip.load).toBe(8);
     expect(m.records.dip.value).toBe(9);
     expect(m.settings.bodyweight).toBe(84);
-    expect(m.engine.queue).toEqual(['C', 'D', 'A', 'B']);
+    expect(m.engine.queue).toEqual(['C', 'D', 'FORGE', 'A', 'B']);
     expect(m.engine.fullSinceDeload).toBe(undefined);
     expect(m.settings.holiday.enabled).toBe(true);
-    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6']);
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7']);
     expect(m.mobility.length).toBe(1);
   });
   it('nach der Migration startet Arc I am Tag der ersten Mission (v3)', () => {
@@ -1809,9 +1806,9 @@ describe('v3 · Migration v2 → v3', () => {
   it('Daten bleiben erhalten, Arc I neu ab erster Mission', () => {
     const m = normalize(JSON.parse(JSON.stringify(v2)));
     expect(m.exState.pullup.target).toBe(6);
-    expect(m.engine.queue).toEqual(['B', 'C', 'D', 'A']);
+    expect(m.engine.queue).toEqual(['B', 'C', 'D', 'FORGE', 'A']);
     expect(m.engine.arc.startedDay).toBe('2026-10-15');
-    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6']);
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7']);
     expect(m.techChecks).toEqual({});
   });
   it('Migration ist wiederholbar', () => {
@@ -2479,8 +2476,80 @@ describe('FEET', () => {
   });
   it('Migration v5 → v6: FEET auf Stufe 1, Rest unverändert', () => {
     const m = normalize({ schemaVersion: 5, settings: { equipment: { room: ['bar'] } }, sessions: [{ id: 'a', day: T, kind: 'mission' }], engine: {} });
-    expect(m.schemaVersion).toBe(6);
+    expect(m.schemaVersion).toBe(SCHEMA_VERSION);
     expect(m.feet.stage).toBe(1);
     expect(m.sessions.length).toBe(1);
+  });
+});
+
+// ——— Update 22.10.: Ramping, Superset, Tageszitat ———
+import { rampable, rampSets, firstRampIndex, supersetOptions, supersetNext } from '../js/engine/warmup.js';
+import { quoteOfDay } from '../js/engine/story.js';
+
+describe('Aufwärmsätze (Ramping)', () => {
+  it('nur schwere Grundübungen mit Last, nicht explosiv', () => {
+    expect(rampable(getDef('deadlift'))).toBe(true);
+    expect(rampable(getDef('deadlift'), { explosive: true })).toBe(false);
+    expect(rampable(getDef('band_pull_apart'))).toBe(false);
+  });
+  it('erste schwere Übung: volle Rampe unter der Arbeitslast', () => {
+    const r = rampSets(getDef('deadlift'), 100, { first: true });
+    expect(r.map((s) => s.load)).toEqual([20, 45, 70, 85]);
+    expect(r.every((s) => s.load < 100)).toBe(true);
+  });
+  it('weitere schwere Übung: ein Feeder-Satz', () => {
+    expect(rampSets(getDef('deadlift'), 100, { first: false })).toEqual([{ load: 70, reps: 3, label: '70 %' }]);
+  });
+  it('leichte Stange: keine doppelten oder zu schweren Sätze', () => {
+    const r = rampSets(getDef('push_press'), 30, { first: true });
+    expect(new Set(r.map((s) => s.load)).size).toBe(r.length);
+    expect(r.every((s) => s.load >= 20 && s.load < 30)).toBe(true);
+  });
+  it('Kettlebell: leichtere Glocken aus dem Bestand', () => {
+    const def = { load: 'kb', rest: 'heavy' };
+    expect(rampSets(def, 24, { first: true, kbWeights: [8, 12, 16, 20, 24] }).map((s) => s.load)).toEqual([16, 20]);
+    expect(rampSets(def, 8, { kbWeights: [8, 12] })).toEqual([]);
+  });
+  it('volle Rampe nur bei der ersten schweren Übung der Einheit', () => {
+    const plan = buildPlan({ missionId: 'FORGE', profile: 'gym', data: defaultData(), today: T });
+    const i = firstRampIndex(plan.items, getDef);
+    expect(i >= 0).toBe(true);
+    expect(rampable(getDef(plan.items[i].exId), plan.items[i])).toBe(true);
+  });
+});
+
+describe('Superset (freiwillig)', () => {
+  it('Vorschlag nur, wenn beide Übungen in der Einheit sind', () => {
+    const items = [{ exId: 'calf_raise_sl' }, { exId: 'nordic_curl' }, { exId: 'tibialis_raise' }];
+    expect(supersetOptions(items)).toEqual([{ a: 0, b: 2, why: 'Wade ↔ Schienbein' }]);
+    expect(supersetOptions([{ exId: 'calf_raise_sl' }])).toEqual([]);
+  });
+  it('Ablauf: A, kurzer Wechsel, B, volle Pause, zurück zu A', () => {
+    const log = [{ sets: [{ done: true }, { done: false }] }, { sets: [{ done: false }, { done: false }] }];
+    const pair = { a: 0, b: 1 };
+    expect(supersetNext(log, pair, 0)).toEqual({ index: 1, rest: 'switch' });
+    log[1].sets[0].done = true;
+    expect(supersetNext(log, pair, 1)).toEqual({ index: 0, rest: 'full' });
+    log[0].sets[1].done = true;
+    log[1].sets[1].done = true;
+    expect(supersetNext(log, pair, 1).rest).toBe(null);
+  });
+  it('IMPACT bietet Drücken ↔ hintere Schulter an', () => {
+    const plan = buildPlan({ missionId: 'C', profile: 'room', data: defaultData(), today: T });
+    expect(supersetOptions(plan.items).length > 0).toBe(true);
+  });
+});
+
+describe('Tageszitat', () => {
+  it('jeden Tag ein anderes, keine Wiederholung vor Ablauf der Liste', () => {
+    const s = {};
+    const n = quotePool(s).length;
+    const seen = new Set(Array.from({ length: n }, (_, k) => quoteOfDay(s, addDays(T, k)).id));
+    expect(seen.size).toBe(n);
+  });
+  it('Quellen abschaltbar, jedes Zitat hat Person und Quelle', () => {
+    expect(quotePool({ quoteCatsOff: ['bibel'] }).some((q) => q.cat === 'bibel')).toBe(false);
+    expect(QUOTES.every((q) => q.person && q.source && q.text && q.cat)).toBe(true);
+    expect(new Set(QUOTES.map((q) => q.id)).size).toBe(QUOTES.length);
   });
 });

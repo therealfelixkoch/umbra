@@ -1,6 +1,6 @@
 // Heute: Check-in → Empfehlung → Start.
 import { sys, esc, chips, glyphChips, targetText, loadText, trendBadge, nameOf } from './kit.js';
-import { decide } from '../engine/decide.js';
+import { decide, advice, adviceText, nextSlot } from '../engine/decide.js';
 import { hardStreak, arenaOn, plattCount, gapDays, lastDoneBySlot } from '../engine/history.js';
 import { shouldSuggestDeload, startDeload } from '../engine/cycle.js';
 import { weekInfo, holidayActive, DEFAULT_HOLIDAY } from '../engine/arc.js';
@@ -9,7 +9,7 @@ import { stagnationStatus } from '../engine/stagnation.js';
 import { logDecision } from '../engine/rulelog.js';
 import { PLYO_NAMES, ARC_WEEKS, arcOf } from '../data/arcs.js';
 import { bossStatus } from '../engine/boss.js';
-import { introDue } from '../engine/story.js';
+import { introDue, quoteOfDay } from '../engine/story.js';
 import { rankEmblem } from './emblem.js';
 import { bossImage } from './lore.js';
 import { BOSSES } from '../data/lore.js';
@@ -38,7 +38,8 @@ const Q = {
   sleep: ['Wie hast du geschlafen?', [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']]],
   feeling: ['Wie fühlst du dich?', [['frisch', 'Frisch'], ['normal', 'Normal'], ['platt', 'Platt']]],
   tonightMT: ['Heute Abend Muay Thai?', [['yes', 'Ja'], ['no', 'Nein'], ['maybe', 'Vielleicht']]],
-  where: ['Wo und wie viel Zeit?', [['room', 'Eigener Raum · 45 min'], ['gym', 'Home Gym · 60 min'], ['travel', 'Unterwegs / Hotel'], ['kompakt', 'Nur 30 Minuten'], ['express', 'Nur 15 Minuten'], ['five', 'Nur 5 Minuten'], ['mobility', 'Nur Mobility']]],
+  where: ['Wo?', [['room', 'Eigener Raum'], ['gym', 'Home Gym'], ['travel', 'Unterwegs / Hotel']]],
+  time: ['Wie viel Zeit?', [['full', 'Volle Einheit · 45–60 min'], ['kompakt', '30 min'], ['express', '15 min'], ['five', '5 min'], ['mobility', 'Nur Mobility']]],
 };
 
 // Kleiner Status unter der Mission: Rang, Kampfkraft, Boss-Lebensbalken, Arc-Woche (x/6), Wochenziel.
@@ -86,8 +87,8 @@ function recommendation(c) {
   if (ci.choice) {
     const id = ci.choice;
     return { ...rec, kind: MISSIONS[id].format === 'flow' ? 'flow' : 'mission', missionId: id,
-      slot: id === 'FORGE' ? data.engine.queue[0] : id === 'NOR4X4' ? 'D' : null, rotate: null,
-      profile: id === 'FORGE' ? 'gym' : rec.profile, compact: !!rec.compact && ['A', 'B', 'C'].includes(id),
+      slot: id === 'NOR4X4' ? 'D' : null, rotate: null,
+      profile: id === 'FORGE' ? 'gym' : rec.profile, compact: !!rec.compact && ['A', 'B', 'C', 'FORGE'].includes(id),
       reason: 'Von dir gewählt.', manual: true };
   }
   return rec;
@@ -133,11 +134,27 @@ export function bodyMap(selected) {
     <p class="muted small">Markierte Regionen: 7 Tage lang schlägt die App Varianten ohne Last auf dieser Stelle vor.</p></div>`;
 }
 
+function dailyQuote(c) {
+  if (c.data.settings.dailyQuote === false) return '';
+  const q = quoteOfDay(c.data.settings, c.today());
+  return q ? `<blockquote class="quote daily-quote">„${esc(q.text)}“<cite>${esc(q.person)} · ${esc(q.source)}</cite></blockquote>` : '';
+}
+
+// Hinweis unter „Wie viel Zeit?“: was dran ist und was die App empfiehlt. Du entscheidest.
+function timeHint(c, f) {
+  const today = c.today();
+  const next = nextSlot(c.data.engine.queue, f.where || 'room');
+  const a = advice({ checkin: f, hardStreak: hardStreak(c.data.sessions, today), yesterday: yesterdayClass(c.data.sessions, today, f.yesterdayMT), next });
+  const name = MISSIONS[next]?.name || next;
+  return `<p class="muted small time-hint">Als Nächstes dran: <b>${esc(name)}</b>${f.where !== 'gym' && c.data.engine.queue[0] === 'FORGE' ? ' (FORGE wartet aufs Home Gym)' : ''}.${a.lines.length ? ` ${esc(adviceText(a))}` : ''}</p>`;
+}
+
 function checkinForm(c) {
   const today = c.today();
   const f = c.ui.ci || (c.ui.ci = { yesterdayMT: arenaOn(c.data.sessions, addDays(today, -1)) });
   const askWhere = f.tonightMT !== 'yes' || f.morning;
-  const ready = f.sleep && f.feeling && f.tonightMT && (!askWhere || f.where) && (!W(c.data).on || f.wristToday != null);
+  const needPlace = askWhere && !['five', 'mobility'].includes(f.time);
+  const ready = f.sleep && f.feeling && f.tonightMT && (!askWhere || f.time) && (!needPlace || f.where) && (!W(c.data).on || f.wristToday != null);
   const q = (k) => `<div class="q"><div class="q-label">${Q[k][0]}</div>${chips(k, Q[k][1], f[k])}</div>`;
   const morning = f.tonightMT === 'yes'
     ? `<div class="q"><div class="q-label">Zusätzlich Morgeneinheit?</div>${chips('morning', [['no', 'Nein, ARENA reicht'], ['yes', 'Ja, zusätzlich']], f.morning ? 'yes' : 'no')}</div>`
@@ -147,11 +164,11 @@ function checkinForm(c) {
   const pain = `<div class="q"><div class="q-label">Zwickt sonst etwas?</div>${chips('painOpen', [['no', 'Alles okay'], ['yes', 'Ja']], painOpen ? 'yes' : 'no')}
     ${painOpen ? bodyMap(f.pain || []) : ''}</div>`;
   const gear = f.travelGear ?? c.data.settings.travelGear ?? [];
-  const travel = askWhere && f.where === 'travel' ? `<div class="q"><div class="q-label">Was ist da? (optional)</div>
+  const travel = needPlace && f.where === 'travel' ? `<div class="q"><div class="q-label">Was ist da? (optional)</div>
     <div class="chips">${TRAVEL_EQUIPMENT.map((id) => `<button class="chip${gear.includes(id) ? ' on' : ''}" data-act="travel-gear" data-id="${id}">${esc(EQUIPMENT[id])}</button>`).join('')}</div>
     <p class="muted small">Nichts angehakt = nur Körpergewicht. Jede Übung wird durch eine mit gleichem Muster ersetzt, Fortschritt zählt getrennt.</p></div>` : '';
   const wristQ = W(c.data).on ? `<div class="q"><div class="q-label">Handgelenk heute (0–10)</div>${chips('wristToday', Array.from({ length: 11 }, (_, v) => [String(v), String(v)]), f.wristToday)}</div>` : '';
-  return sys('Tages-Check-in', `${q('yesterdayMT')}${q('sleep')}${q('feeling')}${elbow}${wristQ}${pain}${q('tonightMT')}${morning}${askWhere ? q('where') : ''}${travel}
+  return sys('Tages-Check-in', `${q('yesterdayMT')}${q('sleep')}${q('feeling')}${elbow}${wristQ}${pain}${q('tonightMT')}${morning}${askWhere ? `${q('time')}${timeHint(c, f)}` : ''}${needPlace ? q('where') : ''}${travel}
     <button class="btn primary wide" data-act="submit-ci" ${ready ? '' : 'disabled'}>Mission anfordern</button>`);
 }
 
@@ -218,7 +235,7 @@ export default {
     const data = c.data;
     const today = c.today();
     // Ganz oben: Status (Rang, Kampfkraft, Boss, Arc-Woche). Darunter Check-in bzw. Mission, dann Hinweise.
-    let out = statusStrip(c);
+    let out = statusStrip(c) + dailyQuote(c);
     let notes = '';
     if (introDue(data)) {
       const a = arcOf(data.engine.arc.n);
@@ -276,7 +293,7 @@ export default {
         ? `<div class="q"><div class="q-label">Morgen hartes Sparring geplant?</div>${chips('sparTomorrow', [['no', 'Nein'], ['yes', 'Ja']], null).replace(/data-act="pick"/g, 'data-act="spar"')}<p class="muted small">Heute steht Plyo-Stufe ${plan.plyo.wanted} an. Vor hartem Sparring bleibt es bei Stufe 3.</p></div>` : '';
       out += sys('Mission verfügbar', `<div class="mission-title"><span class="mid">${rec.missionId.length === 1 ? rec.missionId : '◆'}</span><div><h2>${esc(plan.name)}</h2><small>${esc(plan.focus)} · ca. ${plan.minutes} min${rec.profile === 'gym' && plan.kind === 'mission' && rec.missionId !== 'FORGE' ? ' · Home Gym' : rec.profile === 'travel' ? ' · Unterwegs' : ''}</small></div></div>
         ${plan.kind === 'mission' ? arcLine(data, today, plan) : ''}
-        <p class="reason">${esc(rec.reason)}</p>${rec.walk ? '<p class="note">Danach 20–30 Minuten spazieren.</p>' : ''}${modifierNote(plan)}
+        <p class="reason">${esc(rec.reason)}</p>${rec.hint?.lines.length && !rec.manual ? `<p class="note">${esc(adviceText(rec.hint))}</p>` : ''}${rec.walk ? '<p class="note">Danach 20–30 Minuten spazieren.</p>' : ''}${modifierNote(plan)}
         ${sparQ}${adjustNote(c, plan)}${plan.wrist && rec.missionId !== 'WRIST' ? `<div class="signal-note"><span>${esc(plan.wrist.reason)}</span><button class="btn small ghost" data-act="wrist-decline">Heute ohne Handgelenk-Block</button></div>` : ''}${planPreview(plan)}
         <button class="btn primary wide" data-act="start-rec">Mission starten</button>`);
     }
@@ -348,6 +365,7 @@ export default {
         const { painOpen, ...answers } = f;
         if (answers.sleep) answers.sleep = Number(answers.sleep);
         if (answers.wristToday != null) answers.wristToday = Number(answers.wristToday);
+        if (answers.time && !answers.where) answers.where = 'room';
         if (f.where === 'travel') {
           answers.travelGear = f.travelGear ?? data.settings.travelGear ?? [];
           next = { ...next, settings: { ...next.settings, travelGear: answers.travelGear } };
@@ -420,7 +438,7 @@ export default {
     },
     swap: (c) => {
       const q = c.data.engine.queue;
-      const ids = [...q, 'FORGE', 'NOR4X4', 'D_LIGHT', 'EXPRESS', 'EXPRESS_BAG', 'FLOW', 'HANDS', 'FEET'];
+      const ids = [...new Set([...q, 'NOR4X4', 'D_LIGHT', 'EXPRESS', 'EXPRESS_BAG', 'FLOW', 'HANDS', 'FEET'])];
       c.modal(sys('Andere Einheit', `<div class="swap-list">${ids.map((id) =>
         `<button class="swap" data-act="choose" data-id="${id}"><b>${esc(MISSIONS[id].name)}</b><small>${esc(MISSIONS[id].focus)}${id === q[0] ? ' · als Nächstes dran' : ''}</small></button>`).join('')}</div>
         <button class="btn ghost wide" data-act="close-modal">Abbrechen</button>`, { cls: 'pop' }));

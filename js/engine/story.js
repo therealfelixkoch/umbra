@@ -133,7 +133,16 @@ export function equippedTitle(data) {
 // ——— Zitate ———
 export function quotePool(settings) {
   const hidden = new Set(settings.quotesHidden || []);
-  return [...QUOTES, ...(settings.ownQuotes || [])].filter((q) => !hidden.has(q.id));
+  const catsOff = new Set(settings.quoteCatsOff || []);
+  return [...QUOTES, ...(settings.ownQuotes || [])].filter((q) => !hidden.has(q.id) && !catsOff.has(q.cat));
+}
+
+/** Tageszitat: feste, gemischte Reihenfolge, jeden Tag das nächste. Keine Wiederholung, bis alle einmal dran waren. */
+export function quoteOfDay(settings, day) {
+  const pool = quotePool(settings).slice().sort((a, b) => hash(a.id) - hash(b.id));
+  if (!pool.length) return null;
+  const n = Math.floor(Date.parse(`${day}T12:00:00Z`) / 86400000);
+  return pool[n % pool.length];
 }
 
 export function pickQuote(settings, seed) {

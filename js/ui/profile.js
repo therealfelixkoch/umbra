@@ -5,7 +5,7 @@ import { playerStats, RANKS, rankName } from '../engine/game.js';
 import { rankEmblem } from './emblem.js';
 import { testSound } from './sound.js';
 import { titleStatus, equippedTitle } from '../engine/story.js';
-import { QUOTES } from '../data/story.js';
+import { QUOTES, QUOTE_CATS } from '../data/story.js';
 import { startDeload } from '../engine/cycle.js';
 import { weekInfo, holidayActive, DEFAULT_HOLIDAY, completeWeekManually } from '../engine/arc.js';
 import { ARCS, ARC_WEEKS, WEEK_PLAN } from '../data/arcs.js';
@@ -55,9 +55,12 @@ function arcPanel(data, today) {
 
 function quoteSettings(s) {
   const hidden = new Set(s.quotesHidden || []);
-  const all = [...QUOTES, ...(s.ownQuotes || [])];
+  const catsOff = new Set(s.quoteCatsOff || []);
+  const all = [...QUOTES, ...(s.ownQuotes || [])].filter((q) => !catsOff.has(q.cat));
   return `<section class="card"><div class="label">Zitate</div>
-    <p class="muted small">Erscheinen im Arc-Intro, im Debrief und nach jeder dritten Mission. Antippen blendet aus.</p>
+    <p class="muted small">Jeden Tag eins oben auf „Heute“, dazu im Arc-Intro, im Debrief und nach jeder dritten Mission. Antippen blendet aus.</p>
+    <div class="chips">${[['on', 'Tageszitat an'], ['off', 'aus']].map(([v, l]) => `<button class="chip${(s.dailyQuote === false ? 'off' : 'on') === v ? ' on' : ''}" data-act="q-daily" data-v="${v}">${l}</button>`).join('')}</div>
+    <div class="label">Quellen</div><div class="chips">${Object.entries(QUOTE_CATS).map(([k, l]) => `<button class="chip${catsOff.has(k) ? '' : ' on'}" data-act="q-cat" data-v="${k}">${l}</button>`).join('')}</div>
     <div class="quote-list">${all.map((q) => `<div class="quote-row${hidden.has(q.id) ? ' off' : ''}">
       <button class="quote-btn" data-act="q-hide" data-id="${q.id}"><span>„${esc(q.text)}“</span><small>${esc(q.person)} · ${esc(q.source)}</small></button>
       ${q.own ? `<button class="x" data-act="q-del" data-id="${q.id}" aria-label="Löschen">×</button>` : ''}</div>`).join('')}</div>
@@ -234,6 +237,12 @@ export default {
       c.ui.qText = '';
       c.ui.qPerson = '';
       setSettings(c, { ownQuotes: [...(c.data.settings.ownQuotes || []), q] });
+    },
+    'q-daily': (c, d) => setSettings(c, { dailyQuote: d.v === 'on' }),
+    'q-cat': (c, d) => {
+      const off = new Set(c.data.settings.quoteCatsOff || []);
+      if (off.has(d.v)) off.delete(d.v); else off.add(d.v);
+      setSettings(c, { quoteCatsOff: [...off] });
     },
     'q-del': (c, d) => setSettings(c, { ownQuotes: (c.data.settings.ownQuotes || []).filter((q) => q.id !== d.id) }),
     'p-repair': () => window.__umbraRepair?.(),

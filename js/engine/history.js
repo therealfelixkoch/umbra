@@ -3,7 +3,7 @@ import { addDays, daysBetween } from './dates.js';
 import { FULL_MISSIONS } from '../data/missions.js';
 import { workingGap } from './arc.js';
 
-export const ROTATION = ['A', 'B', 'C', 'D'];
+export const ROTATION = ['A', 'B', 'C', 'D', 'FORGE']; // FORGE: 5. Platz, nur im Home Gym
 
 // Volle Mission: A–D (auch Kompakt), FORGE, 4x4. Nicht: D leicht, Express.
 export function isFullMission(s) {
