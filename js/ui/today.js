@@ -27,6 +27,7 @@ import { bladeTier } from '../engine/temper.js';
 import { playerStats, WEEK_GOAL, rankName } from '../engine/game.js';
 import { addDays, daysBetween, weekStart } from '../engine/dates.js';
 import { MISSIONS } from '../data/missions.js';
+import { journalActions } from './journal.js';
 import { getDef, EQUIPMENT } from '../data/exercises.js';
 import { exportFile } from '../store.js';
 import { XP_CONFIG } from '../data/xp-config.js';
@@ -87,8 +88,8 @@ function recommendation(c) {
   if (ci.choice) {
     const id = ci.choice;
     return { ...rec, kind: MISSIONS[id].format === 'flow' ? 'flow' : 'mission', missionId: id,
-      slot: id === 'NOR4X4' ? 'D' : null, rotate: null,
-      profile: id === 'FORGE' ? 'gym' : rec.profile, compact: !!rec.compact && ['A', 'B', 'C', 'FORGE'].includes(id),
+      slot: id === 'NOR4X4' || id === 'HOTEL' ? 'D' : null, rotate: null,
+      profile: id === 'FORGE' ? 'gym' : id === 'HOTEL' ? 'travel' : rec.profile, compact: !!rec.compact && ['A', 'B', 'C', 'FORGE'].includes(id),
       reason: 'Von dir gewählt.', manual: true };
   }
   return rec;
@@ -159,7 +160,7 @@ function checkinForm(c) {
   const morning = f.tonightMT === 'yes'
     ? `<div class="q"><div class="q-label">Zusätzlich Morgeneinheit?</div>${chips('morning', [['no', 'Nein, ARENA reicht'], ['yes', 'Ja, zusätzlich']], f.morning ? 'yes' : 'no')}</div>`
     : '';
-  const elbow = `<div class="q"><div class="q-label">Ellbogen zwickt?</div>${chips('elbow', [['no', 'Nein'], ['yes', 'Ja']], f.elbow || 'no')}</div>`;
+  const elbow = c.data.settings.jointPause ? '' : `<div class="q"><div class="q-label">Ellbogen zwickt?</div>${chips('elbow', [['no', 'Nein'], ['yes', 'Ja']], f.elbow || 'no')}</div>`;
   const painOpen = f.painOpen || (f.pain || []).length > 0;
   const pain = `<div class="q"><div class="q-label">Zwickt sonst etwas?</div>${chips('painOpen', [['no', 'Alles okay'], ['yes', 'Ja']], painOpen ? 'yes' : 'no')}
     ${painOpen ? bodyMap(f.pain || []) : ''}</div>`;
@@ -273,8 +274,10 @@ export default {
     const trained = doneToday.filter((s) => s.kind === 'mission' || s.kind === 'express').length;
     const ci = data.checkins[today];
     if (trained > (ci.extra || 0)) {
+      const logged = doneToday.filter((s) => s.kind === 'mission' || s.kind === 'express');
       out += sys('Tagesziel erreicht', `<p class="reason">Mission erfüllt.${ci.tonightMT === 'yes' ? ' Heute Abend wartet die ARENA.' : ' Der Rest des Tages gehört der Erholung.'}</p>
         <p class="muted">Stärke entsteht in der Pause. Ein FLOW am Abend hält dich geschmeidig.</p>
+        ${logged.map((s) => `<div class="done-row"><span>${esc(MISSIONS[s.missionId]?.name || s.missionId)}${s.completion < 0.999 ? ` · ${Math.round(s.completion * 100)} %` : ''}</span><button class="btn small ghost danger" data-act="j-del" data-id="${esc(s.id)}">Löschen</button></div>`).join('')}
         <div class="row gap"><button class="btn ghost" data-act="swap">Weitere Einheit</button></div>`, { tone: 'calm' });
     } else if (rec.kind === 'arenaday') {
       out += sys('ARENA-Tag', `<p class="reason">${esc(rec.reason)}</p><p class="muted">Ein kurzer FLOW am Morgen macht die Hüfte frei für die Kicks am Abend.</p>
@@ -425,6 +428,8 @@ export default {
         return { ...data, checkins };
       });
     },
+    'j-del': journalActions['j-del'],
+    'j-del-yes': journalActions['j-del-yes'],
     'redo-ci': (c) => {
       const today = c.today();
       const { day, choice, overrideRest, extra, ...answers } = c.data.checkins[today] || {};
@@ -438,7 +443,7 @@ export default {
     },
     swap: (c) => {
       const q = c.data.engine.queue;
-      const ids = [...new Set([...q, 'NOR4X4', 'D_LIGHT', 'EXPRESS', 'EXPRESS_BAG', 'FLOW', 'HANDS', 'FEET'])];
+      const ids = [...new Set([...q, 'HOTEL', 'NOR4X4', 'D_LIGHT', 'EXPRESS', 'EXPRESS_BAG', 'FLOW', 'HANDS', 'FEET'])];
       c.modal(sys('Andere Einheit', `<div class="swap-list">${ids.map((id) =>
         `<button class="swap" data-act="choose" data-id="${id}"><b>${esc(MISSIONS[id].name)}</b><small>${esc(MISSIONS[id].focus)}${id === q[0] ? ' · als Nächstes dran' : ''}</small></button>`).join('')}</div>
         <button class="btn ghost wide" data-act="close-modal">Abbrechen</button>`, { cls: 'pop' }));

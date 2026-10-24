@@ -72,6 +72,16 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 24.10.2026
+
+- **Gelenk-Pause** (Profil → Gelenke, per Migration eingeschaltet): Handgelenk-Protokoll und Ellbogen-Protokoll ruhen. Kein Unterarm-Prehab und kein Dead Hang in den Missionen, keine Ellbogen-Frage im Check-in, kein Ellbogen-Zähler und keine Anpassungen daraus, keine Handgelenk-Blöcke und -Karten. HANDS und FEET bleiben verfügbar. Alle Daten bleiben gespeichert, ein Tipp auf „Aktiv“ schaltet alles wieder an.
+- **Mobility-Block (frei, 3–5 min)** nach dem Aufwärmen jeder vollen Mission: Foam Rolling nach Bedarf, dynamische Stretches, Shoulder Dislocates mit dem Besenstiel. Optional abhaken, zählt nicht für Fortschritt. Zirkel, SHADOWSTEP und 4x4 zeigen vor dem Start „Vorher · Aufwärmen und Mobility-Block“. Nicht im 30-Minuten-Modus.
+- **Beenden ohne Leistung** (kein Satz, keine Runde): wird nicht verbucht, die App bietet „Verwerfen“ an. Zirkel und 4x4 fragen bei unvollständigen Runden nach, wie Satz-Missionen.
+- **Einheit löschen:** im Verlauf (Eintrag aufklappen → „Einheit löschen“) und direkt auf der Karte „Tagesziel erreicht“. War es die letzte Trainingseinheit, gehen Rotation, Wiedereinstieg, Gewichte und Bestleistungen auf den Stand davor zurück. Bei älteren Einheiten rückt nur ihr Rotationsplatz wieder nach vorn. XP, Tages- und Wochenziel rechnen sich neu. Freigeschaltete Ascensions bleiben.
+- **Andere Einheit:** HOTEL ist jetzt wählbar (belegt den INFILTRATION-Platz).
+- **FLOW:** zwischen jeder Übung 10 s Umpositionieren. Doppelton = Übung zu Ende, 3-2-1-Klicks, Glocke = nächste Übung beginnt (TEMPER-Klänge). „Jetzt starten“ überspringt den Wechsel.
+- Schema 8.
+
 ### Update 22.10.2026
 
 - **Tageszitat** oben auf „Heute“, jeden Tag ein anderes, keine Wiederholung vor Ablauf der Liste. Quellen: Bibel (Luther 1912), Sun Tzu und Musashi (eigene Übersetzung gemeinfreier Fassungen), Kämpfer (nur mit Quelle; „überliefert“, wo der Wortlaut nicht gesichert ist), Krieger, Stoiker. Profil → Setup: Tageszitat an/aus, Quellen einzeln abschaltbar, einzelne Zitate ausblendbar.

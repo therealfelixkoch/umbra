@@ -53,6 +53,7 @@ export function wristCards(c, rec) {
   const card = (title, sub, act, btn, extra = '') => `<section class="card flow-card wrist-card"><div><b>${title}</b><small>${sub}</small></div>
     <div class="row gap"><button class="btn primary" ${act}>${btn}</button>${extra}</div></section>`;
   let out = '';
+  if (data.settings.jointPause) return ''; // Gelenk-Pause: keine Handgelenk-Karten
   if (!w.on) {
     // Erhaltung 1–2 × pro Woche, sobald das Protokoll einmal lief
     if ((w.stageLog.length || w.ended) && !doneToday) {
@@ -103,6 +104,10 @@ export function wristView(c) {
   const pcts = w.checks.filter((x) => x.pct != null);
   const ws = weekStart(today);
   const blocks = c.data.sessions.filter((s) => s.wristBlock === 'strength' && s.day >= ws).length;
+  if (c.data.settings.jointPause) {
+    const hw0 = handsWeek(c.data.sessions, today);
+    return sys('HANDS', `<p>Diese Woche: <b>${hw0.minutes} min</b> (${hw0.count}×)</p><button class="btn wide" data-act="start" data-id="HANDS">HANDS starten</button>`);
+  }
   let out = sys('Handgelenk-Protokoll', `<div class="chips"><button class="chip${w.on ? ' on' : ''}" data-act="wrist-toggle" data-v="1">AN</button><button class="chip${w.on ? '' : ' on'}" data-act="wrist-toggle" data-v="0">AUS</button></div>
     ${w.on ? `<p>Seite: <b>${esc(w.side || '–')}</b> · Stufe <b>${w.stage ?? '–'}</b>${w.stage ? ` · ${STAGE_NAMES[w.stage]}` : ''}</p>` : '<p class="muted small">Aus: nur Erhaltung (1–2 × pro Woche) und HANDS. Alle Daten bleiben gespeichert.</p>'}
     <button class="btn wide" data-act="go" data-to="wristcheck">Status-Check starten</button>`);

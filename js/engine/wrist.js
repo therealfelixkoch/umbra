@@ -8,7 +8,9 @@ export const emptyWrist = () => ({
   checks: [], pain: [], levels: {}, greens: {}, redFrom: null, lastVariant: null,
   flags: {}, ended: null,
 });
-export const W = (data) => ({ ...emptyWrist(), ...(data?.wrist || {}) });
+export const W = (data) => ({ ...emptyWrist(), ...(data?.wrist || {}), ...(jointsPaused(data) ? { on: false } : {}) });
+/** Gelenk-Pause (Profil → Gelenke): Handgelenk-Modul und Ellbogen-Prehab ruhen, Daten bleiben erhalten. */
+export const jointsPaused = (data) => data?.settings?.jointPause === true;
 
 export const RED_DAYS = 3; // 2–3 Tage nur Aktivierung (leicht) und HANDS
 export const STRENGTH_PER_WEEK = 3;

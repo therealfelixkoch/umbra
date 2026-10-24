@@ -5,7 +5,7 @@ import { sessionXp } from './engine/game.js';
 import { toDay } from './engine/dates.js';
 import { effortToRpe, sessionIntensity, intensityFromRpe, trainingLoad } from './engine/session.js';
 
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export function defaultData() {
   return {
@@ -128,6 +128,12 @@ MIGRATIONS[6] = (raw) => {
   return { ...raw, schemaVersion: 7, engine: { ...raw.engine, queue },
     ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v7', day: toDay(), suggestion: 'forge_slot', decision: 'applied' }] };
 };
+
+MIGRATIONS[7] = (raw) => ({
+  // v7 → v8: Gelenk-Pause an (Handgelenk links, Golferellbogen rechts): Handgelenk-Modul und Ellbogen-Prehab ruhen.
+  ...raw, schemaVersion: 8, settings: { ...raw.settings, jointPause: true },
+  ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v8', day: toDay(), suggestion: 'joint_pause', decision: 'applied' }],
+});
 
 export function migrate(raw) {
   let doc = raw;

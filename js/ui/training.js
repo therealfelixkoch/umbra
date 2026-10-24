@@ -21,6 +21,7 @@ import { stepFrom } from '../data/ladders.js';
 import { guardianTier } from '../data/lore.js';
 import { rankName } from '../engine/game.js';
 import { beep, keepAwake, signal, unlockAudio } from './sound.js';
+import { playTone } from './temper-audio.js';
 import { RIR_CHOICES, restFor, REST_STEP, exercisePhases, exerciseTimerAt, timerState, intervalPhases, phaseAt, workDone, PHASE_LABEL, activeMinutes } from '../engine/session.js';
 
 const fmt = (sec) => {
@@ -82,7 +83,17 @@ function tick(c) {
   const el = document.querySelector('[data-elapsed]');
   if (el && a.startedAt) el.textContent = elapsedOf(a, now);
   const p = a.plan;
-  if (p.format === 'flow' && a.flow?.endAt && !a.flow.paused) {
+  if (p.format === 'flow' && a.flow?.switchUntil && !a.flow.paused) {
+    const left = Math.ceil((a.flow.switchUntil - now) / 1000);
+    if (left <= 0) {
+      a.flow = { i: a.flow.i, endAt: a.flow.endAt };
+      playTone('bell');
+      save(c);
+      return;
+    }
+    if (left <= 3 && a.flow.cd !== left) { a.flow.cd = left; playTone('hold'); }
+  }
+  if (p.format === 'flow' && a.flow?.endAt && !a.flow.paused && !a.flow.switchUntil) {
     if (now >= a.flow.endAt) {
       advanceFlow(c, true);
       return;
@@ -315,7 +326,7 @@ function setsView(c, a) {
       ${ramp}
       ${is4x4(def) ? card4x4(a, i, entry) : `<div class="sets">${rows}</div>`}
       ${effort}
-      ${showsElbowTap(def) && entry.sets.some((s) => s.done)
+      ${showsElbowTap(def) && !c.data.settings.jointPause && entry.sets.some((s) => s.done)
         ? `<button class="elbow-tap${entry.elbowReported ? ' done' : ''}" data-act="t-elbow" ${entry.elbowReported ? 'disabled' : ''}>${entry.elbowReported ? 'Ellbogen gemeldet' : 'Ellbogen gezwickt'}</button>` : ''}
     </section>
     <footer class="t-nav">
@@ -395,6 +406,15 @@ function itemList(p) {
   }).join('')}</ol>`;
 }
 
+// Vorher (Zirkel, SHADOWSTEP, 4x4): allgemeines Aufwärmen und der freie Mobility-Block. Wird nicht getrackt.
+function prepBlock(a) {
+  if (!['mission', 'express'].includes(a.plan.kind) || a.roundsDone > 0 || a.clockEnd || a.iv?.startAt) return '';
+  const cues = (id) => `<ul class="cues">${getDef(id).cues.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`;
+  return `<details class="ramp prep" open><summary>Vorher · Aufwärmen und Mobility-Block</summary>
+    <div class="label">General Warm-Up · 5–10 min</div>${cues('warmup_general')}
+    <div class="label">Mobility-Block · 3–5 min, frei</div>${cues('mobility_block')}</details>`;
+}
+
 function circuitView(c, a) {
   const p = a.plan;
   const done = a.roundsDone;
@@ -403,6 +423,7 @@ function circuitView(c, a) {
       <div class="rounds">${Array.from({ length: p.rounds }, (_, k) => `<i class="${k < done ? 'on' : ''}"></i>`).join('')}</div>
       <p class="t-target">${done < p.rounds ? `Runde ${done + 1} von ${p.rounds}` : 'Alle Runden geschafft'}${p.light ? ' · ruhiges Tempo' : ''}</p>
       <p class="rir">Übungen ohne Pause nacheinander. ${p.restBetween / 60} min Pause nach jeder Runde.</p>
+      ${prepBlock(a)}
       ${p.wristPrelude ? `<div class="wrist-prelude"><div class="label">Vorher · Handgelenk-Aktivierung (3–4 min)</div>${itemList({ items: p.wristPrelude.map((x) => ({ exId: x.exId, value: x.target })) })}</div>` : ''}
       ${itemList(p)}
     </section>
@@ -418,7 +439,7 @@ function amrapView(c, a) {
   return `${head(c, a, `${a.roundsDone} R`, running ? 1 - Math.max(0, a.clockEnd - Date.now()) / 900000 : 0)}
     <section class="t-card center">
       <b class="clock num" ${running && !a.clockFired ? `data-clock="${a.clockEnd}"` : ''}>${running ? (a.clockFired ? 'Zeit!' : fmt((a.clockEnd - Date.now()) / 1000)) : '15:00'}</b>
-      ${running ? '' : '<button class="btn primary wide" data-act="t-clock">Uhr starten</button>'}
+      ${running ? '' : `${prepBlock(a)}<button class="btn primary wide" data-act="t-clock">Uhr starten</button>`}
       <div class="counter"><small>Runden</small><b class="num">${a.roundsDone}</b></div>
       <div class="row gap center"><button class="btn" data-act="t-round-minus">−1</button><button class="btn primary big" data-act="t-round-plus">+1 Runde</button></div>
       ${itemList(p)}
@@ -446,7 +467,7 @@ function intervalView(c, a) {
       <b class="clock num ${st && st.phase !== 'work' ? 'calm' : ''}" ${running ? `data-clock="${now + st.left * 1000}"` : ''}>${st ? fmt(done ? 0 : st.left) : fmt(phases[0].sec)}</b>
       <div class="rounds">${Array.from({ length: p.rounds }, (_, k) => `<i class="${k < a.roundsDone ? 'on' : ''}"></i>`).join('')}</div>
       ${next ? `<p class="muted">Danach: ${PHASE_LABEL[next.phase]} · ${fmt(next.sec)}</p>` : ''}
-      ${!iv ? '<button class="btn primary wide" data-act="t-iv-start">Start</button>' : !done ? `<div class="row gap center">
+      ${!iv ? `${prepBlock(a)}<button class="btn primary wide" data-act="t-iv-start">Start</button>` : !done ? `<div class="row gap center">
         <button class="btn" data-act="t-iv-pause">${iv.pausedAt ? 'Weiter' : 'Pause'}</button>
         <button class="btn ghost" data-act="t-iv-skip">Phase überspringen</button></div>` : ''}
       <p class="muted">${exName}: ${plan}.</p>
@@ -474,6 +495,7 @@ function ivLogView(c, a) {
 }
 
 // ——— FLOW ———
+const FLOW_SWITCH = 10; // Sekunden zum Umpositionieren zwischen zwei Übungen
 function flowSeq(p) {
   if (p.seq) return p.seq; // HANDS: feste Folge mit Timer- und Wiederholungsschritten
   const seq = [];
@@ -488,12 +510,19 @@ function advanceFlow(c, auto) {
   if (i >= seq.length) {
     a.flow = { i: seq.length, done: true };
     a.roundsDone = a.plan.rounds;
-    signal(3);
+    if (a.plan.seq) signal(3); else playTone('bell');
   } else {
     const st = seq[i];
-    // Wiederholungsschritt (HANDS): keine Uhr, weiter per Tipp
-    a.flow = st.reps && !st.sec ? { i } : { i, endAt: Date.now() + (st.sec || a.plan.work) * 1000 };
-    if (auto) beep(1, 660);
+    const now = Date.now();
+    if (!a.plan.seq) {
+      // FLOW: 10 s Umpositionieren, Doppelton = Übung zu Ende, 3-2-1-Klicks, Glocke = nächste Übung beginnt
+      a.flow = { i, switchUntil: now + FLOW_SWITCH * 1000, endAt: now + (FLOW_SWITCH + a.plan.work) * 1000 };
+      playTone('next');
+    } else {
+      // Wiederholungsschritt (HANDS): keine Uhr, weiter per Tipp
+      a.flow = st.reps && !st.sec ? { i } : { i, endAt: now + (st.sec || a.plan.work) * 1000 };
+      if (auto) beep(1, 660);
+    }
   }
   save(c);
 }
@@ -516,6 +545,19 @@ function flowView(c, a) {
   const cur = seq[f.i];
   const def = getDef(cur.exId);
   const next = seq[f.i + 1];
+  const switching = f.switchUntil || (f.paused && f.switchLeft > 0);
+  if (switching) {
+    const sl = f.paused ? f.switchLeft : (f.switchUntil - Date.now()) / 1000;
+    return `${head(c, a, `${f.i + 1}/${seq.length}`, f.i / seq.length)}
+    <section class="t-card center flow switch">
+      <small class="muted">Umpositionieren · gleich geht es weiter</small>
+      <h1>${esc(def.name)}</h1>
+      <b class="clock num calm" ${f.paused ? '' : `data-clock="${f.switchUntil}"`}>${fmt(sl)}</b>
+      <ul class="cues">${def.cues.slice(0, 2).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+      <p class="muted small">Doppelton = Übung zu Ende · Klicks = 3, 2, 1 · Glocke = los</p>
+    </section>
+    <footer class="t-nav"><button class="btn" data-act="t-flow-pause">${f.paused ? 'Weiter' : 'Pause'}</button><button class="btn primary grow" data-act="t-flow-skip">Jetzt starten</button></footer>`;
+  }
   const left = f.paused ? f.left : (f.endAt - Date.now()) / 1000;
   return `${head(c, a, `${f.i + 1}/${seq.length}`, f.i / seq.length)}
     <section class="t-card center flow">
@@ -946,16 +988,31 @@ const training = {
       const st = flowSeq(a.plan)[0];
       unlockAudio();
       a.flow = st.reps && !st.sec ? { i: 0 } : { i: 0, endAt: Date.now() + (st.sec || a.plan.work) * 1000 };
+      if (!a.plan.seq) playTone('bell'); // FLOW: Glocke = los
       if (a.plan.hands && !c.data.settings.handsIntroSeen) c.data.settings = { ...c.data.settings, handsIntroSeen: true };
       if (a.plan.feet && !c.data.settings.feetIntroSeen) c.data.settings = { ...c.data.settings, feetIntroSeen: true };
       save(c);
     },
     't-hands-feel': (c, d) => { c.data.active.feel = Number(d.v); save(c); },
-    't-flow-skip': (c) => advanceFlow(c, false),
+    't-flow-skip': (c) => {
+      const a = c.data.active;
+      // Im Umpositionieren: Übung sofort starten
+      if (a.flow?.switchUntil) {
+        a.flow = { i: a.flow.i, endAt: Date.now() + a.plan.work * 1000 };
+        playTone('bell');
+        save(c);
+        return;
+      }
+      advanceFlow(c, false);
+    },
     't-flow-pause': (c) => {
       const f = c.data.active.flow;
-      if (f.paused) c.data.active.flow = { i: f.i, endAt: Date.now() + f.left * 1000 };
-      else c.data.active.flow = { i: f.i, paused: true, left: (f.endAt - Date.now()) / 1000 };
+      const now = Date.now();
+      if (f.paused) {
+        c.data.active.flow = { i: f.i, endAt: now + f.left * 1000, ...(f.switchLeft > 0 ? { switchUntil: now + f.switchLeft * 1000 } : {}) };
+      } else {
+        c.data.active.flow = { i: f.i, paused: true, left: (f.endAt - now) / 1000, switchLeft: f.switchUntil ? Math.max(0, (f.switchUntil - now) / 1000) : 0 };
+      }
       save(c);
     },
     'rest-add': (c) => adjustRest(c, +1),
@@ -978,9 +1035,15 @@ const training = {
       c.modal(null);
       const a = c.data.active;
       const comp = completionOf(a);
-      if (a.plan.format === 'sets' && comp < 0.999 && !c.ui.confirmPartial) {
+      // Nichts erledigt (nur angeschaut): nicht verbuchen, sondern verwerfen
+      if (comp === 0 && ['sets', 'circuit', 'intervals', 'amrap'].includes(a.plan.format)) {
+        c.system('Noch nichts erledigt', '<p>Es ist noch kein Satz und keine Runde erledigt. Die Einheit wird nicht verbucht, Rotation und Tagesziel bleiben unverändert.</p>',
+          [['t-discard', 'Verwerfen', 'primary'], ['t-cancel-finish', 'Weitermachen']]);
+        return;
+      }
+      if (['sets', 'circuit', 'intervals'].includes(a.plan.format) && comp < 0.999 && !c.ui.confirmPartial) {
         c.ui.confirmPartial = true;
-        c.system('Mission beenden?', `<p>${Math.round(comp * 100)} % erledigt. Das zählt anteilig, und die Rotation geht weiter.</p>`,
+        c.system('Mission beenden?', `<p>${a.plan.format === 'sets' ? `${Math.round(comp * 100)} %` : `${a.roundsDone} von ${a.plan.rounds} Runden`} erledigt. Das zählt anteilig, und die Rotation geht weiter. Verbuchte Einheiten kannst du im Profil unter Verlauf wieder löschen.</p>`,
           [['t-finish', 'Beenden', 'primary'], ['t-cancel-finish', 'Weitermachen']]);
         return;
       }

@@ -356,7 +356,7 @@ describe('Verbuchen', () => {
     expect(session.xp).toBe(100); // v3: volle Mission pauschal 100
   });
   it('unvollständige Mission zählt anteilig', () => {
-    const { session, data } = run(defaultData(), 'C', (a) => { a.log[1].sets[0].done = true; });
+    const { session, data } = run(defaultData(), 'C', (a) => { a.log[2].sets[0].done = true; });
     expect(session.completion > 0 && session.completion < 1).toBe(true);
     expect(session.xp < 100).toBe(true);
     expect(data.engine.queue[4]).toBe('C');
@@ -1022,7 +1022,7 @@ describe('Migration v1 → v2', () => {
     expect(m.engine.queue).toEqual(['C', 'D', 'FORGE', 'A', 'B']);
     expect(m.engine.fullSinceDeload).toBe(undefined);
     expect(m.settings.holiday.enabled).toBe(true);
-    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7']);
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7', 'migration:v8']);
     expect(m.mobility.length).toBe(1);
   });
   it('nach der Migration startet Arc I am Tag der ersten Mission (v3)', () => {
@@ -1808,7 +1808,7 @@ describe('v3 · Migration v2 → v3', () => {
     expect(m.exState.pullup.target).toBe(6);
     expect(m.engine.queue).toEqual(['B', 'C', 'D', 'FORGE', 'A']);
     expect(m.engine.arc.startedDay).toBe('2026-10-15');
-    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7']);
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7', 'migration:v8']);
     expect(m.techChecks).toEqual({});
   });
   it('Migration ist wiederholbar', () => {
@@ -2551,5 +2551,73 @@ describe('Tageszitat', () => {
     expect(quotePool({ quoteCatsOff: ['bibel'] }).some((q) => q.cat === 'bibel')).toBe(false);
     expect(QUOTES.every((q) => q.person && q.source && q.text && q.cat)).toBe(true);
     expect(new Set(QUOTES.map((q) => q.id)).size).toBe(QUOTES.length);
+  });
+});
+
+// ——— Update 24.10.: Gelenk-Pause, Mobility-Block, Einheit löschen ———
+import { deleteSession, completionOf } from '../js/engine/plan.js';
+import { W as wristState } from '../js/engine/wrist.js';
+
+describe('Gelenk-Pause', () => {
+  const paused = () => { const d = defaultData(); d.settings = { ...d.settings, jointPause: true }; return d; };
+  it('kein Unterarm-Prehab und kein Dead Hang in ASCENT/IMPACT', () => {
+    for (const id of ['A', 'C']) {
+      const ids = buildPlan({ missionId: id, profile: 'room', data: paused(), today: T }).items.map((i) => i.exId);
+      expect(['forearm_rotation', 'wrist_ext_eccentric', 'dead_hang'].some((x) => ids.includes(x))).toBe(false);
+    }
+    const normal = buildPlan({ missionId: 'A', profile: 'room', data: defaultData(), today: T }).items.map((i) => i.exId);
+    expect(normal.includes('dead_hang')).toBe(true);
+  });
+  it('Handgelenk-Modul gilt als aus, Daten bleiben', () => {
+    const d = paused();
+    d.wrist = { ...d.wrist, on: true, stage: 2 };
+    expect(wristState(d).on).toBe(false);
+    expect(wristState(d).stage).toBe(2);
+  });
+  it('Ellbogen-Zähler löst keine Anpassung aus', () => {
+    const d = paused();
+    d.signals = { elbow: Array.from({ length: 5 }, () => ({ day: T, source: 'checkin' })), pain: [] };
+    expect(elbowStatus(d, T).full).toBe(false);
+  });
+  it('Migration v7 → v8 schaltet die Pause ein', () => {
+    expect(normalize({ schemaVersion: 7, settings: {}, sessions: [], engine: {} }).settings.jointPause).toBe(true);
+  });
+});
+
+describe('Mobility-Block vor jeder Mission', () => {
+  it('nach dem Aufwärmen, optional, zählt nicht für den Fortschritt', () => {
+    const plan = buildPlan({ missionId: 'B', profile: 'room', data: defaultData(), today: T });
+    expect(plan.items[1].exId).toBe('mobility_block');
+    expect(plan.items[1].optional).toBe(true);
+    const a = createActive(plan, T);
+    expect(completionOf(a)).toBe(0);
+  });
+  it('nicht im 30-Minuten-Modus', () => {
+    const plan = buildPlan({ missionId: 'B', profile: 'room', data: defaultData(), today: T, compact: true });
+    expect(plan.items.some((i) => i.exId === 'mobility_block')).toBe(false);
+  });
+});
+
+describe('Einheit löschen', () => {
+  it('letzte Einheit: Rotation, Progression und XP wie vorher', () => {
+    const d0 = defaultData();
+    const plan = buildPlan({ missionId: 'HOTEL', profile: 'travel', data: d0, today: T, slot: 'D' });
+    const a = createActive(plan, T);
+    a.roundsDone = 1;
+    const r = finishSession(d0, a);
+    expect(JSON.stringify(r.data.engine.queue) === JSON.stringify(d0.engine.queue)).toBe(false);
+    const back = deleteSession(r.data, r.session.id);
+    expect(back.sessions.length).toBe(0);
+    expect(back.engine.queue).toEqual(d0.engine.queue);
+    expect(JSON.stringify(back.exState)).toBe(JSON.stringify(d0.exState));
+  });
+  it('ältere Einheit: ihr Rotationsplatz rückt wieder nach vorn', () => {
+    let d = defaultData();
+    const run1 = (id) => { const p = buildPlan({ missionId: id, profile: 'room', data: d, today: T }); const a = createActive(p, T); a.log.forEach((e) => e.sets.forEach((x) => { x.done = true; })); const r = finishSession(d, a, { id: `t${id}` }); d = r.data; return r.session; };
+    const sA = run1('A');
+    run1('B');
+    const back = deleteSession(d, sA.id);
+    expect(back.engine.queue[0]).toBe('A');
+    expect(back.sessions.length).toBe(1);
   });
 });

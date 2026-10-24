@@ -149,7 +149,10 @@ export default {
     if (tab === 'hand') {
       const j = c.ui.jtab || 'hand';
       const seg = `<div class="seg sub">${[['hand', 'Hand'], ['fuss', 'Fuß']].map(([k, v]) => `<button class="${j === k ? 'on' : ''}" data-act="jtab" data-v="${k}">${v}</button>`).join('')}</div>`;
-      return out + seg + (j === 'fuss' ? feetView(c) : wristView(c));
+      const paused = !!data.settings.jointPause;
+      const pause = sys('Gelenk-Pause', `<div class="chips"><button class="chip${paused ? ' on' : ''}" data-act="joint-pause" data-v="1">Pausiert</button><button class="chip${paused ? '' : ' on'}" data-act="joint-pause" data-v="0">Aktiv</button></div>
+        <p class="muted small">${paused ? 'Handgelenk-Protokoll und Ellbogen-Protokoll ruhen: kein Unterarm-Prehab und kein Dead Hang in den Missionen, keine Ellbogen-Frage, kein Ellbogen-Zähler, keine Handgelenk-Blöcke. Alle Daten bleiben gespeichert.' : 'Handgelenk-Protokoll (falls an) und Ellbogen-Prehab, Ellbogen-Frage und -Zähler laufen.'}</p>`, { tone: paused ? 'calm' : 'sys' });
+      return out + pause + seg + (j === 'fuss' ? feetView(c) : wristView(c));
     }
 
     const s = data.settings;
@@ -186,6 +189,7 @@ export default {
     ...journalActions,
     ptab: (c, d) => c.setUi({ ptab: d.v }),
     jtab: (c, d) => c.setUi({ jtab: d.v }),
+    'joint-pause': (c, d) => setSettings(c, { jointPause: d.v === '1' }),
     'wk-tip': (c, d, el) => el.classList.toggle('open'),
     'p-deload': (c) => c.system('Deload-Woche jetzt?', '<p>Die laufende Arc-Woche wird zur Deload-Woche: halbe Sätze, gleiches Gewicht, 3 Wdh. im Tank. Danach beginnt der nächste Arc.</p>',
       [['p-deload-yes', 'Deload-Woche starten', 'primary'], ['close-modal', 'Abbrechen']]),

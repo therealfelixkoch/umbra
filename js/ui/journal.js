@@ -7,6 +7,8 @@ import { formatDay, weekStart } from '../engine/dates.js';
 import { filterSessions, filterOptions, exerciseCurve, doneSets } from '../engine/journal.js';
 import { xpLedger, xpBySource } from '../engine/game.js';
 import { SOURCE_LABELS } from '../data/xp-config.js';
+import { deleteSession } from '../engine/plan.js';
+import { logDecision } from '../engine/rulelog.js';
 
 const RIR_TXT = (r) => (r == null ? '' : ` · RIR ${r === 4 ? '4+' : r}`);
 const missionName = (id) => (id === 'ARENA' ? 'ARENA' : MISSIONS[id]?.name || id);
@@ -49,7 +51,8 @@ function detail(s) {
   }
   if (s.load) parts.push(`<p class="muted small">Trainingslast ${s.load}</p>`);
   if (s.records?.length) parts.push(`<p class="small gold-text">Bestleistung: ${s.records.map((r) => esc(getDef(r.exId)?.name || 'SHADOWSTEP')).join(', ')}</p>`);
-  return `<div class="j-detail">${parts.join('') || '<p class="muted small">Keine Details.</p>'}</div>`;
+  const del = ['ascension', 'quest'].includes(s.kind) ? '' : `<button class="btn small ghost danger j-del" data-act="j-del" data-id="${esc(s.id)}">Einheit löschen</button>`;
+  return `<div class="j-detail">${parts.join('') || '<p class="muted small">Keine Details.</p>'}${del}</div>`;
 }
 
 // Kleine Kurve: bestes Satzergebnis pro Einheit
@@ -114,6 +117,21 @@ export function xpSourceView(c) {
 
 export const journalActions = {
   'j-open': (c, d) => c.setUi({ jOpen: c.ui.jOpen === d.id ? null : d.id }),
+  'j-del': (c, d) => {
+    const s = c.data.sessions.find((x) => x.id === d.id);
+    if (!s) return;
+    c.ui.jDel = d.id;
+    c.system('Einheit löschen?', `<p>${esc(formatDay(s.day))} · ${s.xp ? `+${s.xp} XP` : 'ohne XP'}. Die Einheit verschwindet aus dem Log, XP, Tages- und Wochenziel rechnen sich neu.
+      ${['mission', 'express'].includes(s.kind) ? ' War es die letzte Trainingseinheit, gehen auch Rotation und Gewichte auf den Stand davor zurück.' : ''}</p>`,
+    [['j-del-yes', 'Löschen', 'primary'], ['close-modal', 'Abbrechen']], 'warn');
+  },
+  'j-del-yes': (c) => {
+    const id = c.ui.jDel;
+    c.modal(null);
+    c.ui.jDel = null;
+    c.update((data) => logDecision(deleteSession(data, id), { rule: 'session:delete', day: c.today(), suggestion: id, decision: 'manual' }));
+    c.setUi({ jOpen: null });
+  },
   'xp-by': (c, d) => c.setUi({ xpBy: d.v }),
 };
 

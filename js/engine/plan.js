@@ -3,7 +3,7 @@ import { MISSIONS, MISSION_KIND, FULL_MISSIONS, TRAVEL_SWAP } from '../data/miss
 import { getDef as defaultGetDef, EXERCISES } from '../data/exercises.js';
 import { elbowStatus, activeRegions, adjustment } from './signals.js';
 import { PLYO, CONTRAST } from '../data/arcs.js';
-import { gapDays, lastSetsFor } from './history.js';
+import { gapDays, lastSetsFor, ROTATION } from './history.js';
 import { initialArc, weekInfo, holidayActive, DEFAULT_HOLIDAY } from './arc.js';
 import { modifierFor, completeMission } from './cycle.js';
 import { initialState, progress, ladderFor, snap, canLoad, setScore, stepLoad } from './progression.js';
@@ -152,7 +152,7 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
       if (s.only && s.only !== profile) return;
       if (s.arcOnly && s.arcOnly !== focus) return;
       if (isCompact && !s.main) return;
-      if (s.prehab && wrist.on) return; // Handgelenk-Modul ersetzt das Unterarm-Prehab (Kraftblock bzw. Aktivierung)
+      if (s.prehab && (wrist.on || data.settings.jointPause)) return; // Handgelenk-Modul ersetzt das Prehab, Gelenk-Pause lässt es weg
       if (s.plyo && contrastOn) return; // In Arc II übernehmen die Kontrastpaare die Sprünge.
       const slotKey = `${missionId}:${i}`;
       // Tausch „für den Rest des Arcs“ gilt nur im Arc, in dem er gewählt wurde.
@@ -224,6 +224,11 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
           explosive: true, noFailure: true, rir: null, trend: null, lastTime: lastSetsFor(data.sessions, partner) });
       }
     });
+    // Vor jeder Mission: nach dem Aufwärmen der freie Mobility-Block (3–5 min, abhaken, zählt nicht für den Fortschritt)
+    if (full && !isCompact && items.length && getDef(items[0].exId)?.cat === 'aufwaermen') {
+      items.splice(1, 0, { key: 'mobility_block', exId: 'mobility_block', sets: 1, target: 3, load: 0, ladder: [0],
+        optional: true, prep: true, rir: null, trend: null, lastTime: null });
+    }
     // Handgelenk: Kraftblock ans Ende, Aktivierung nach dem Aufwärmen
     if (wInfo?.kind === 'strength' || missionId === 'WRIST') items.push(...wItems);
     else if (wInfo) items.splice(items.length ? 1 : 0, 0, ...wItems);
@@ -533,11 +538,42 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
     ? completeMission(data.engine, { missionId: p.missionId, slot: p.slot, rotate: p.rotate, gap, modifier: p.modifier })
     : data.engine;
 
+  // Für „Einheit löschen“: vorheriger Stand von Rotation, Progression und Bestleistungen (nur was sich geändert hat)
+  const diff = (before, after) => Object.fromEntries(Object.keys(after).filter((k) => after[k] !== before[k]).map((k) => [k, before[k] ?? null]));
+  session.undo = { queue: data.engine.queue, comeback: data.engine.comeback ?? null, exState: diff(data.exState, exState), records: diff(data.records, records) };
+
   return {
     data: { ...data, exState, records, engine, sessions: [...data.sessions, session], active: null,
       ...(p.wrist?.variant ? { wrist: { ...(data.wrist || {}), lastVariant: p.wrist.variant } } : {}) },
     session,
   };
+}
+
+/**
+ * Verbuchte Einheit löschen. War es die letzte Trainingseinheit, wird der Stand davor wiederhergestellt
+ * (Rotation, Wiedereinstieg, Progression, Bestleistungen). Bei älteren Einheiten rückt nur ihr Rotationsplatz wieder nach vorn.
+ * XP, Wochenziel und Tagesziel rechnen sich aus dem Log und stimmen danach von selbst.
+ */
+export function deleteSession(data, id) {
+  const idx = data.sessions.findIndex((x) => x.id === id);
+  if (idx < 0) return data;
+  const s = data.sessions[idx];
+  const sessions = data.sessions.filter((x) => x.id !== id);
+  const training = (x) => x.kind === 'mission' || x.kind === 'express';
+  if (!training(s)) return { ...data, sessions };
+  const last = !data.sessions.slice(idx + 1).some(training);
+  if (last && s.undo) {
+    const restore = (cur, prev) => {
+      const out = { ...cur };
+      for (const [k, v] of Object.entries(prev || {})) { if (v == null) delete out[k]; else out[k] = v; }
+      return out;
+    };
+    return { ...data, sessions, exState: restore(data.exState, s.undo.exState), records: restore(data.records, s.undo.records),
+      engine: { ...data.engine, queue: s.undo.queue, comeback: s.undo.comeback } };
+  }
+  const pos = ROTATION.includes(s.missionId) ? s.missionId : s.slot;
+  if (!pos || !FULL_MISSIONS.includes(s.missionId) || !data.engine.queue.includes(pos)) return { ...data, sessions };
+  return { ...data, sessions, engine: { ...data.engine, queue: [pos, ...data.engine.queue.filter((m) => m !== pos)] } };
 }
 
 // Ab diesem Gefühlswert zählt eine Arena-Einheit als hart (wie Sparring).

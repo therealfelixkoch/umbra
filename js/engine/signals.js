@@ -39,7 +39,7 @@ export function elbowCount(signals, today) {
 export function elbowStatus(data, today) {
   const threshold = data.settings.elbowThreshold || DEFAULT_ELBOW_THRESHOLD;
   const count = elbowCount(data.signals, today);
-  return { count, threshold, full: count >= threshold };
+  return { count, threshold, full: data.settings.jointPause !== true && count >= threshold };
 }
 
 export function reportElbow(data, { day, exId = null, source }) {
