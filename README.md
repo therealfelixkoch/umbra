@@ -72,6 +72,17 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Design-Update 27.10.2026: Obsidian-Glas
+
+- **Material:** Karten, Panels und Tabbar als dunkles Glas mit Lichtkante und Weichzeichner. Die alten Systemrahmen-Ecken sind weg.
+- **Saisonfarbe:** Die Akzentfarbe (`--sys`) folgt der Saison: Winter Frost-Cyan, Frühjahr Sturm-Violett, Sommer Glut-Orange, Herbst Rost-Bronze. Buttons, Chips, Leisten und Glühen färben sich mit.
+- **Atmosphäre auf Heute** (js/ui/atmosphere.js): Partikel je Saison (Schnee, Regen, Funken, Blätter), Nebel und der Saison-Wächter als Silhouette im Hintergrund. Seine Risse werden mit der Saisonwoche deutlicher. Bei „Bewegung reduzieren“ (iOS) aus.
+- **Lebender Wächter:** Das Rang-Emblem atmet und glüht.
+- **Training:** Klingen-Schnitt beim Abhaken eines Satzes, Ghost-Leiste „Heute gegen letztes Mal“ (dieselben Sätze, Wdh. bzw. Sekunden), Pausen-Timer als leuchtender Ring.
+- **Siegesmoment:** Funken-Burst und Aufsteigen beim Missionsende.
+- **Datenansichten** (Profil → Status, js/ui/overview.js): Wochen-Ringe (Training 3, ARENA 2, FLOW 5), Attribut-Radar, Halbjahres-Heatmap.
+- **Story-Karten** (js/ui/storycard.js): 9:16-Bild mit Wächter, Rang, Saison, Zahlen, Säulen und Tageszitat. Teilen nach jeder Mission, nach dem Benchmark und im Profil („Saison-Karte teilen“). iPhone: Teilen-Menü (Instagram, Nachrichten, Fotos sichern).
+
 ### Update 27.10.2026: Extras und Tutorial (Pakete 4 und 5 von 5)
 
 - **ZONE 2:** lockere Ausdauer, 30 min (Rudern, Air Bike, Laufen, Seil, Shadow Boxing). Im Sommer Kapitel 2 als Karte auf „Heute“ (einmal pro Woche, zusätzlich), sonst über „Andere Einheit“. Zählt nicht für Rotation und Wochenziel, 40 XP.
