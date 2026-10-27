@@ -4,7 +4,7 @@
 // in die neue Version. Ausgeliefert wird nur aus dem Cache der eigenen Version.
 // Lore-Bilder: eigener Cache, einzeln geladen. Fehlende Bilder brechen die Installation nicht ab;
 // bei jedem App-Start mit Netz holt der Service Worker neue oder geänderte Bilder nach.
-const VERSION = 'v25';
+const VERSION = 'v32';
 const LORE_CACHE = 'umbra-lore';
 const ASSETS = [
   './',
@@ -17,9 +17,12 @@ const ASSETS = [
   './index.html',
   './js/app.js',
   './js/data/arcs.js',
+  './js/data/benchmarks.js',
+  './js/data/events.js',
   './js/data/exercises.js',
   './js/data/feet.js',
   './js/data/glyphs.js',
+  './js/data/help.js',
   './js/data/ladders.js',
   './js/data/lore.js',
   './js/data/missions.js',
@@ -39,6 +42,8 @@ const ASSETS = [
   './js/engine/dates.js',
   './js/engine/debrief.js',
   './js/engine/decide.js',
+  './js/engine/equipment.js',
+  './js/engine/events.js',
   './js/engine/feet.js',
   './js/engine/footwork.js',
   './js/engine/game.js',
@@ -46,6 +51,7 @@ const ASSETS = [
   './js/engine/journal.js',
   './js/engine/load.js',
   './js/engine/mobility.js',
+  './js/engine/pillars.js',
   './js/engine/plan.js',
   './js/engine/progress.js',
   './js/engine/progression.js',
@@ -63,10 +69,12 @@ const ASSETS = [
   './js/store.js',
   './js/ui/arena.js',
   './js/ui/arenastatus.js',
+  './js/ui/benchmark.js',
   './js/ui/bmt.js',
   './js/ui/check.js',
   './js/ui/debrief.js',
   './js/ui/emblem.js',
+  './js/ui/equipment.js',
   './js/ui/feet.js',
   './js/ui/footwork.js',
   './js/ui/hands.js',
@@ -83,6 +91,7 @@ const ASSETS = [
   './js/ui/temper-audio.js',
   './js/ui/temper.js',
   './js/ui/today.js',
+  './js/ui/tour.js',
   './js/ui/training.js',
   './js/ui/voice.js',
   './js/ui/week.js',
@@ -130,6 +139,10 @@ const LORE = [
   './assets/lore/nemesis-fades.webp',
   './assets/lore/nemesis-plateau.webp',
   './assets/lore/splash.webp',
+  './assets/lore/warden-coldiron.webp',
+  './assets/lore/warden-scorch.webp',
+  './assets/lore/warden-stormlung.webp',
+  './assets/lore/warden-wither.webp',
 ];
 
 async function cacheLore() {
