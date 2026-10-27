@@ -5,6 +5,7 @@ import { guardianName } from '../data/lore.js';
 import { benchmarkOf, benchState, benchmarkDue, logBenchmark, formatScore, beats } from '../engine/pillars.js';
 import { playTone } from './temper-audio.js';
 import { keepAwake, unlockAudio } from './sound.js';
+import { setStory } from './storycard.js';
 
 let ticker = null;
 const fmt = (sec) => { const s = Math.max(0, Math.floor(sec)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -60,7 +61,8 @@ const screen = {
       return `${head}${sys(kind === 'revenge' ? (won ? 'Baseline geschlagen' : 'Knapp daneben') : 'Baseline steht', `
         <p class="big num center">${formatScore(bench, f.value)}</p>
         <p>${kind === 'revenge' ? (won ? 'Die erste Säule steht. Der Wächter wankt.' : 'Die Säule bleibt offen. Fortschritt und Durchhalten zählen trotzdem.') : 'Das ist deine Messlatte für die Prüfwoche. Gleiche Version, gleiche Regeln.'}</p>
-        <button class="btn primary wide" data-act="bm-close">Fertig</button>`, { tone: kind === 'revenge' && won ? 'gold' : 'sys' })}`;
+        <button class="btn primary wide" data-act="bm-close">Fertig</button>
+        <button class="btn wide share-btn" data-act="story-share">Story-Karte teilen</button>`, { tone: kind === 'revenge' && won ? 'gold' : 'sys' })}`;
     }
 
     if (f.phase === 'ready') {
@@ -133,6 +135,8 @@ const screen = {
       f.kind = st.baseline ? 'revenge' : 'baseline';
       c.update((data) => logBenchmark(data, { kind: f.kind, variant: st.variant || f.variant, value: f.value, sub: f.sub, minutes: f.minutes, day: c.today() }));
       f.phase = 'saved';
+      const bench = benchmarkOf(n);
+      setStory({ kicker: f.kind === 'baseline' ? 'BASELINE GESETZT' : 'REVANCHE', title: bench.name, stats: [[formatScore(bench, f.value).replace(' min', ''), bench.score === 'time' ? 'Zeit' : bench.unit], [f.minutes || '–', 'Minuten'], [st.variant === 'full' || f.variant === 'full' ? 'VOLL' : 'HALB', 'Version']] });
       c.render();
     },
     'bm-close': (c) => { c.ui.bm = null; c.go('heute'); },

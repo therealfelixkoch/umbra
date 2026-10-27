@@ -22,6 +22,8 @@ import { guardianTier } from '../data/lore.js';
 import { rankName } from '../engine/game.js';
 import { beep, keepAwake, signal, unlockAudio } from './sound.js';
 import { playTone } from './temper-audio.js';
+import { setStory } from './storycard.js';
+import { MISSIONS as MISSIONS_ALL } from '../data/missions.js';
 import { RIR_CHOICES, restFor, REST_STEP, exercisePhases, exerciseTimerAt, timerState, intervalPhases, phaseAt, workDone, PHASE_LABEL, activeMinutes } from '../engine/session.js';
 
 const fmt = (sec) => {
@@ -33,7 +35,7 @@ const fmt = (sec) => {
 const restEl = () => document.getElementById('rest');
 let rest = null;
 function startRest(sec, label = 'Pause', exId = null) {
-  rest = { endAt: Date.now() + sec * 1000, label, fired: false, exId };
+  rest = { endAt: Date.now() + sec * 1000, total: sec, label, fired: false, exId };
   drawRest();
 }
 function drawRest() {
@@ -57,7 +59,12 @@ function drawRest() {
     }
     rest.reset = null;
   }
-  el.innerHTML = `<div class="rest-inner"><small>${esc(rest.label)}</small><b class="num">${left > 0 ? fmt(left) : 'Los'}</b>
+  const C = 452;
+  const frac = Math.max(0, Math.min(1, left / Math.max(1, rest.total || 60)));
+  el.innerHTML = `<div class="rest-inner"><small>${esc(rest.label)}</small>
+    <div class="rest-ring"><svg viewBox="0 0 160 160" width="168" height="168" aria-hidden="true"><circle cx="80" cy="80" r="72" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="6"/>
+      <circle cx="80" cy="80" r="72" fill="none" stroke="var(--sys)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${(C * (1 - frac)).toFixed(1)}"/></svg>
+      <b class="num">${left > 0 ? fmt(left) : 'Los'}</b></div>
     ${rest.resetOffer && left > 40 ? '<button class="btn small ghost rest-reset" data-act="rest-reset">Reset?</button>' : ''}
     <div class="row gap"><button class="btn" data-act="rest-sub">−15 s</button><button class="btn" data-act="rest-add">+15 s</button><button class="btn primary" data-act="rest-skip">${left > 0 ? 'Überspringen' : 'Weiter'}</button></div>
     ${rest.exId ? '<small class="rest-note">±15 s merkt sich die App für diese Übung.</small>' : ''}</div>`;
@@ -254,6 +261,7 @@ function setsView(c, a) {
           : `<p class="rir">Alle Sätze mit ${r} Wdh. im Tank${it.noFailure ? ', kein Versagen' : ''}. ${helpDot('rir')}</p>`;
 
   const nextK = entry.sets.findIndex((x) => !x.done);
+  const slash = (k) => (a.justDone && a.justDone.i === i && a.justDone.k === k && Date.now() - a.justDone.at < 900 ? ' slash' : '');
   const rows = entry.sets.map((s, k) => {
     const isNext = nextK === k;
     const prev = last?.sets?.[k];
@@ -268,14 +276,14 @@ function setsView(c, a) {
       timer = `<button class="set-timer" data-act="t-timer" data-k="${k}" aria-label="Timer starten"><b>▶ Timer</b><small>${fmt(timerTarget(def, s))}</small></button>`;
     }
     if (fixed) {
-      return `<div class="set-wrap"><div class="set-row${s.done ? ' done' : ''}${isNext ? ' next' : ''}"><span class="set-n">${k + 1}</span>
+      return `<div class="set-wrap"><div class="set-row${s.done ? ' done' : ''}${isNext ? ' next' : ''}${slash(k)}"><span class="set-n">${k + 1}</span>
         <div class="set-fixed">${targetText(def)}${s.sec ? ` <small class="muted">· ${fmt(s.sec)}</small>` : ''}</div>
         <button class="check" data-act="t-done" data-k="${k}" aria-label="Erledigt">✓</button></div>${timer}</div>`;
     }
     const step = def.mode === 'time' ? 5 : 1;
     const sides = def.perSide && def.mode === 'reps';
     const tag = s.label === 'Top-Satz' ? 'TOP' : s.label === 'Backdown' ? 'BD' : null;
-    return `<div class="set-wrap${s.done ? ' done' : ''}">${s.label && !tag ? `<small class="set-dir">${esc(s.label)}${it.holdReps > 1 ? ` · ${it.holdReps} × ${s.value} s` : ''}</small>` : ''}<div class="set-row${s.done ? ' done' : ''}${isNext ? ' next' : ''}"><span class="set-n">${tag ? `<i class="set-tag">${tag}</i>` : k + 1}</span>
+    return `<div class="set-wrap${s.done ? ' done' : ''}">${s.label && !tag ? `<small class="set-dir">${esc(s.label)}${it.holdReps > 1 ? ` · ${it.holdReps} × ${s.value} s` : ''}</small>` : ''}<div class="set-row${s.done ? ' done' : ''}${isNext ? ' next' : ''}${slash(k)}"><span class="set-n">${tag ? `<i class="set-tag">${tag}</i>` : k + 1}</span>
       <div class="set-mid">${sides
         ? `<div class="sides">${stepper('t-side', `${s.left ?? s.value}`, 'links', { idx: `${k}:L` })}${stepper('t-side', `${s.right ?? s.value}`, 'rechts', { idx: `${k}:R` })}</div>`
         : stepper('t-val', `${s.value}`, def.mode === 'time' ? 's' : 'Wdh.', { idx: `${k}:${step}`, big: true })}${lastLine}</div>
@@ -313,7 +321,7 @@ function setsView(c, a) {
         <div><small>Letztes Mal${last ? ` · ${esc(formatShort(last.day))}` : ''}</small>${lastFull}</div>
         <span class="arrow">→</span>
         <div><small>Heute</small><b>${entry.sets.length} × ${targetText(def, it.target)}</b><em>${def.load ? esc(loadText(def, it.load)) : ''}</em></div>
-      </div>${trendBadge(it.trend)}`}
+      </div>${trendBadge(it.trend)}${ghostBar(def, entry, last)}`}
       ${it.adjust ? `<p class="note">${esc(it.adjust)}</p>` : ''}
       ${it.tempo ? '<p class="note">Tempo: 3 s ablassen, 1 s Pause in der Dehnung, dann kraftvoll hoch.</p>' : ''}
       ${it.levelLabel ? `<p class="note">Stufe der Übung: <b>${esc(it.levelLabel)}</b>. Drei grüne Einheiten in Folge, dann geht es eine Stufe weiter.</p>` : ''}
@@ -335,6 +343,22 @@ function setsView(c, a) {
       ${isLast ? '<button class="btn gold grow" data-act="t-finish">Mission abgeschlossen</button>'
         : '<button class="btn primary grow" data-act="t-next">Nächste Übung →</button>'}
     </footer>`;
+}
+
+// Ghost-Leiste: erledigte Sätze heute gegen dieselben Sätze beim letzten Mal (Wdh. bzw. Sekunden)
+function ghostBar(def, entry, last) {
+  if (!last?.sets?.length || def.mode === 'fixed') return '';
+  const unit = def.mode === 'time' ? 's' : 'Wdh.';
+  const val = (x) => (x.left != null ? Math.min(x.left, x.right ?? x.left) : x.value) || 0;
+  const doneIdx = entry.sets.map((x, k) => (x.done ? k : -1)).filter((k) => k >= 0);
+  const now = doneIdx.reduce((n, k) => n + val(entry.sets[k]), 0);
+  const ghostSoFar = doneIdx.reduce((n, k) => n + (last.sets[k] ? val(last.sets[k]) : 0), 0);
+  const ghostAll = last.sets.reduce((n, x) => n + val(x), 0);
+  const max = Math.max(ghostAll, entry.sets.reduce((n, x) => n + val(x), 0), 1) * 1.1;
+  const d = now - ghostSoFar;
+  const txt = !doneIdx.length ? `Schatten: ${ghostAll} ${unit}` : d > 0 ? `+${d} ${unit} vor dem Schatten` : d < 0 ? `${d} ${unit} hinter dem Schatten` : 'gleichauf mit dem Schatten';
+  return `<div class="ghost-bar"><div class="gb-head"><span>Heute gegen letztes Mal</span><b class="${d < 0 ? 'behind' : ''}">${txt}</b></div>
+    <div class="gb-track"><i class="gb-ghost" style="width:${Math.round((ghostAll / max) * 100)}%"></i><i class="gb-now" style="width:${Math.round((now / max) * 100)}%"></i></div></div>`;
 }
 
 // Aufwärmsätze vor schweren Grundübungen: zählen nicht, kein Log. Volle Rampe nur bei der ersten.
@@ -640,8 +664,12 @@ function finish(c) {
     : s.completion >= 0.999 ? 'Mission abgeschlossen.' : 'Einsatz verbucht.';
   const rankUp = after.index > before.index;
   const quote = quoteAfterMission(c.data, s);
+  const reps = (s.exercises || []).reduce((n, e) => n + (e.sets || []).filter((x) => x.done && getDef(e.exId)?.mode === 'reps').reduce((m, x) => m + (x.value || 0), 0), 0);
+  setStory({ kicker: s.completion >= 0.999 ? 'MISSION ABGESCHLOSSEN' : 'EINSATZ VERBUCHT', title: (MISSIONS_ALL[s.missionId]?.name || title).replace('.', ''),
+    stats: [[s.minutes, 'Minuten'], reps ? [reps, 'Wiederholungen'] : [s.xp, 'XP'], [s.records?.length ? `+${s.records.length}` : `+${s.xp}`, s.records?.length ? 'Bestwerte' : 'XP']] });
+  const burst = `<div class="victory-burst" aria-hidden="true">${Array.from({ length: 16 }, (_, k) => { const ang = (k / 16) * Math.PI * 2; const d = 60 + (k % 3) * 30; return `<i style="--vx:${Math.round(Math.cos(ang) * d)}px;--vy:${Math.round(Math.sin(ang) * d)}px;animation-delay:${(k % 4) * 0.04}s"></i>`; }).join('')}</div>`;
   c.go('heute');
-  c.system(rankUp ? 'Rang-Prüfung bestanden' : title, `${rankUp ? `<div class="rankup epic">${guardianImage(guardianTier(after.id), { cls: 'rankup-guardian' })}
+  c.system(rankUp ? 'Rang-Prüfung bestanden' : title, `${burst}${rankUp ? `<div class="rankup epic">${guardianImage(guardianTier(after.id), { cls: 'rankup-guardian' })}
       <small>Neuer Rang</small><b>${esc(rankName(after))}</b></div>` : ''}
     <div class="xp-gain num">+${s.xp} XP</div>
     <dl class="session-eval"><div><dt>Dauer</dt><dd class="num">${s.minutes} min</dd></div>
@@ -651,13 +679,14 @@ function finish(c) {
     ${rec ? `<div class="record"><b>Rekord gebrochen</b><ul>${rec}</ul></div>` : ''}
     ${painPrompt(c, s)}
     ${quote ? `<blockquote class="quote">„${esc(quote.text)}“<cite>${esc(quote.person)} · ${esc(quote.source)}</cite></blockquote>` : ''}`,
-  [['close-modal', 'Weiter', 'primary']], rankUp ? 'gold aura' : rec ? 'gold' : 'sys');
+  [['close-modal', 'Weiter', 'primary'], ['story-share', 'Story-Karte teilen']], `${rankUp ? 'gold aura' : rec ? 'gold' : 'sys'} victory`);
 }
 
 // ±15 s: läuft sofort und wird pro Übung gemerkt (gilt ab dem nächsten Satz)
 function adjustRest(c, dir) {
   if (!rest) return;
   rest.endAt = Math.max(Date.now() + 1000, Math.max(rest.endAt, Date.now()) + dir * REST_STEP * 1000);
+  rest.total = Math.max(1, (rest.total || 60) + dir * REST_STEP);
   rest.fired = false;
   drawRest();
   const id = rest.exId;
@@ -763,6 +792,7 @@ const training = {
       const sets = entry.sets;
       const k = Number(d.k);
       sets[k].done = !sets[k].done;
+      a.justDone = sets[k].done ? { i: a.index, k, at: Date.now() } : null;
       if (sets[k].done) {
         // RIR vorausgewählt mit dem Ziel der Arc-Woche: ein Tap, wenn es passt
         if (sets[k].rir == null && it.rir != null && !it.explosive && getDef(entry.exId).mode !== 'fixed') sets[k].rir = it.rir;

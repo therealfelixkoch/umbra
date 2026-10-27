@@ -26,6 +26,8 @@ import { wristCheckScreen, wristActions } from './ui/wrist.js';
 import { feetCheckScreen, feetActions } from './ui/feet.js';
 import benchmark from './ui/benchmark.js';
 import { HELP } from './data/help.js';
+import { syncAtmosphere } from './ui/atmosphere.js';
+import { storyActions } from './ui/storycard.js';
 import { tourActions, tourActive, drawTour, startTour } from './ui/tour.js';
 
 const SCREENS = { heute: today, training, arena, kodex, profil: profile, onboarding, check, review, debrief, intro, temper, wristcheck: wristCheckScreen, feetcheck: feetCheckScreen, benchmark };
@@ -117,6 +119,7 @@ function render() {
   if (!app.data.settings.onboarded) route = 'onboarding';
   const screen = SCREENS[route];
   const showTabs = !['onboarding', 'training', 'check', 'review', 'debrief', 'intro', 'temper', 'wristcheck', 'feetcheck', 'benchmark'].includes(route);
+  syncAtmosphere(app.data, route);
   root.innerHTML = `<main class="screen screen-${route}">${screen.render(ctx)}</main>${showTabs ? tabbar(route) : ''}`;
   screen.mount?.(ctx, root);
   animateKK();
@@ -221,6 +224,7 @@ const GLOBAL = {
   ...wristActions,
   ...feetActions,
   ...tourActions,
+  ...storyActions,
   start: (c, d) => today.actions.start(c, d), // HANDS/FEET auch aus dem Profil
   go: (c, d) => c.go(d.to, d.param),
   help: (c, d) => {

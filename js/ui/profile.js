@@ -11,7 +11,7 @@ import { titleStatus, equippedTitle } from '../engine/story.js';
 import { QUOTES, QUOTE_CATS } from '../data/story.js';
 import { startDeload } from '../engine/cycle.js';
 import { weekInfo, holidayActive, DEFAULT_HOLIDAY, completeWeekManually, seasonPlan, inDeload } from '../engine/arc.js';
-import { ARCS, WEEK_PLAN, arcWeeks, planWeek, CYCLE_INFO } from '../data/arcs.js';
+import { ARCS, WEEK_PLAN, arcWeeks, planWeek, CYCLE_INFO, arcOf } from '../data/arcs.js';
 import { logDecision } from '../engine/rulelog.js';
 import { formatDay } from '../engine/dates.js';
 import { MISSIONS } from '../data/missions.js';
@@ -29,6 +29,8 @@ import { bladeEmblem } from './temper.js';
 import { wristView } from './wrist.js';
 import { feetView, mountPhotos } from './feet.js';
 import { equipmentSetup, equipmentActions } from './equipment.js';
+import { overviewView } from './overview.js';
+import { setStory, shareStory } from './storycard.js';
 import { bladeTier } from '../engine/temper.js';
 import { journalView, xpSourceView, journalActions, journalChange } from './journal.js';
 import { guardianTier, GUARDIANS, BOSSES, BOSS_BY_ARC, guardianName } from '../data/lore.js';
@@ -106,6 +108,7 @@ function arcPanel(data, today) {
       <div class="label">Wechseln die Übungen?</div><p class="small">${esc(CYCLE_INFO.exercises)}</p></details>
     <p class="muted small">Eine Woche zählt, sobald darin 2 volle Missionen stattfinden (Kompakt zählt, SHADOWSTEP nicht). Sonst wird sie wiederholt.${holiday ? ' Feiertagsmodus aktiv: Die Saison pausiert.' : ''}</p>
     ${inDeload(arc) || info.chapterIndex === 'exam' ? '' : '<button class="btn wide" data-act="p-deload">Ich brauche einen Deload</button>'}
+    <button class="btn wide" data-act="p-season-story">Saison-Karte teilen</button>
     <button class="btn ghost wide" data-act="p-week-manual">Saison-Woche manuell abschließen</button>`);
 }
 
@@ -179,6 +182,7 @@ export default {
         </dl>`);
       out += sys('Titel', `<div class="titles">${titleStatus(data).map((t) => `<button class="title-chip${t.unlocked ? ' on' : ''}${data.settings.title === t.id ? ' eq' : ''}" ${t.unlocked ? `data-act="p-title" data-id="${t.id}"` : 'disabled'}>
           <b>${esc(t.name)}</b><small>${esc(t.desc)}${data.settings.title === t.id ? ' · ausgerüstet' : ''}</small></button>`).join('')}</div>`);
+      out += overviewView(data, c.today());
       out += sys('Attribut-Ränge', attributeRanks(data));
       out += achievementsView(data, c.today());
       out += weightCard(data, c);
@@ -249,6 +253,13 @@ export default {
     ...equipmentActions,
     ptab: (c, d) => c.setUi({ ptab: d.v }),
     jtab: (c, d) => c.setUi({ jtab: d.v }),
+    'p-season-story': (c) => {
+      const arc = c.data.engine.arc;
+      const p = pillars(c.data, arc.n, getDef);
+      const done = c.data.sessions.filter((s) => s.arc?.n === arc.n && s.kind === 'mission').length;
+      setStory({ kicker: 'SAISON', title: arcOf(arc.n).name, stats: [[`${arc.week}/13`, 'Woche'], [done, 'Missionen'], [`${p.count}/3`, 'Säulen']] });
+      shareStory(c);
+    },
     'bw-step': (c, d) => c.setUi({ bwDraft: Math.round(((c.ui.bwDraft ?? c.data.settings.bodyweight ?? 80) + Number(d.dir) * 0.1) * 10) / 10 }),
     'bw-log': (c) => {
       const kg = c.ui.bwDraft ?? c.data.settings.bodyweight ?? 80;
