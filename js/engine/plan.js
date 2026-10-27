@@ -16,15 +16,21 @@ import { activeMinutes, sessionIntensity, intensityFromRpe, trainingLoad } from 
 import { W as wristOf, blockForMission, blockEntries, wristAdjust, strengthVariant, flatHandOk } from './wrist.js';
 import { HANDS_SEQUENCE } from '../data/wrist.js';
 import { FT, feetSequence, sparTomorrow as feetSpar } from './feet.js';
+import { weightsOf } from './equipment.js';
 
 // Equipment und Einstellungen für ein Profil. Im Home Gym ersetzen Kurzhanteln die Kettlebells.
 export function profileContext(settings, profile) {
   // Unterwegs: nur, was im Check-in angehakt wurde (Kurzhanteln, Laufband, Band, Bank/Stuhl)
   const equipment = [...(profile === 'travel' ? settings.travelGear || [] : settings.equipment?.[profile] || [])];
-  let s = settings;
+  // Bestand des Ortes: echte KB- und Kurzhantel-Gewichte als Stufen (ohne Eintrag: die allgemeine Liste)
+  const inv = settings.inventory?.[profile] || {};
+  const kbs = weightsOf(inv, 'kb');
+  const dbs = weightsOf(inv, 'dumbbells');
+  let s = { ...settings, ...(kbs.length ? { kbWeights: kbs } : {}), ...(dbs.length ? { dbWeights: dbs } : {}) };
+  if (equipment.includes('vest') && !equipment.includes('belt')) equipment.push('belt'); // Weste = Zusatzgewicht wie Gürtel
   if ((profile === 'gym' || profile === 'travel') && !equipment.includes('kb') && equipment.includes('dumbbells')) {
     equipment.push('kb');
-    s = { ...settings, kbWeights: ladderFor('dumbbell', settings) };
+    s = { ...s, kbWeights: ladderFor('dumbbell', s) };
   }
   return { equipment, settings: s };
 }
@@ -141,16 +147,16 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
 
   if (mission.format === 'sets') {
     const items = [];
-    const focus = info.arc.id;
+    const rules = info.rules; // Regler des Kapitels (Saison)
     // Körpersignale: Ellbogen-Zähler voll oder gemeldete Region → Übung anpassen (für heute ablehnbar)
     const declined = data.engine.signalsDeclined === today;
     const sig = declined ? { elbowFull: false, regions: [] }
       : { elbowFull: elbowStatus(data, today).full, regions: activeRegions(data.signals, today) };
-    const contrastOn = focus === 'II' || mission.contrast;
+    const contrastOn = rules.contrast || mission.contrast; // Kontrastpaare (Frühjahr, FORGE immer)
     const plyo = plyoFor(info, arc, plyoCap);
     mission.slots.forEach((s, i) => {
       if (s.only && s.only !== profile) return;
-      if (s.arcOnly && s.arcOnly !== focus) return;
+      if (s.arcOnly && !rules.loadedMobility) return; // belastete Mobility (Herbst)
       if (isCompact && !s.main) return;
       if (s.prehab && (wrist.on || data.settings.jointPause)) return; // Handgelenk-Modul ersetzt das Prehab, Gelenk-Pause lässt es weg
       if (s.plyo && contrastOn) return; // In Arc II übernehmen die Kontrastpaare die Sprünge.
@@ -171,9 +177,11 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
       if (!key) return;
       const def0 = getDef(key);
       if (isCompact) sets = 2;
-      else if (focus === 'IV' && !s.arcOnly && def0.mode !== 'fixed') sets = Math.max(1, sets - 1);
+      else if (rules.minusSet && !s.arcOnly && def0.mode !== 'fixed') sets = Math.max(1, sets - 1);
+      else if (rules.lessAccessory && !s.main && !s.plyo && !s.arcOnly && def0.mode !== 'fixed' && def0.cat !== 'aufwaermen') sets = Math.max(1, sets - 1);
+      else if (rules.extraMainSet && s.main && def0.mode !== 'fixed') sets += 1;
       // Arc II: Top-Satz + Backdown bei Hauptübungen mit Zusatzlast
-      const topSet = focus === 'II' && s.main && !isCompact && def0.load && canLoad(def0, equipment);
+      const topSet = rules.topSet && s.main && !isCompact && def0.load && canLoad(def0, equipment); // Top-Satz + Backdown
       const range = topSet ? [3, 5] : undefined;
       let item = itemFor(key, { data, profile, sets: topSet ? 2 : sets, getDef, arcN: arc.n, range });
       item = { ...item, optional: !!s.optional, main: !!s.main, slotKey, plyoStage: s.plyo ? plyo.stage : undefined, prehab: !!s.prehab };
@@ -266,7 +274,7 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
   if (mission.format === 'intervals') {
     const exId = profile === 'gym' && mission.gymEx ? mission.gymEx : mission.ex;
     return { ...base, rounds: mission.rounds, work: mission.work, rest: mission.rest, exId,
-      warmup: mission.warmup || 0, cooldown: mission.cooldown || 0, rpeLog: !!mission.rpeLog };
+      warmup: mission.warmup || 0, cooldown: mission.cooldown || 0, rpeLog: !!mission.rpeLog, calm: !!mission.calm };
   }
 
   // HANDS: feste Reihenfolge, Timer (s) oder Wiederholungszähler je Schritt
@@ -354,8 +362,8 @@ export function itemFor(key, { data, profile, sets, getDef = defaultGetDef, arcN
 
 // Sprungübung für die Plyo-Stufe des Arcs. Vor hartem Sparring maximal Stufe 3.
 export function plyoFor(info, arc, cap) {
-  let stage = info.arc.plyo[arc.week - 1];
-  if (stage === 4 && info.cycle >= 1 && (arc.week === 4 || arc.week === 5)) stage = 5;
+  let stage = info.plyoStage;
+  if (stage === 4 && info.cycle >= 1 && (info.chapterWeek === 4 || info.chapterWeek === 5)) stage = 5;
   const wanted = stage;
   if (cap && stage > 3) stage = 3;
   const list = PLYO[stage];

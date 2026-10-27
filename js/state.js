@@ -1,11 +1,11 @@
 // Datenmodell: ein Dokument, das komplett in IndexedDB liegt und so auch exportiert wird.
 import { initialEngine } from './engine/cycle.js';
-import { DEFAULT_HOLIDAY, rebaseFirstArc } from './engine/arc.js';
+import { DEFAULT_HOLIDAY, rebaseFirstArc, seasonStartFrom } from './engine/arc.js';
 import { sessionXp } from './engine/game.js';
 import { toDay } from './engine/dates.js';
 import { effortToRpe, sessionIntensity, intensityFromRpe, trainingLoad } from './engine/session.js';
 
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 10;
 
 export function defaultData() {
   return {
@@ -18,6 +18,7 @@ export function defaultData() {
         gym: ['barbell', 'rack', 'dumbbells', 'cable', 'rower', 'bar'],
       },
       kbWeights: [8, 12, 16, 20, 24],
+      inventory: { room: {}, gym: {} }, // Bestand pro Ort; leer = allgemeine KB-Liste
       bodyweight: 80,
       restSec: 75,
       sound: true,
@@ -134,6 +135,30 @@ MIGRATIONS[7] = (raw) => ({
   ...raw, schemaVersion: 8, settings: { ...raw.settings, jointPause: true },
   ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v8', day: toDay(), suggestion: 'joint_pause', decision: 'applied' }],
 });
+
+MIGRATIONS[8] = (raw) => {
+  // v8 → v9: Bestand pro Ort (Fighting Cave, Home Gym). KB-Gewichte je 1 Stück an jedem Ort, an dem KBs abgehakt sind.
+  // Kletterseil ist ein eigenes Teil (vorher „Ringe / Kletterseil“).
+  const eq = raw.settings?.equipment || {};
+  const kb = Object.fromEntries((raw.settings?.kbWeights || []).map((w) => [w, 1]));
+  const inv = (place) => ((eq[place] || []).includes('kb') ? { kb: { ...kb } } : {});
+  const withRope = (list) => (list && list.includes('rings') ? [...new Set([...list, 'climb_rope'])] : list);
+  return { ...raw, schemaVersion: 9,
+    settings: { ...raw.settings, inventory: raw.settings?.inventory || { room: inv('room'), gym: inv('gym') },
+      equipment: { ...eq, ...(eq.room ? { room: withRope(eq.room) } : {}), ...(eq.gym ? { gym: withRope(eq.gym) } : {}) } },
+    ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v9', day: toDay(), suggestion: 'inventory', decision: 'applied' }] };
+};
+
+MIGRATIONS[9] = (raw) => {
+  // v9 → v10: Saisons statt Arc-Kreis (Konzept 27.10.2026). Die neue Saison startet am nächsten Montag mit Woche 1.
+  // Bisherige Sessions bekommen n = −1 („Vorbereitung“), damit sie nicht als Saisonwochen zählen. Alte Bosse sind raus.
+  const today = toDay();
+  const arc = seasonStartFrom(today);
+  const sessions = (raw.sessions || []).map((x) => (x.arc ? { ...x, arc: { n: -1, week: x.arc.week } } : x));
+  const engine = { ...raw.engine, arc, bossEvents: {}, introSeen: {}, arcHistory: [], prevArc: raw.engine?.arc || null };
+  return { ...raw, schemaVersion: 10, engine, sessions,
+    ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v10', day: today, suggestion: `season:${arc.n}:${arc.startedDay}`, decision: 'applied' }] };
+};
 
 export function migrate(raw) {
   let doc = raw;

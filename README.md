@@ -72,6 +72,70 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 27.10.2026: Extras und Tutorial (Pakete 4 und 5 von 5)
+
+- **ZONE 2:** lockere Ausdauer, 30 min (Rudern, Air Bike, Laufen, Seil, Shadow Boxing). Im Sommer Kapitel 2 als Karte auf „Heute“ (einmal pro Woche, zusätzlich), sonst über „Andere Einheit“. Zählt nicht für Rotation und Wochenziel, 40 XP.
+- **Events (freiwillig, eins pro Kapitel):** Ankündigung ab Kapitelwoche 3, am Samstag und Sonntag der Kapitelwoche 4 live (HERO DAY, SACK-MARATHON, 100 BURPEES, IRON LADDER, LONG HAUL, DEEP FLOW). „Event geschafft“ = 100 XP, Liste unter Erfolge. Zählt nicht für Rotation und Wochenziel.
+- **Körpergewicht:** Profil → Status → Körpergewicht, ±0,1 kg, „Heute eintragen“. Kurve seit Saisonstart, Veränderung in kg. Montags eine Erinnerung auf „Heute“, falls diese Woche noch nichts eingetragen ist. Keine Ernährungslogik.
+- **„?“-Punkte** an den wichtigen Stellen (Zeitwahl, Hinweise, Rotation, Saison, Säulen, Benchmark, Index, RIR, Top-Satz, Kontrast, Aufwärmsätze, Superset, + Satz, Gelenk-Pause, Equipment, Kampfkraft, Erfolge). Alle Texte stehen in js/data/help.js.
+- **Handbuch im Kodex:** alle Erklärungen nach Themen (Der Tag, Saisons, Training, Körper, Fortschritt).
+- **Geführte Tour:** 7 Schritte an den echten Stellen (Status, Zitat, Check-in, Navigation, Saison und Säulen, Erfolge, Handbuch). Startet einmal automatisch nach diesem Update, wiederholbar im Handbuch und unter Setup → Einführung.
+
+### Update 27.10.2026: Erfolge (Paket 3 von 5)
+
+- **Saisonale Wochen-Quests:** Jede Quest gehört zu Saisons und bereitet die Säulen vor. Winter z. B. IRON CLIMB (40 Klimmzüge), FULL LOAD (2 Missionen mit allen Hauptsätzen), PEAK (Top-Sätze), dazu BEDROCK, POSTERIOR CHAIN, STEEL NECK, BURDEN. Frühjahr: SECOND WIND (4x4 oder voller Zirkel), BLOODED (Sparring), SPARK, PEAK. Sommer: Athletik und Kondition. Herbst: DEEP ROOTS (Mobility), FLOWING SHADOW. Die Auswahl bevorzugt weiter Lücken der Vorwoche.
+- **Kapitel-Erfolge** (je Kapitel): KAPITEL DURCHGEZOGEN (100 XP), NEUE BESTWERTE (3 in Hauptübungen), NEUE STUFE (Progressionsstufe angenommen), eine Saison-Tat (je 50 XP). Taten: Winter VOLLE LAST / SAUBERE SPITZE, Frühjahr ZEHN RUNDEN / ERSTES 4x4, Sommer LEICHTE FÜSSE / DREI ZIRKEL, Herbst WEITER / STILLE GELENKE.
+- **Erfolge in Stufen** (Profil → Status): Abzeichen (150 XP: AWAKENING, ARENA BLOOD, FLOWING SHADOW, STEEL NECK), Errungenschaften (300 XP: WEIGHTED ASCENT, OPEN HIPS, IRON GRIP, UNBENDING, ECLIPSE FORM = erster Wächter besiegt), große Errungenschaften (750 XP): SKYWARD (+50 % KG Klimmzug), DOUBLE WEIGHT (2 × KG Kreuzheben), IRON PILLAR (1,5 × KG Kniebeuge), TWENTY DEEP (20 Dips), FULL MURPH, ENGINE (4x4 mit 4.000 m), ARENA LEGEND (100 ARENA), FIVE ROUNDS (5 Sparringsrunden), NIGHT WARDEN (100 Einsätze), UNBROKEN (alle vier Wächter in einem Jahr), ALL SEASONS (52 Wochen Streak), THREE WINTERS (3 Jahre), FLUID (alle Regionen ≥ 75), SIDE SPLIT, PANCAKE. Bereits freigeschaltete bleiben, alle Erfolge außerhalb des Tagesdeckels.
+
+### Update 27.10.2026: Säulen und Wächter-Ergebnis (Paket 2 von 5)
+
+- **Säule 1 · Benchmark-Workout:** pro Wächter ein festes Workout mit voller und halber Version (Winter: Cave-Murph auf Zeit, Frühjahr: Storm Rounds (Sprawls zählen), Sommer: Scorch Chain auf Zeit, Herbst: Wither Flow (Runden in 10 bzw. 6 min)). Baseline im ersten Kapitel, Revanche in der Prüfwoche, gleiche Version. Karte auf „Heute“, eigener Screen mit Stoppuhr bzw. Rundenuhr und Glocke, Gelenk-Ersatz anhakbar. Zählt als volle Mission und ersetzt einmal INFILTRATION.
+- **Säule 2 · Fortschritts-Index:** Saisonwochen 1–4 gegen 9–13. Bereiche: Hauptübungen (bester Satz, RIR-bereinigt), Kondition (Zirkelrunden, SHADOWSTEP-Runden, 4x4-RPE), Mobility (Test vor der Saison gegen letzten Test in der Saison, pro Region), Muay Thai (ARENA-Minuten pro Woche, Sparringsrunden, Technik-Check). Geschafft: ≥ 60 % besser (Fokus der Saison doppelt), keiner > 10 % schlechter, mindestens 3 Bereiche.
+- **Säule 3 · Durchziehen:** die Prüfwoche erreicht (beide Kapitel inkl. Deload).
+- **Ergebnis beim Saisonende:** 1 Säule Bronze (200 XP), 2 Silber (350 XP), 3 Gold (500 XP), keine = Rückzug. Panels Sieg/Rückzug. Heute zeigt die Säulen als B · I · K neben dem Wächter, das Profil den Stand jeder Säule.
+- Bild-Prompts für COLDIRON, STORMLUNG, SCORCH, WITHER und die Saison-Szenen: docs/umbra-bild-prompts.md, Abschnitt 3b.
+
+### Update 27.10.2026: Saisons statt Arc-Kreis (Paket 1 von 5, Konzept in docs/umbra-saisons-konzept.md)
+
+- **4 Saisons pro Jahr** (Winter Arc Nov–Jan, Frühjahr Feb–Apr, Sommer Mai–Jul, Herbst Aug–Okt), je **13 Trainingswochen = 2 Kapitel à 6 Wochen (5 Aufbau + 1 Deload) + Prüfwoche**. Das ganze Jahr SuperMover mit denselben Missionen, die Saison dreht nur an Reglern pro Kapitel:
+
+| Saison | Kapitel 1 | Kapitel 2 |
+| --- | --- | --- |
+| Winter Arc · COLDIRON | Volumen: Hauptübungen +1 Satz, Plyo 1–2 | Kraft: Top-Satz + Backdown, Plyo 3 |
+| Frühjahr · STORMLUNG | Power: Kontrastpaare + Top-Satz, Plyo 4 | Motor: + 4x4 1× pro Woche |
+| Sommer · SCORCH | Athletik: Nebenübungen −1 Satz, Plyo 3–4 | Motor: + 4x4 |
+| Herbst · WITHER | Reset: alle −1 Satz, belastete Mobility | Basis: belastete Mobility, Mobility-Check |
+
+- Prüfwoche (Woche 13): RIR 3, ausgeruht nach dem Deload in Woche 12. Dort fällt ab Paket 2 der Wächter über drei Säulen (Benchmark-Workout, Fortschritts-Index, Durchziehen). Der Saison-Debrief ist in der Prüfwoche fällig.
+- Ein Wächter pro Saison, jedes Jahr stärker (COLDIRON II …). Die alten Arcs I–IV und Bosse TORPOR, FRACTURE, HOLLOW und RIGOR sind raus. Bilder der Wächter fehlen noch, die App zeigt Silhouetten.
+- Heute zeigt Wächter, Saison, Kapitel und die 13 Wochen als Leiste. Das Profil zeigt die Saison-Karte mit Kapiteln, Plan (Start/Ende, Feiertage verschieben das Ende) und „Das Jahr“.
+- **Übergang (Migration v10):** Die Saison startet am Montag nach dem Update mit Woche 1 (bei Update bis 1.11.: Winter Arc ab 2.11.2026). Bisherige Sessions zählen als Vorbereitung (n = −1), XP, Bestwerte, Rotation und Progression bleiben.
+
+### Update 27.10.2026: Equipment pro Ort (Fighting Cave, Home Gym)
+
+- Der eigene Raum heißt jetzt **Fighting Cave** (Check-in, Setup, Onboarding). Intern bleibt der Schlüssel `room`.
+- **Setup → Fighting Cave / Home Gym:** ein Katalog für beide Orte, nach Gruppen: Gewichte, Ziehen/Stützen/Klettern, Sprung und Boden, Kampf und Kondition, Füße/Hände/Gelenke. Neu: Kletterseil (eigenes Teil, vorher „Ringe / Kletterseil“), Gewichtsweste (zählt wie Dip-Gürtel), Air Bike (ersetzt Rudergerät bei Aufwärmen, Intervallen und 4x4).
+- **+N** an jedem nicht vorhandenen Teil = so viele Übungen würde es an diesem Ort freischalten. **„Fehlt für deine Missionen“** listet, welche Plätze gerade mit Ausweichübung oder ohne Zusatzgewicht laufen.
+- **Bestand pro Ort:** Kettlebells und Kurzhanteln mit Gewicht und Anzahl (Tippen: 1, 2, 3, 4, aus), Plyo-Box-Höhen, Bandstärken. Die KB- und Kurzhantel-Gewichte eines Ortes sind die Stufen, mit denen die App dort steigert (und die Aufwärmsätze rechnet).
+- Schema 9 (Migration: bisherige KB-Gewichte als Bestand je 1 Stück an jedem Ort mit KBs).
+
+### Update 27.10.2026: Arcs bauen aufeinander auf (Winter Arc → Fight-Shape im Frühjahr)
+
+| Arc | Wochen | Schwerpunkt | Was sich ändert |
+| --- | --- | --- | --- |
+| I IRONROOT | 6 | Fundament: Muskel, Kraftausdauer, Sehnen | Wiederholungsbereiche oben, Plyo 1–2 |
+| II IGNITION | 6 | Maximalkraft | Top-Satz + Backdown bei den Hauptübungen, Plyo 3 |
+| III ENDLESS NIGHT | 6 | Power + Motor (Fight-Shape) | Kontrastpaare, Top-Satz als Kraft-Erhalt, 1× pro Woche 4x4 statt Zirkel, Plyo 4 |
+| IV STILL WATER | 3 | Entladen, Mobilität | −1 Satz, belastete Mobility, Woche 3 Deload + Re-Test |
+
+- Die vier Arcs zusammen = ein Zyklus von ca. 21 Trainingswochen, aktuell der **Winter Arc** (Ziel Fight-Shape zum Frühjahr). Profil → Status → Arc erklärt unter „Warum dieser Arc“ und „Winter Arc: alle vier Arcs“, warum der Arc so gebaut ist, was sich ändert und was bleibt.
+- Übungen wechseln nicht komplett: Beim Arc-Wechsel tauschen nur Nebenplätze mit Variante, Hauptübungen nur bei vorgemerkter schwererer Stufe, der Sprungplatz folgt der Plyo-Stufe.
+- Die letzte Woche jedes Arcs ist Deload + Re-Test (I–III: Woche 6, IV: Woche 3). Boss in Arc IV: 6 Lebenspunkte (2 Kampfwochen).
+- Kondition läuft in jedem Arc über INFILTRATION (Zirkel) in der Rotation, in Arc III einmal pro Woche als 4x4.
+- **Saisonziel:** Profil → Status → Arc zeigt „Fight-Shape bis 21.3.27: im Plan / X Wochen hinter Plan“. Gerechnet wird mit den restlichen Arc-Wochen bis Ende Arc III gegen die Kalenderwochen bis zum Ziel, Feiertagswochen zählen nicht. Arc-Wochen zählen weiter erst ab 2 vollen Missionen.
+- **Arm-Finisher (optional):** Hammer Curls (KB, im Home Gym Kurzhantel) am Ende von ASCENT statt Goblet Curls, Trizeps-Overhead-Extension mit KB (Home Gym: Kabel-Pushdown, Ersatz: Band-Pushdown, Diamond Push-ups) am Ende von IMPACT.
+- **+ Satz / − Satz** an jeder Übung, nur für die laufende Einheit. Die Progression rechnet mit den gemachten Sätzen.
+
 ### Update 24.10.2026
 
 - **Gelenk-Pause** (Profil → Gelenke, per Migration eingeschaltet): Handgelenk-Protokoll und Ellbogen-Protokoll ruhen. Kein Unterarm-Prehab und kein Dead Hang in den Missionen, keine Ellbogen-Frage im Check-in, kein Ellbogen-Zähler und keine Anpassungen daraus, keine Handgelenk-Blöcke und -Karten. HANDS und FEET bleiben verfügbar. Alle Daten bleiben gespeichert, ein Tipp auf „Aktiv“ schaltet alles wieder an.

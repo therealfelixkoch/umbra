@@ -1,13 +1,13 @@
 // Story: Nemesis, Boss-Sieg/-Rückzug, Codex-Einträge, Titel, Zitate und die Comic-Panels für Intro und Debrief.
 import { BOSS_LORE, CODEX_EXERCISE, CODEX_RECORD, TITLES, QUOTES } from '../data/story.js';
-import { BOSSES, BOSS_BY_ARC, sceneFile, NEMESIS_SCENES } from '../data/lore.js';
-import { arcOf, ARC_WEEKS, PLYO_NAMES } from '../data/arcs.js';
+import { BOSSES, BOSS_BY_ARC, sceneFile, NEMESIS_SCENES, guardianName } from '../data/lore.js';
+import { arcOf } from '../data/arcs.js';
 import { ATTRIBUTES } from '../data/glyphs.js';
 import { REGION } from '../data/mobility.js';
 import { getDef as defaultGetDef } from '../data/exercises.js';
 import { FULL_MISSIONS } from '../data/missions.js';
 import { weekStart, addDays } from './dates.js';
-import { bossStatus } from './boss.js';
+import { pillars, MEDAL_NAMES } from './pillars.js';
 import { stagnationStatus } from './stagnation.js';
 import { countsForWeek } from './game.js';
 
@@ -36,18 +36,15 @@ export function storyEvents(data, today, arcEvents = []) {
     events.push({ type: 'nemesis_appears' });
   }
 
-  // Boss
-  const b = bossStatus({ ...data, engine });
+  // Saison-Wächter: Ergebnis über die drei Säulen, einmal beim Saisonende
   const be = { ...(engine.bossEvents || {}) };
-  const cur = { ...(be[arc.n] || {}) };
-  if (b.defeated && !cur.defeated) {
-    cur.defeated = today;
-    events.push({ type: 'boss_defeated', n: arc.n, boss: b.id });
-  } else if (!b.defeated && arc.week === ARC_WEEKS && !cur.retreat) {
-    cur.retreat = today;
-    events.push({ type: 'boss_retreat', n: arc.n, boss: b.id });
+  for (const e of arcEvents.filter((x) => x.type === 'arc_complete')) {
+    if (be[e.n]?.result) continue;
+    const p = pillars({ ...data, engine }, e.n, defaultGetDef);
+    be[e.n] = { result: today, medal: p.medal, defeated: p.medal ? today : null,
+      pillars: { benchmark: p.benchmark.passed, index: p.index.passed, chapters: p.chapters.passed }, better: p.index.better, areas: p.index.areas.length };
+    events.push({ type: p.medal ? 'boss_defeated' : 'boss_retreat', n: e.n, medal: p.medal });
   }
-  be[arc.n] = cur;
   engine.bossEvents = be;
 
   const changed = events.length || JSON.stringify(be) !== JSON.stringify(data.engine.bossEvents || {})
@@ -165,12 +162,12 @@ export function introPanels(data, n) {
   const bossId = BOSS_BY_ARC[n % 4];
   const lore = BOSS_LORE[bossId];
   const idx = n % 4;
-  const plyo = [...new Set(arc.plyo)].map((p) => `${p} (${PLYO_NAMES[p]})`).join(', ');
+  const name = guardianName(n);
   return [
-    { file: sceneFile(idx, 'establishing'), title: `ARC ${arc.id} · ${arc.name}`, lines: lore.world },
-    { file: BOSSES[bossId].file, ratio: 3 / 4, boss: bossId, title: `${BOSSES[bossId].name} · ${lore.epithet}`, lines: [lore.weakness] },
-    { file: sceneFile(idx, 'confront'), title: 'Konfrontation', lines: [...lore.confront, '15 Treffer bis zum Fall. Er heilt sich nie.'] },
-    { title: 'Was dieser Arc trainiert', stats: [['Fokus', arc.focus], ['Plyo-Stufen', plyo], ['Wochen', '6'], ['Woche 6', 'Deload']],
+    { file: sceneFile(idx, 'establishing'), title: arc.name, lines: lore.world },
+    { file: BOSSES[bossId].file, ratio: 3 / 4, boss: bossId, title: `${name} · ${lore.epithet}`, lines: [lore.weakness] },
+    { file: sceneFile(idx, 'confront'), title: 'Konfrontation', lines: [...lore.confront, 'Er fällt nicht durch Menge. Drei Säulen entscheiden: Benchmark, Fortschritt, Durchziehen.'] },
+    { title: 'Was diese Saison trainiert', stats: [['Fokus', arc.focus], ['Kapitel 1', arc.chapters[0].name], ['Kapitel 2', arc.chapters[1].name], ['Woche 13', 'Prüfwoche']],
       lines: [arc.desc, 'Woche 1: Gewichte finden, 3 Wiederholungen im Tank.'] },
     quotePanel(pickQuote(data.settings, `intro-${n}`)),
   ].filter(Boolean);
@@ -178,12 +175,14 @@ export function introPanels(data, n) {
 
 export function victoryPanels(data, n, stats = {}) {
   const bossId = BOSS_BY_ARC[n % 4];
-  return [{ file: sceneFile(n % 4, 'victory'), title: `${BOSSES[bossId].name} ist gefallen`, lines: BOSS_LORE[bossId].victory.map((l) => fill(l, stats)), gold: true }];
+  const medal = stats.medal || data.engine.bossEvents?.[n]?.medal;
+  const lines = BOSS_LORE[bossId].victory.map((l) => fill(l, stats));
+  return [{ file: sceneFile(n % 4, 'victory'), title: `${guardianName(n)} ist gefallen`, lines: medal ? [...lines, `Säulen: ${MEDAL_NAMES[medal]}.`] : lines, gold: true }];
 }
 
 export function retreatPanels(data, n, stats = {}) {
   const bossId = BOSS_BY_ARC[n % 4];
-  return [{ file: sceneFile(n % 4, 'retreat'), title: `${BOSSES[bossId].name} zieht sich zurück`, lines: BOSS_LORE[bossId].retreat.map((l) => fill(l, stats)) }];
+  return [{ file: sceneFile(n % 4, 'retreat'), title: `${guardianName(n)} zieht sich zurück`, lines: BOSS_LORE[bossId].retreat.map((l) => fill(l, stats)) }];
 }
 
 export function nemesisPanels(kind) {
@@ -203,7 +202,7 @@ export function debriefPanels(data, st) {
   panels.push({ title: 'Konstanz', stats: [['Missionen', st.missions], ['ARENA', `${st.arena} · ${fmt(st.arenaHours)} h`], ['FLOW-Tage', st.flowDays], ['Längste Serie', `${st.longestStreak} W`]],
     lines: [st.missions >= 10 ? 'Das System registriert Beständigkeit.' : 'Jeder Einsatz wurde gezählt. Keiner ging verloren.'] });
   const top = [...st.strength].sort((a, b) => b.gain / (b.first || 1) - a.gain / (a.first || 1)).slice(0, 4);
-  if (top.length) panels.push({ title: 'Kraft', stats: top.map((x) => [x.name, `${fmt(x.first)} → ${fmt(x.best)}`]), lines: [`Bestleistungen in diesem Arc: ${st.records}.`] });
+  if (top.length) panels.push({ title: 'Kraft', stats: top.map((x) => [x.name, `${fmt(x.first)} → ${fmt(x.best)}`]), lines: [`Bestleistungen in dieser Saison: ${st.records}.`] });
   if (st.mobility.length) {
     const moved = st.mobility.filter((m) => m.before != null).sort((a, b) => (b.after - b.before) - (a.after - a.before)).slice(0, 4);
     const rows = (moved.length ? moved : st.mobility.slice(0, 4)).map((m) => [REGION[m.region]?.name || m.region, m.before != null ? `${m.before} → ${m.after}` : `${m.after}`]);

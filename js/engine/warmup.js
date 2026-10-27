@@ -59,7 +59,9 @@ export const SUPERSET_PAIRS = [
   ['pseudo_planche_pushup', 'band_pull_apart', 'Drücken ↔ hintere Schulter'],
   ['calf_raise_sl', 'tibialis_raise', 'Wade ↔ Schienbein'],
   ['neck_ext_harness', 'neck_flex_side', 'Nacken hinten ↔ vorne/seitlich'],
-  ['ab_rollout', 'goblet_curl', 'Rumpf ↔ Arme'],
+  ['ab_rollout', 'hammer_curl_kb', 'Rumpf ↔ Arme'],
+  ['ab_rollout', 'db_hammer_curl', 'Rumpf ↔ Arme'],
+  ['hanging_leg_raise', 'kb_overhead_triceps', 'Rumpf ↔ Arme'],
   ['kb_halo', 'hanging_leg_raise', 'Schulter ↔ Rumpf'],
 ];
 export const SUPERSET_REST = 20; // Wechsel zwischen den beiden Übungen

@@ -1,10 +1,11 @@
 // Erster Start: Equipment, KB-Gewichte, Startwerte.
 import { sys, stepper, esc } from './kit.js';
 import { EQUIPMENT } from '../data/exercises.js';
+import { EQUIPMENT_GROUPS } from '../engine/equipment.js';
 
-export const ROOM_EQUIPMENT = ['bag', 'bar', 'dipbars', 'box', 'kb', 'rope', 'harness', 'belt', 'band', 'rings', 'sandbag', 'abwheel', 'hammer', 'ball', 'balance_board', 'slant', 'pipes'];
+export const ROOM_EQUIPMENT = EQUIPMENT_GROUPS.flatMap((g) => g.items);
 export const TRAVEL_EQUIPMENT = ['dumbbells', 'treadmill', 'band', 'chair'];
-export const GYM_EQUIPMENT = ['barbell', 'rack', 'dumbbells', 'cable', 'rower', 'bar', 'dipbars', 'bench', 'kb', 'band'];
+export const GYM_EQUIPMENT = EQUIPMENT_GROUPS.flatMap((g) => g.items);
 export const KB_OPTIONS = [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 32, 36, 40, 44, 48];
 const START_KEYS = [['pullups', 'Max. Klimmzüge'], ['dips', 'Max. Dips'], ['pushups', 'Max. Liegestütze']];
 
@@ -37,7 +38,7 @@ export default {
     }
     if (step === 1) {
       return `<h1 class="h">Ausrüstung</h1>${dots}
-        <p class="muted">Eigener Raum: Was ist vorhanden? Fehlt etwas, nimmt die App automatisch eine Alternative.</p>
+        <p class="muted">Fighting Cave (dein eigener Raum): Was ist vorhanden? Fehlt etwas, nimmt die App automatisch eine Alternative.</p>
         ${equipmentToggles(ROOM_EQUIPMENT, d.equipment.room, 'room')}
         <h2 class="h2">Home Gym</h2>
         ${equipmentToggles(GYM_EQUIPMENT, d.equipment.gym, 'gym')}

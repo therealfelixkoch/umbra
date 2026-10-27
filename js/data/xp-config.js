@@ -24,9 +24,14 @@ export const XP_CONFIG = {
     rest: 10, // Ruhetag mit FLOW
     record: 25, // pro Bestleistung
     weekGoal: 100, // Wochenziel erreicht
-    boss: 500, // Boss besiegt
+    boss: 500, // (alt) Boss besiegt
+    guardian: { bronze: 200, silver: 350, gold: 500 }, // Saison-Wächter nach Säulen, nicht im Tagesdeckel
     quest: 100, // Side Quest
-    ascension: 150,
+    ascension: 150, // Abzeichen
+    feat: 300, // Errungenschaft
+    legend: 750, // große Errungenschaft
+    micro: 50, // Mikro-Erfolg im Kapitel
+    chapter: 100, // Kapitel durchgezogen
     check: 50, // Mobility-Check
     temper: 15, // TEMPER-Episode oder Situations-Einsatz, unabhängig von der Retentionszeit
     temperBook: 150, // TEMPER-Stufe abgeschlossen (Buch beendet), nicht im Tagesdeckel
@@ -36,6 +41,8 @@ export const XP_CONFIG = {
     hands: 5, // HANDS
     feet: 5, // FEET-Einheit
     feetCheck: 10, // Fuß-Check
+    zone2: 40, // ZONE 2 (locker)
+    event: 100, // freiwilliges Event im Kapitel
   },
 
   partialMin: 0.2, // unvollständige Mission zählt mindestens 20 %
@@ -47,7 +54,7 @@ export const XP_CONFIG = {
 
 export const SOURCE_LABELS = {
   mission: 'Missionen', compact: 'QUICK STRIKE', light: 'INFILTRATION leicht', express: 'SHADOWSTEP', arena: 'ARENA',
-  flow: 'FLOW', rest: 'Ruhetag', record: 'Bestleistungen', weekGoal: 'Wochenziel', boss: 'Boss besiegt', quest: 'Side Quests',
-  ascension: 'Ascensions', check: 'Mobility-Check', temper: 'TEMPER', temperBook: 'TEMPER-Stufe',
-  wrist: 'Handgelenk', wristCheck: 'Handgelenk-Check', wristDone: 'Handgelenk-Protokoll beendet', hands: 'HANDS', feet: 'FEET', feetCheck: 'Fuß-Check',
+  flow: 'FLOW', rest: 'Ruhetag', record: 'Bestleistungen', weekGoal: 'Wochenziel', boss: 'Boss besiegt', guardian: 'Saison-Wächter', quest: 'Side Quests',
+  ascension: 'Erfolge', micro: 'Kapitel-Erfolge', check: 'Mobility-Check', temper: 'TEMPER', temperBook: 'TEMPER-Stufe',
+  wrist: 'Handgelenk', wristCheck: 'Handgelenk-Check', wristDone: 'Handgelenk-Protokoll beendet', hands: 'HANDS', feet: 'FEET', feetCheck: 'Fuß-Check', zone2: 'ZONE 2', event: 'Events',
 };

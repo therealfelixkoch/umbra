@@ -1,4 +1,4 @@
-:root { --app-version: "v25"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
+:root { --app-version: "v32"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
 @font-face {
   font-family: 'Oxanium';
   src: url('../fonts/oxanium.woff2') format('woff2');
@@ -955,3 +955,77 @@ table.mini th { font-size: 11px; color: var(--muted); font-weight: 600; }
 .superset.on { border-color: var(--cyan); }
 .superset small { display: block; color: var(--muted); font-size: 12px; }
 .ss-tag { color: var(--cyan); font-weight: 700; font-size: 12px; letter-spacing: 0.06em; }
+
+/* Satz hinzufügen / entfernen (nur heute) */
+.set-adj { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.set-adj small { margin-left: auto; font-size: 12px; }
+
+/* Equipment pro Ort */
+.eq-place summary { display: flex; justify-content: space-between; align-items: baseline; cursor: pointer; list-style: none; }
+.eq-place summary::-webkit-details-marker { display: none; }
+.eq-place summary b { font-family: var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.eq-place summary small { color: var(--muted); }
+.eq-place .label { margin-top: 12px; }
+.toggle .eq-plus { margin-left: 6px; font-size: 11px; color: var(--cyan); font-weight: 700; }
+.inv { margin-top: 6px; }
+.kbgrid .kb small { display: block; font-size: 10px; line-height: 1; color: var(--cyan); }
+.eq-gaps { list-style: none; padding: 0; margin: 4px 0; }
+.eq-gaps li { padding: 6px 0; border-top: 1px solid var(--line); }
+.eq-gaps li:first-child { border-top: 0; }
+.eq-gaps small { display: block; color: var(--muted); font-size: 12px; }
+
+/* Arc-Erklärung */
+.arc-why { margin: 10px 0; border-top: 1px solid var(--line); padding-top: 8px; }
+.arc-why summary { font-weight: 600; color: var(--sys); cursor: pointer; }
+.arc-why p { font-size: 14.5px; line-height: 1.5; }
+.arc-cycle { padding-left: 18px; margin: 6px 0; }
+.arc-cycle li { margin: 6px 0; font-size: 14px; color: var(--muted); }
+.arc-cycle li b { color: var(--text); }
+.arc-cycle li.cur b { color: var(--sys); }
+.arc-cycle li.cur::marker { color: var(--sys); }
+
+/* Saison: 13 Wochen als Leiste (2 Kapitel + Prüfwoche) */
+.season-track { display: flex; gap: 6px; flex: 1; align-items: center; }
+.season-track span { display: flex; gap: 2px; }
+.season-track span:nth-child(1), .season-track span:nth-child(2) { flex: 6; }
+.season-track span:nth-child(3) { flex: 1; }
+.season-track i { flex: 1; height: 6px; min-width: 6px; border-radius: 2px; background: rgba(255, 255, 255, 0.14); }
+.season-track i.on { background: var(--sys); }
+.season-track i.cur { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+.season-track i.dl { opacity: 0.6; }
+.season-track i.exam { background: var(--gold, #ffcf5a); opacity: 0.45; }
+.season-track i.exam.cur, .season-track i.exam.on { opacity: 1; }
+.chapter { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+.chapter.cur b { color: var(--sys); }
+.sys .season-track { margin: 10px 0; }
+
+/* Säulen des Saison-Wächters */
+.pillars { display: inline-flex; gap: 3px; margin-left: 6px; }
+.pillars i { font-style: normal; font-size: 9px; font-weight: 700; width: 14px; height: 14px; line-height: 14px; text-align: center; border-radius: 4px; border: 1px solid var(--line); color: var(--muted); }
+.pillars i.half { border-color: var(--cyan); color: var(--cyan); }
+.pillars i.on { background: var(--gold, #ffcf5a); border-color: var(--gold, #ffcf5a); color: #111; }
+.pillar-panel { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 6px; }
+.pillar-panel p { margin: 6px 0; }
+.bench-card { border-color: var(--gold, #ffcf5a); }
+.big.num { font-size: 40px; font-weight: 700; margin: 8px 0; }
+
+/* Kapitel-Erfolge */
+.micro-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.micro { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; opacity: 0.6; }
+.micro.on { opacity: 1; }
+.micro span { color: var(--gold, #ffcf5a); }
+.micro small { display: block; color: var(--muted); font-size: 12px; }
+.micro em { font-style: normal; font-size: 12px; color: var(--muted); }
+.micro b { font-size: 13.5px; letter-spacing: 0.04em; }
+
+/* „?“-Punkte, Tour, Events */
+.help-dot { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--sys); color: var(--sys); font-size: 11px; font-weight: 700; line-height: 1; vertical-align: middle; background: transparent; padding: 0; flex: none; }
+.help-dot:active { background: rgba(139, 125, 255, 0.25); }
+#tour { position: fixed; inset: 0; z-index: 90; pointer-events: none; }
+.tour-hole { position: fixed; border-radius: 14px; box-shadow: 0 0 0 9999px rgba(5, 4, 10, 0.72); border: 2px solid var(--cyan); transition: all 0.2s; }
+.tour-card { position: fixed; left: 16px; right: 16px; bottom: calc(84px + env(safe-area-inset-bottom)); background: var(--surface); border: 1px solid var(--sys); border-radius: 16px; padding: 14px; pointer-events: auto; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); }
+.tour-card small { color: var(--sys); letter-spacing: 0.12em; text-transform: uppercase; font-size: 11px; }
+.tour-card b { display: block; font-size: 17px; margin: 4px 0; }
+.tour-card p { font-size: 14.5px; line-height: 1.45; margin: 0 0 10px; }
+.event-card { border-color: var(--cyan); }
+.archive-link.wide { width: 100%; margin-top: 8px; }

@@ -15,19 +15,26 @@ export const GUARDIANS = [
   { id: 'guardian-5', file: 'guardian-5-unbreakable.webp', name: 'UNZERBRECHLICH', ratio: 3 / 4, gold: true },
 ];
 
-// Bosse (Arc-Index 0–3) und Nemesis
+// Saison-Wächter (Saison-Index 0–3: Winter, Frühjahr, Sommer, Herbst) und Nemesis.
+// Bilder fehlen noch (Prompts in docs/umbra-bild-prompts.md), bis dahin zeigt die App eine Silhouette.
 export const BOSSES = {
-  torpor: { file: 'boss-torpor.webp', name: 'TORPOR', arc: 0, shape: 'colossus', ratio: 3 / 4 },
-  fracture: { file: 'boss-fracture.webp', name: 'FRACTURE', arc: 1, shape: 'shards', ratio: 3 / 4 },
-  hollow: { file: 'boss-hollow.webp', name: 'HOLLOW', arc: 2, shape: 'wraith', ratio: 3 / 4 },
-  rigor: { file: 'boss-rigor.webp', name: 'RIGOR', arc: 3, shape: 'serpent', ratio: 3 / 4 },
+  coldiron: { file: 'warden-coldiron.webp', name: 'COLDIRON', arc: 0, shape: 'colossus', ratio: 3 / 4 },
+  stormlung: { file: 'warden-stormlung.webp', name: 'STORMLUNG', arc: 1, shape: 'wraith', ratio: 3 / 4 },
+  scorch: { file: 'warden-scorch.webp', name: 'SCORCH', arc: 2, shape: 'shards', ratio: 3 / 4 },
+  wither: { file: 'warden-wither.webp', name: 'WITHER', arc: 3, shape: 'serpent', ratio: 3 / 4 },
   plateau: { file: 'nemesis-plateau.webp', name: 'THE PLATEAU', nemesis: true, shape: 'monolith', ratio: 3 / 4 },
 };
-export const BOSS_BY_ARC = ['torpor', 'fracture', 'hollow', 'rigor'];
+export const BOSS_BY_ARC = ['coldiron', 'stormlung', 'scorch', 'wither'];
+/** Name mit Jahreszahl: COLDIRON, COLDIRON II … */
+export const guardianName = (n) => {
+  const b = BOSSES[BOSS_BY_ARC[((n % 4) + 4) % 4]];
+  const y = Math.floor(n / 4) + 1;
+  return y > 1 ? `${b.name} ${['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][y] || y}` : b.name;
+};
 
-// Arc-Szenen (4:5): Establishing, Konfrontation, Sieg, Rückzug
+// Saison-Szenen (4:5): Establishing, Konfrontation, Sieg, Rückzug
 export const SCENE_KINDS = ['establishing', 'confront', 'victory', 'retreat'];
-export const sceneFile = (arcIndex, kind) => `arc${arcIndex + 1}-${kind}.webp`;
+export const sceneFile = (arcIndex, kind) => `season${arcIndex + 1}-${kind}.webp`;
 export const NEMESIS_SCENES = { appears: 'nemesis-appears.webp', fades: 'nemesis-fades.webp' };
 
 export const EXTRAS = { splash: { file: 'splash.webp', ratio: 9 / 16 }, icon: { file: 'icon-1024.png', ratio: 1 } };

@@ -6,6 +6,7 @@ import { GUARDIANS, BOSSES, SCENE_KINDS, sceneFile, NEMESIS_SCENES, LORE_DIR, MA
 import { guardianImage, bossImage, loreImage, scenePlaceholder, comicPanels, bindPanels } from './lore.js';
 import { codexEntry } from '../engine/story.js';
 import { formatDay } from '../engine/dates.js';
+import { HELP, HELP_GROUPS } from '../data/help.js';
 
 export function exerciseDetail(def, { linkable = true } = {}) {
   const link = (id) => {
@@ -54,11 +55,11 @@ function archive(c) {
   const st = c.ui.bossDemo || 'half';
   const bossOpts = st === 'full' ? {} : st === 'half' ? { hp: 7.5, max: 15 } : st === 'heavy' ? { hp: 2.2, max: 15 } : { state: st };
   const cell = (html, file) => `<div class="lore-cell">${html}<small data-file="${file}">${file}</small></div>`;
-  const scenes = [0, 1, 2, 3].map((a) => `<div class="label">Arc ${['I', 'II', 'III', 'IV'][a]}</div><div class="lore-grid">${SCENE_KINDS.map((k) =>
+  const scenes = [0, 1, 2, 3].map((a) => `<div class="label">${['Winter', 'Frühjahr', 'Sommer', 'Herbst'][a]}</div><div class="lore-grid">${SCENE_KINDS.map((k) =>
     cell(loreImage({ file: sceneFile(a, k), ratio: 4 / 5, placeholder: scenePlaceholder(4 / 5) }), sceneFile(a, k))).join('')}</div>`).join('');
   const demo = comicPanels([
-    { file: sceneFile(0, 'establishing'), title: 'ARC I · IRONROOT', lines: ['Ein Steinbruch. Nebel liegt schwer über dem Boden.', 'Etwas hier will, dass du stehen bleibst.'] },
-    { file: BOSSES.torpor.file, ratio: 3 / 4, title: 'TORPOR', lines: ['Er macht dich schwer und träge.', 'Er wartet darauf, dass du aufhörst.'] },
+    { file: sceneFile(0, 'establishing'), title: 'WINTER ARC', lines: ['Eine Schmiede, in der das Feuer erloschen ist.', 'Der Winter ist lang. Hier wird Kraft gesammelt.'] },
+    { file: BOSSES.coldiron.file, ratio: 3 / 4, title: 'COLDIRON', lines: ['Er macht dich schwach und träge, wenn es dunkel wird.', 'Er weicht nur der Kraft.'] },
     { title: 'Bilanz', stats: [['Missionen', '14'], ['ARENA', '9'], ['FLOW-Tage', '21'], ['Längste Serie', '6 W']], lines: ['Beispielzahlen. Im Debrief stehen deine echten.'] },
   ], 'demo-panels');
   return `<button class="btn ghost back" data-act="go" data-to="kodex">← Kodex</button>
@@ -86,10 +87,23 @@ function chronicle(c) {
     ${sys('Einträge', rest.length ? rest.map((x) => `<div class="chron"><small>${formatDay(x.meta.day || '2026-01-01')}</small><b>${esc(x.e.title)}</b><p>${esc(x.e.text)}</p></div>`).join('') : '<p class="muted">Noch leer. Die erste Mission schreibt den ersten Eintrag.</p>')}`;
 }
 
+// Handbuch: alle Erklärungen der „?“-Punkte nach Themen, dazu die Tour
+function handbook(c) {
+  const q = (c.ui.hq || '').toLowerCase();
+  const items = Object.entries(HELP).filter(([, h]) => !q || `${h.title} ${h.text}`.toLowerCase().includes(q));
+  return `<button class="btn ghost back" data-act="go" data-to="kodex">← Kodex</button><h1 class="h">Handbuch</h1>
+    <button class="btn wide" data-act="tour-start">Geführte Tour starten</button>
+    ${HELP_GROUPS.map((g) => {
+      const list = items.filter(([, h]) => h.group === g);
+      return list.length ? sys(g, list.map(([, h]) => `<details class="arc-why"><summary>${esc(h.title)}</summary><p>${esc(h.text)}</p></details>`).join('')) : '';
+    }).join('')}`;
+}
+
 export default {
   render(c) {
     if (c.param === 'archiv') return archive(c);
     if (c.param === 'chronik') return chronicle(c);
+    if (c.param === 'handbuch') return handbook(c);
     if (c.param && getDef(c.param)) {
       return `<button class="btn ghost back" data-act="go" data-to="kodex">← Kodex</button>${exerciseDetail(getDef(c.param))}`;
     }
@@ -97,6 +111,7 @@ export default {
     return `<h1 class="h">Kodex</h1>
       <div class="row gap"><button class="card archive-link grow" data-act="go" data-to="kodex" data-param="chronik"><b>Chronik</b><small>${Object.keys(c.data.codex || {}).length} Einträge freigeschaltet</small></button>
       <button class="card archive-link grow" data-act="go" data-to="kodex" data-param="archiv"><b>Archiv</b><small>Bilder und Zustände</small></button></div>
+      <button class="card archive-link wide" data-act="go" data-to="kodex" data-param="handbuch"><b>Handbuch</b><small>Wie UMBRA funktioniert: alle Erklärungen an einem Ort</small></button>
       <input class="search" type="search" placeholder="Übung, Muskel, Bewegung …" value="${esc(kq)}" data-input="kq" autocomplete="off">
       <div class="chips scroll">${[['', 'Alle'], ...Object.entries(CATEGORIES)].map(([k, v]) =>
         `<button class="chip${kcat === k ? ' on' : ''}" data-act="kcat" data-v="${k}">${v}</button>`).join('')}</div>

@@ -5,7 +5,7 @@ import { ICONS, sys, esc } from './ui/kit.js';
 import { unlockAudio, setSound } from './ui/sound.js';
 import { checkProgress } from './engine/progress.js';
 import { syncData } from './engine/arcsync.js';
-import { arcOf, WEEK_PLAN } from './data/arcs.js';
+import { arcOf, WEEK_PLAN, planWeek, chapterOf } from './data/arcs.js';
 import { victoryPanels, retreatPanels, nemesisPanels } from './engine/story.js';
 import { debriefStats } from './engine/debrief.js';
 import { comicPanels, bindPanels } from './ui/lore.js';
@@ -24,8 +24,11 @@ import intro from './ui/intro.js';
 import temper from './ui/temper.js';
 import { wristCheckScreen, wristActions } from './ui/wrist.js';
 import { feetCheckScreen, feetActions } from './ui/feet.js';
+import benchmark from './ui/benchmark.js';
+import { HELP } from './data/help.js';
+import { tourActions, tourActive, drawTour, startTour } from './ui/tour.js';
 
-const SCREENS = { heute: today, training, arena, kodex, profil: profile, onboarding, check, review, debrief, intro, temper, wristcheck: wristCheckScreen, feetcheck: feetCheckScreen };
+const SCREENS = { heute: today, training, arena, kodex, profil: profile, onboarding, check, review, debrief, intro, temper, wristcheck: wristCheckScreen, feetcheck: feetCheckScreen, benchmark };
 const TABS = [['heute', 'Heute'], ['arena', 'Arena'], ['kodex', 'Kodex'], ['profil', 'Profil']];
 
 const app = {
@@ -113,10 +116,11 @@ function render() {
   let route = app.route;
   if (!app.data.settings.onboarded) route = 'onboarding';
   const screen = SCREENS[route];
-  const showTabs = !['onboarding', 'training', 'check', 'review', 'debrief', 'intro', 'temper', 'wristcheck', 'feetcheck'].includes(route);
+  const showTabs = !['onboarding', 'training', 'check', 'review', 'debrief', 'intro', 'temper', 'wristcheck', 'feetcheck', 'benchmark'].includes(route);
   root.innerHTML = `<main class="screen screen-${route}">${screen.render(ctx)}</main>${showTabs ? tabbar(route) : ''}`;
   screen.mount?.(ctx, root);
   animateKK();
+  if (tourActive()) setTimeout(() => drawTour(ctx), 50);
 }
 
 // Kampfkraft zählt sichtbar hoch, wenn sie gestiegen ist.
@@ -148,7 +152,7 @@ function sync() {
     if (['arc_complete', 'week_done', 'week_repeat', 'boss_defeated', 'boss_retreat', 'nemesis_appears', 'nemesis_fades'].includes(e.type)) app.events.push(e);
   }
   // Nur die letzte Wochenmeldung zeigen, Arc-Wechsel immer.
-  const keep = ['ascension', 'quest', 'boss_defeated', 'boss_retreat', 'nemesis_appears', 'nemesis_fades'];
+  const keep = ['ascension', 'micro', 'quest', 'boss_defeated', 'boss_retreat', 'nemesis_appears', 'nemesis_fades'];
   const arcs = app.events.filter((e) => e.type === 'arc_complete');
   const weeks = app.events.filter((e) => e.type !== 'arc_complete' && !keep.includes(e.type));
   app.events = [...app.events.filter((e) => keep.includes(e.type)), ...arcs.slice(-1), ...(arcs.length ? [] : weeks.slice(-1))];
@@ -162,7 +166,7 @@ function flushEvents() {
   const today = toDay();
   if (ev.type === 'boss_defeated' || ev.type === 'boss_retreat') {
     const st = debriefStats(app.data, ev.n, today) || {};
-    const vars = { missions: st.missions, records: st.records, arena: st.arena, flow: st.flowDays };
+    const vars = { missions: st.missions, records: st.records, arena: st.arena, flow: st.flowDays, medal: ev.medal };
     const p = ev.type === 'boss_defeated' ? victoryPanels(app.data, ev.n, vars) : retreatPanels(app.data, ev.n, vars);
     ctx.panels(ev.type === 'boss_defeated' ? 'Sieg' : 'Rückzug', p, ev.type === 'boss_defeated' ? 'gold aura' : 'calm');
     return;
@@ -173,23 +177,29 @@ function flushEvents() {
   }
   if (ev.type === 'arc_complete') {
     const a = arcOf(app.data.engine.arc.n);
-    ctx.system(`ARC ${a.id} · ${a.name}`, `<p class="reason">${esc(a.focus)}.</p><p class="muted">Ein neuer Arc beginnt. Das Intro wartet auf „Heute“.</p>`,
+    ctx.system(a.name, `<p class="reason">${esc(a.focus)}.</p><p class="muted">Eine neue Saison beginnt. Das Intro wartet auf „Heute“.</p>`,
       [['close-modal', 'Weiter', 'primary']], 'gold aura');
     return;
   }
   if (ev.type === 'week_done') {
-    const w = WEEK_PLAN[ev.week];
-    ctx.system(`Arc-Woche ${ev.week}`, `<p class="reason">${esc(w.label)}. RIR-Ziel ${w.rir}.</p>${w.deload ? '<p class="muted">Deload-Woche: halbe Sätze, Mobility-Check wiederholen.</p>' : ''}`);
+    const w = WEEK_PLAN[planWeek({ n: app.data.engine.arc?.n ?? 0, week: ev.week })];
+    const ch = chapterOf(ev.week);
+    const head = ch === 'exam' ? 'Prüfwoche' : ev.week === 7 ? 'Kapitel 2 beginnt' : `Saison-Woche ${ev.week}`;
+    ctx.system(head, `<p class="reason">${esc(w.label)}. RIR-Ziel ${w.rir}.</p>${w.deload ? '<p class="muted">Deload-Woche: halbe Sätze, gleiches Gewicht.</p>' : ''}${w.exam ? '<p class="muted">Ausgeruht nach dem Deload. Die Säulen des Wächters werden in dieser Woche entschieden.</p>' : ''}`);
     return;
   }
   if (ev.type === 'week_repeat') {
-    ctx.system(`Arc-Woche ${ev.week}`, '<p class="muted">Letzte Woche hatte weniger als zwei volle Missionen. Die Woche läuft noch einmal. Kein Problem.</p>', undefined, 'calm');
+    ctx.system(`Saison-Woche ${ev.week}`, '<p class="muted">Letzte Woche hatte weniger als zwei volle Missionen. Die Woche läuft noch einmal. Kein Problem.</p>', undefined, 'calm');
     return;
   }
   if (ev.type === 'ascension') {
     const a = ev.ascension;
-    ctx.system('Ascension freigeschaltet', `<div class="asc-big" style="--aura:${a.aura}"><span>◆</span><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div><div class="xp-gain num">+${XP_CONFIG.sources.ascension} XP</div>`,
+    const head = { badge: 'Abzeichen', feat: 'Errungenschaft', legend: 'Große Errungenschaft' }[a.tier] || 'Erfolg';
+    ctx.system(`${head} freigeschaltet`, `<div class="asc-big" style="--aura:${a.aura}"><span>◆</span><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div><div class="xp-gain num">+${a.xp ?? XP_CONFIG.sources.ascension} XP</div>`,
       [['close-modal', 'Weiter', 'primary']], 'gold aura');
+  } else if (ev.type === 'micro') {
+    ctx.system('Kapitel-Erfolg', `<p class="reason">${esc(ev.micro.name)}: ${esc(ev.micro.desc)}.</p><div class="xp-gain num">+${ev.micro.xp} XP</div>`,
+      [['close-modal', 'Weiter', 'primary']], 'gold');
   } else if (ev.type === 'quest') {
     ctx.system('Quest erfüllt', `<p class="reason">${esc(ev.quest.title)}: ${esc(ev.quest.desc)}.</p><div class="xp-gain num">+${XP_CONFIG.sources.quest} XP</div>`,
       [['close-modal', 'Weiter', 'primary']], 'gold');
@@ -210,8 +220,13 @@ function renderModal() {
 const GLOBAL = {
   ...wristActions,
   ...feetActions,
+  ...tourActions,
   start: (c, d) => today.actions.start(c, d), // HANDS/FEET auch aus dem Profil
   go: (c, d) => c.go(d.to, d.param),
+  help: (c, d) => {
+    const h = HELP[d.k];
+    if (h) c.system(h.title, `<p>${esc(h.text)}</p><p class="muted small">Alle Erklärungen stehen im Kodex unter „Handbuch“.</p>`, [['close-modal', 'Verstanden', 'primary']]);
+  },
   'close-modal': () => {
     ctx.modal(null);
     setTimeout(flushEvents, 250);
@@ -275,6 +290,11 @@ async function boot() {
   if (app.data.active && app.route === 'heute') app.route = 'training';
   if (sync()) store.save(app.data);
   render();
+  // Einmal nach dem Saison-Update (und nach dem Onboarding): geführte Tour, sobald keine Meldung offen ist
+  if (app.data.settings.onboarded && !app.data.settings.tourSeen && !app.data.active) {
+    const wait = () => (app.modal || app.events.length ? setTimeout(wait, 800) : startTour(ctx));
+    setTimeout(wait, 1200);
+  }
   store.requestPersist();
   // Lokal (Entwicklung) nur mit ?sw, damit Änderungen sofort sichtbar sind.
   document.documentElement.dataset.booted = APP_VERSION;

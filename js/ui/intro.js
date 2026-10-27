@@ -1,4 +1,4 @@
-// Arc-Intro: 3–5 Panels zum Durchwischen. Wer der Boss ist, welche Schwäche er verkörpert, was der Arc trainiert.
+// Saison-Intro: 3–5 Panels zum Durchwischen. Wer der Wächter ist, welche Schwäche er verkörpert, was die Saison trainiert.
 import { introPanels } from '../engine/story.js';
 import { comicPanels, bindPanels } from './lore.js';
 import { arcOf } from '../data/arcs.js';
@@ -8,10 +8,10 @@ export default {
     const n = c.data.engine.arc?.n ?? 0;
     const arc = arcOf(n);
     return `<p class="intro-kicker">Das System meldet</p>
-      <h1 class="h">ARC ${arc.id} · ${arc.name}</h1>
+      <h1 class="h">${arc.name}</h1>
       ${comicPanels(introPanels(c.data, n), 'intro-panels')}
       <p class="muted small center">Wischen für das nächste Panel.</p>
-      <button class="btn primary wide" data-act="intro-done">Arc beginnen</button>`;
+      <button class="btn primary wide" data-act="intro-done">Saison beginnen</button>`;
   },
   mount(c, root) {
     bindPanels(root);

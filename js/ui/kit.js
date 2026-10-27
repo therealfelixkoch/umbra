@@ -40,6 +40,9 @@ export function glyphChips(def, { small = false } = {}) {
   }).join('')}</div>`;
 }
 
+/** Kleiner „?“-Punkt: öffnet die Erklärung aus js/data/help.js. */
+export const helpDot = (key) => `<button class="help-dot" data-act="help" data-k="${key}" aria-label="Erklärung">?</button>`;
+
 export function sys(title, body = '', { tone = 'sys', cls = '' } = {}) {
   return `<section class="sys ${tone} ${cls}"><div class="sys-head"><span class="sys-mark">◆</span>${esc(title)}</div>${body}</section>`;
 }

@@ -11,7 +11,7 @@ export function ladderFor(loadType, settings) {
     case 'kb': return kb.length ? kb : [0];
     case 'belt': return [0, ...kb.filter((w) => w > 0)];
     case 'barbell': return Array.from({ length: 113 }, (_, i) => 20 + i * 2.5);
-    case 'dumbbell': return Array.from({ length: 30 }, (_, i) => 2 + i * 2);
+    case 'dumbbell': return settings.dbWeights?.length ? [...settings.dbWeights].sort((a, b) => a - b) : Array.from({ length: 30 }, (_, i) => 2 + i * 2);
     case 'cable': return Array.from({ length: 40 }, (_, i) => 5 + i * 2.5);
     default: return [0];
   }
@@ -30,7 +30,7 @@ export function stepLoad(ladder, kg, dir) {
 // Darf die Übung Zusatzlast bekommen? (Gürtel-Übungen nur mit Dip-Gürtel und KB)
 export function canLoad(def, equipment) {
   if (!def.load) return false;
-  if (def.load === 'belt') return equipment.includes('belt') && equipment.includes('kb');
+  if (def.load === 'belt') return (equipment.includes('belt') || equipment.includes('vest')) && equipment.includes('kb');
   return true;
 }
 

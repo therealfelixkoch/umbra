@@ -1,7 +1,7 @@
 // Training: Übung für Übung, Satz-Logging, Pausen-Timer, Zirkel, SHADOWSTEP, FLOW.
-import { sys, esc, glyphChips, targetText, loadText, setsText, trendBadge, stepper, kg } from './kit.js';
+import { sys, esc, glyphChips, targetText, loadText, setsText, trendBadge, stepper, kg, helpDot } from './kit.js';
 import { getDef } from '../data/exercises.js';
-import { finishSession, completionOf, swapGroups, itemFor, stateKey } from '../engine/plan.js';
+import { finishSession, completionOf, swapGroups, itemFor, stateKey, profileContext } from '../engine/plan.js';
 import { EXERCISES, CATEGORIES } from '../data/exercises.js';
 import { ATTRIBUTES } from '../data/glyphs.js';
 import { stepLoad, snap } from '../engine/progression.js';
@@ -247,11 +247,11 @@ function setsView(c, a) {
   const wristPct = { 1: '20–30 %', 2: '30–50 %', 3: 'ca. 50–70 %', 4: 'ca. 70 %' }[c.data.wrist?.stage || 2];
   const rir = it.wrist ? `<p class="rir">${def.dirs ? `Isometrie mit ${wristPct} Kraft, ohne sichtbare Bewegung. ` : ''}Schmerz auf der Kleinfingerseite höchstens 2 (Ampel grün).</p>`
     : fixed ? '' : it.explosive
-    ? '<p class="rir">Kontrast: jede Wiederholung maximal explosiv, volle Pause. Stopp, sobald die Explosivität nachlässt.</p>'
-    : it.topSet ? '<p class="rir">Top-Satz: 3–5 Wdh., 1 Wdh. im Tank. Backdown: 6–10 Wdh. mit ca. 18 % weniger Last.</p>'
+    ? `<p class="rir">Kontrast: jede Wiederholung maximal explosiv, volle Pause. Stopp, sobald die Explosivität nachlässt. ${helpDot('contrast')}</p>`
+    : it.topSet ? `<p class="rir">Top-Satz: 3–5 Wdh., 1 Wdh. im Tank. Backdown: 6–10 Wdh. mit ca. 18 % weniger Last. ${helpDot('topset')}</p>`
       : def.mode === 'amrap' ? `<p class="rir">${it.noFailure ? `Ein Satz, ${r} Wdh. im Tank.` : 'Ein Satz bis kurz vor Versagen, saubere Technik.'}</p>`
         : it.failLast && setCount > 1 ? `<p class="rir">Satz 1–${setCount - 1}: ${r} Wdh. im Tank. Letzter Satz darf ans Versagen.</p>`
-          : `<p class="rir">Alle Sätze mit ${r} Wdh. im Tank${it.noFailure ? ', kein Versagen' : ''}.</p>`;
+          : `<p class="rir">Alle Sätze mit ${r} Wdh. im Tank${it.noFailure ? ', kein Versagen' : ''}. ${helpDot('rir')}</p>`;
 
   const nextK = entry.sets.findIndex((x) => !x.done);
   const rows = entry.sets.map((s, k) => {
@@ -324,7 +324,8 @@ function setsView(c, a) {
       ${ss}
       ${loadRow}
       ${ramp}
-      ${is4x4(def) ? card4x4(a, i, entry) : `<div class="sets">${rows}</div>`}
+      ${is4x4(def) ? card4x4(a, i, entry) : `<div class="sets">${rows}</div>
+      <div class="set-adj"><button class="btn small ghost" data-act="t-set-add">+ Satz</button>${entry.sets.length > 1 && entry.sets.some((x) => !x.done) ? '<button class="btn small ghost" data-act="t-set-del">− Satz</button>' : ''}<small class="muted">nur heute ${helpDot('sets')}</small></div>`}
       ${effort}
       ${showsElbowTap(def) && !c.data.settings.jointPause && entry.sets.some((s) => s.done)
         ? `<button class="elbow-tap${entry.elbowReported ? ' done' : ''}" data-act="t-elbow" ${entry.elbowReported ? 'disabled' : ''}>${entry.elbowReported ? 'Ellbogen gemeldet' : 'Ellbogen gezwickt'}</button>` : ''}
@@ -339,7 +340,7 @@ function setsView(c, a) {
 // Aufwärmsätze vor schweren Grundübungen: zählen nicht, kein Log. Volle Rampe nur bei der ersten.
 function rampBlock(c, a, i, it, def, open) {
   if (!rampable(def, it) || a.log[i].sets.some((s) => s.done)) return '';
-  const sets = rampSets(def, open.load ?? it.load, { first: firstRampIndex(a.plan.items, getDef) === i, kbWeights: c.data.settings.kbWeights || [] });
+  const sets = rampSets(def, open.load ?? it.load, { first: firstRampIndex(a.plan.items, getDef) === i, kbWeights: profileContext(c.data.settings, a.plan.profile).settings.kbWeights || [] });
   if (!sets.length) return '';
   const done = a.ramp?.[i] || [];
   const all = sets.every((_, k) => done[k]);
@@ -347,7 +348,7 @@ function rampBlock(c, a, i, it, def, open) {
   return `<details class="ramp"${all ? '' : ' open'}><summary>Aufwärmsätze ${all ? '✓' : `· ${sets.length}`}</summary>
     ${sets.map((s, k) => `<div class="ramp-row${done[k] ? ' done' : ''}"><span>${txt(s)} × ${s.reps}<small>${esc(s.label)}</small></span>
       <button class="check" data-act="t-ramp" data-k="${k}" aria-label="Aufwärmsatz erledigt">✓</button></div>`).join('')}
-    <p class="muted small">Zählt nicht als Satz. Locker, schnell, kurze Pausen. Gewicht oben anpassen, die Rampe rechnet mit.</p></details>`;
+    <p class="muted small">Zählt nicht als Satz. Locker, schnell, kurze Pausen. Gewicht oben anpassen, die Rampe rechnet mit. ${helpDot('ramp')}</p></details>`;
 }
 
 // Freiwilliges Superset: Vorschlag am Übungspaar, Sätze wechseln ab
@@ -362,7 +363,7 @@ function supersetBlock(a, i) {
       <button class="btn small ghost" data-act="t-superset" data-v="off">Beenden</button></div>`;
   }
   return `<div class="superset"><div>Zeit sparen: als Superset mit <b>${esc(other)}</b>?<small>${esc(o.why)} · Sätze wechseln ab</small></div>
-    <button class="btn small" data-act="t-superset" data-v="on">Superset</button></div>`;
+    <span class="row gap">${helpDot('superset')}<button class="btn small" data-act="t-superset" data-v="on">Superset</button></span></div>`;
 }
 
 // 4x4 in der Übungskarte (FORGE, Arc III): Phasen-Timer, danach RPE pro Intervall
@@ -458,7 +459,7 @@ function intervalView(c, a) {
   const plan = `${p.warmup ? `${p.warmup / 60} min Aufwärmen · ` : ''}${p.rounds} × ${p.work / 60} min, ${p.rest / 60} min ${p.warmup ? 'aktive ' : ''}Pause${p.cooldown ? ` · ${p.cooldown / 60} min Auslaufen` : ''}`;
   if (done && p.rpeLog) return ivLogView(c, a);
   const label = !st ? 'Bereit' : done ? 'Fertig'
-    : st.phase === 'work' ? `Intervall ${st.round}/${p.rounds} · ${PHASE_LABEL.work}` : PHASE_LABEL[st.phase];
+    : st.phase === 'work' ? (p.calm ? 'Locker · Zone 2' : `Intervall ${st.round}/${p.rounds} · ${PHASE_LABEL.work}`) : PHASE_LABEL[st.phase];
   const next = st && !done ? phases[st.index + 1] : null;
   const running = st && !done && !iv.pausedAt;
   return `${head(c, a, `${a.roundsDone}/${p.rounds}`, completionOf(a))}
@@ -793,6 +794,21 @@ const training = {
           rest.resetOffer = it.main && sets.filter((s) => !s.done).length === 1 && c.data.settings.temperResetHint !== false && book1Reached(c.data) >= 26;
         }
       }
+      save(c);
+    },
+    // Sätze nur für diese Einheit: + kopiert den letzten Satz (Ziel und Gewicht), − entfernt den letzten offenen
+    't-set-add': (c) => {
+      const a = c.data.active;
+      const sets = a.log[a.index].sets;
+      const last = sets[sets.length - 1];
+      sets.push({ value: last.value, load: last.load, ...(last.left != null ? { left: last.value, right: last.value } : {}), done: false });
+      save(c);
+    },
+    't-set-del': (c) => {
+      const a = c.data.active;
+      const sets = a.log[a.index].sets;
+      const k = sets.map((x) => x.done).lastIndexOf(false);
+      if (sets.length > 1 && k >= 0) sets.splice(k, 1);
       save(c);
     },
     't-ramp': (c, d) => {

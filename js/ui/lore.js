@@ -90,7 +90,7 @@ export function guardianImage(tier, { aura, caption, cls } = {}) {
 
 /**
  * Boss-Porträt mit Zustand.
- * @param {string} id torpor|fracture|hollow|rigor|plateau
+ * @param {string} id coldiron|stormlung|scorch|wither|plateau
  * @param {{hp?:number, max?:number, state?:'defeated'|'retreat'}} s
  */
 export function bossImage(id, { hp, max, state, caption, cls } = {}) {

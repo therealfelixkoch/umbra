@@ -1,36 +1,13 @@
-// Boss-Lebensbalken: Lebenspunkte = geplante Einsätze der Arc-Wochen 1–5 (3 pro Woche = 15).
-// Schaden: volle Mission 1 · Kompakt 0,6 · SHADOWSTEP 0,3 · ARENA 0,5 · Bestleistung +0,5 (kritischer Treffer).
-// Der Boss heilt sich nie. Verpasste Tage kosten nichts.
-import { BOSS_BY_ARC } from '../data/lore.js';
-import { FULL_MISSIONS } from '../data/missions.js';
+// Saison-Wächter: einer pro Saison (COLDIRON, STORMLUNG, SCORCH, WITHER), jedes Jahr stärker (COLDIRON II …).
+// Besiegt wird er über drei Säulen (Benchmark, Fortschritts-Index, Durchziehen), nicht über Trainingsmenge.
+// Die Säulen kommen in Paket 2. Bis dahin liefert der Status nur Name, Saison und Kapitel.
+import { BOSS_BY_ARC, guardianName } from '../data/lore.js';
+import { weekInfo } from './arc.js';
 
-export const PLANNED_PER_WEEK = 3;
-export const BOSS_WEEKS = 5;
-export const BOSS_HP = PLANNED_PER_WEEK * BOSS_WEEKS;
-
-export function hitOf(s) {
-  let dmg = 0;
-  if (s.kind === 'mission' && FULL_MISSIONS.includes(s.missionId)) dmg = s.compact ? 0.6 : 1;
-  else if (s.kind === 'express') dmg = 0.3;
-  else if (s.kind === 'arena') dmg = 0.5;
-  const crits = (s.records?.length || 0) * 0.5;
-  return { dmg, crits, total: dmg + crits };
-}
-
-// Treffer zählen in den Arc-Wochen 1–5 des laufenden Arcs.
 export function bossStatus(data, arc = data.engine.arc) {
   if (!arc) return null;
-  const id = BOSS_BY_ARC[arc.n % 4];
-  let damage = 0;
-  let crits = 0;
-  for (const s of data.sessions) {
-    if (s.arc?.n !== arc.n || s.arc.week > BOSS_WEEKS) continue;
-    const h = hitOf(s);
-    damage += h.total;
-    crits += h.crits ? 1 : 0;
-  }
-  damage = Math.round(damage * 10) / 10;
-  const hp = Math.max(0, Math.round((BOSS_HP - damage) * 10) / 10);
-  return { id, max: BOSS_HP, hp, damage, crits, defeated: hp <= 0,
-    retreating: hp > 0 && arc.week > BOSS_WEEKS };
+  const info = weekInfo(arc);
+  const ev = data.engine.bossEvents?.[arc.n] || {};
+  return { id: BOSS_BY_ARC[arc.n % 4], name: guardianName(arc.n), season: info.arc, week: arc.week, weeks: info.weeks,
+    chapterIndex: info.chapterIndex, chapter: info.chapter, defeated: !!ev.defeated, medal: ev.medal || null };
 }

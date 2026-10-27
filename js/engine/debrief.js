@@ -13,6 +13,7 @@ import { elbowStatus, painPatterns, REGIONS } from './signals.js';
 import { stagnationStatus, performance, mainSlots } from './stagnation.js';
 import { bossStatus } from './boss.js';
 import { getDef as defaultGetDef } from '../data/exercises.js';
+import { inExam } from './arc.js';
 
 const inRange = (day, from, to) => day >= from && day <= to;
 
@@ -57,7 +58,7 @@ export function arcRange(data, n, today) {
 // In Arc-Woche 6, oder bis 3 Wochen nach Arc-Ende, solange nicht beantwortet.
 export function debriefDue(data, today) {
   const arc = data.engine.arc;
-  if (arc?.week === 6 && !data.debriefs?.[arc.n]?.done) return arc.n;
+  if (inExam(arc) && !data.debriefs?.[arc.n]?.done) return arc.n; // Saison-Debrief in der Prüfwoche
   const open = (data.engine.arcHistory || []).filter((h) => !data.debriefs?.[h.n]?.done && addDays(h.to, 21) >= today);
   return open.length ? open[open.length - 1].n : null;
 }

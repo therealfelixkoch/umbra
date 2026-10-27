@@ -19,7 +19,7 @@ export const MISSIONS = {
       { ex: 'neck_ext_harness', sets: 2 },
       { ex: 'neck_flex_side', sets: 2 },
       { ex: 'ab_rollout', sets: 3 },
-      { ex: 'goblet_curl', sets: 2, optional: true },
+      { ex: 'hammer_curl_kb', sets: 2, optional: true, gym: 'db_hammer_curl' }, // Arm-Finisher Bizeps (neutraler Griff, ellbogenfreundlich)
       { ex: 'forearm_rotation', sets: 1, prehab: true },
       { ex: 'wrist_ext_eccentric', sets: 1, prehab: true },
       { ex: 'dead_hang', sets: 1, prehab: true },
@@ -52,6 +52,7 @@ export const MISSIONS = {
       { ex: 'band_pull_apart', sets: 2 },
       { ex: 'hanging_leg_raise', sets: 3, main: true },
       { ex: 'lizard_crawl', sets: 2 },
+      { ex: 'kb_overhead_triceps', sets: 2, optional: true, gym: 'cable_pushdown' }, // Arm-Finisher Trizeps
       { ex: 'forearm_rotation', sets: 1, prehab: true },
       { ex: 'wrist_ext_eccentric', sets: 1, prehab: true },
       { ex: 'dead_hang', sets: 1, prehab: true },
@@ -104,6 +105,10 @@ export const MISSIONS = {
     ],
   },
   // Arc III: ersetzt einmal pro Woche die Infiltration.
+  // Benchmark-Workout des Saison-Wächters (Baseline Woche 1, Revanche Prüfwoche). Belegt einmal den Zirkel-Platz.
+  BENCH: { id: 'BENCH', name: 'BENCHMARK', focus: 'Benchmark-Workout des Wächters', minutes: 30, format: 'benchmark' },
+  // Lockere Ausdauer (Sommer Kapitel 2 einmal pro Woche, sonst frei wählbar). Zählt nicht für Rotation und Wochenziel.
+  ZONE2: { id: 'ZONE2', name: 'ZONE 2', focus: '30 min locker, Nasenatmung', minutes: 30, format: 'intervals', rounds: 1, work: 1800, rest: 0, warmup: 0, cooldown: 0, ex: 'zone2', calm: true },
   NOR4X4: {
     id: 'NOR4X4', name: 'NORWEGIAN 4x4', focus: '3 min warm · 4 × 4 min hart, 3 min aktiv · 3 min aus', minutes: 31,
     format: 'intervals', rounds: 4, work: 240, rest: 180, warmup: 180, cooldown: 180, ex: 'norwegian_4x4', gymEx: 'rower_4x4',
@@ -141,10 +146,10 @@ export const MISSIONS = {
 };
 
 export const MISSION_KIND = (id) =>
-  id === 'FLOW' ? 'flow' : id === 'EXPRESS' || id === 'EXPRESS_BAG' ? 'express' : id === 'WRIST' ? 'wrist' : id === 'HANDS' ? 'hands' : id === 'FEET' ? 'feet' : 'mission';
+  id === 'FLOW' ? 'flow' : id === 'EXPRESS' || id === 'EXPRESS_BAG' ? 'express' : id === 'WRIST' ? 'wrist' : id === 'HANDS' ? 'hands' : id === 'FEET' ? 'feet' : id === 'ZONE2' ? 'zone2' : 'mission';
 
 // Missionen, die als volle Mission zählen (Rotation, Arc-Woche, Pausen). FORGE und 4x4 belegen einen Rotationsplatz.
-export const FULL_MISSIONS = ['A', 'B', 'C', 'D', 'FORGE', 'NOR4X4', 'HOTEL'];
+export const FULL_MISSIONS = ['A', 'B', 'C', 'D', 'FORGE', 'NOR4X4', 'HOTEL', 'BENCH'];
 
 // Unterwegs: bevorzugter Ersatz mit gleichem Bewegungsmuster (vor den allgemeinen Alternativen).
 export const TRAVEL_SWAP = {

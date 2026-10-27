@@ -12,7 +12,7 @@ import { logDecision } from '../engine/rulelog.js';
 
 const RIR_TXT = (r) => (r == null ? '' : ` · RIR ${r === 4 ? '4+' : r}`);
 const missionName = (id) => (id === 'ARENA' ? 'ARENA' : MISSIONS[id]?.name || id);
-const arcName = (n) => `Arc ${n + 1}${ARCS[n % ARCS.length] ? ` · ${ARCS[n % ARCS.length].name}` : ''}`;
+const arcName = (n) => `${ARCS[((n % 4) + 4) % 4].name}${n >= 4 ? ` · Jahr ${Math.floor(n / 4) + 1}` : ''}`;
 
 function setLine(def, x) {
   const v = def.mode === 'time' ? `${x.value} s` : def.mode === 'fixed' ? (x.sec ? `${Math.round(x.sec / 60 * 10) / 10} min` : '✓') : `${x.value}`;

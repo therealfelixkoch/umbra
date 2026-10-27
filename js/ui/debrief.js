@@ -20,11 +20,11 @@ export default {
     const n = c.ui.debriefArc ?? debriefDue(c.data, today) ?? c.data.engine.arc?.n ?? 0;
     c.ui.debriefArc = n;
     const st = debriefStats(c.data, n, today);
-    if (!st) return sys('Kein Arc', '<p>Für diesen Arc gibt es noch keine Daten.</p><button class="btn wide" data-act="go" data-to="heute">Zurück</button>');
+    if (!st) return sys('Keine Saison', '<p>Für diese Saison gibt es noch keine Daten.</p><button class="btn wide" data-act="go" data-to="heute">Zurück</button>');
     const saved = c.data.debriefs?.[n] || {};
     const draft = c.ui.debrief || (c.ui.debrief = { ...(saved.answers || {}) });
     return `<button class="btn ghost back" data-act="go" data-to="heute">← Heute</button>
-      <h1 class="h">Debrief · ARC ${st.arc.id}</h1>
+      <h1 class="h">Debrief · ${st.arc.name}</h1>
       <p class="muted">${esc(st.arc.name)} · ${st.arc.from} bis ${st.arc.to}</p>
       ${comicPanels(debriefPanels(c.data, st), 'debrief-panels')}
       ${(() => { const ps = playerStats(c.data, today); const asc = highestAscension(c.data);
@@ -40,7 +40,7 @@ export default {
         <div><dt>TEMPER</dt><dd>${esc(st.temper)}</dd></div>
         ${st.wrist ? `<div><dt>Handgelenk</dt><dd>${esc(st.wrist)}</dd></div>` : ''}
         ${st.feet ? `<div><dt>FEET</dt><dd>${esc(st.feet)}</dd></div>` : ''}
-        ${st.boss ? `<div><dt>Boss</dt><dd>${st.boss.defeated ? 'besiegt' : `${num(st.boss.hp)}/${st.boss.max} LP übrig`}</dd></div>` : ''}
+        ${st.boss ? `<div><dt>Wächter</dt><dd>${esc(st.boss.name)}${st.boss.defeated ? ' · besiegt' : ''}</dd></div>` : ''}
       </dl>`)}
       ${sys('ARENA', `<dl class="facts">
         <div><dt>Einheiten</dt><dd class="num">${st.arenaDetail.sessions} · ${st.arenaDetail.hours.toLocaleString('de-DE')} h</dd></div>

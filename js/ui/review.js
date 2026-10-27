@@ -44,10 +44,9 @@ export default {
         </dl>
         <div class="label">Belastung</div><div class="bar-chart load-bars">${bar('high', 'High')}${bar('normal', 'Normal')}${bar('low', 'Low')}</div>
         ${snap.patterns.length ? `<div class="label">Muster</div><ul class="cues">${snap.patterns.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}`)}
-      ${boss ? sys(BOSSES[boss.id].name, `<div class="boss-row">${bossImage(boss.id, { hp: boss.hp, max: boss.max, cls: 'lore-small' })}
-          <div><div class="hpbar"><i style="width:${(boss.hp / boss.max) * 100}%"></i></div>
-          <p class="num">${boss.hp.toLocaleString('de-DE')} / ${boss.max} Lebenspunkte</p>
-          <p class="muted small">${boss.defeated ? 'Gefallen.' : 'Er heilt sich nicht. Jeder Einsatz zählt.'}</p></div></div>`) : ''}
+      ${boss ? sys(boss.name, `<div class="boss-row">${bossImage(boss.id, { cls: 'lore-small' })}
+          <div><p>${esc(boss.season.name)} · ${boss.chapter ? `Kapitel ${boss.chapterIndex + 1} ${esc(boss.chapter.name)}` : 'Prüfwoche'} · Woche ${boss.week}/${boss.weeks}</p>
+          <p class="muted small">Er fällt in der Prüfwoche über drei Säulen: Benchmark, Fortschritts-Index, Durchziehen.</p></div></div>`) : ''}
       ${insightsCard(c.data, c.today())}
       ${sys('Zwei Taps', `<div class="q"><div class="q-label">Spaß</div>${scale('fun', f.fun, 'zäh', 'stark')}</div>
         <div class="q"><div class="q-label">Belastung</div>${scale('strain', f.strain, 'leicht', 'am Limit')}</div>

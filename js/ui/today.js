@@ -1,18 +1,18 @@
 // Heute: Check-in → Empfehlung → Start.
-import { sys, esc, chips, glyphChips, targetText, loadText, trendBadge, nameOf } from './kit.js';
+import { sys, esc, chips, glyphChips, targetText, loadText, trendBadge, nameOf, helpDot } from './kit.js';
 import { decide, advice, adviceText, nextSlot } from '../engine/decide.js';
 import { hardStreak, arenaOn, plattCount, gapDays, lastDoneBySlot } from '../engine/history.js';
 import { shouldSuggestDeload, startDeload } from '../engine/cycle.js';
-import { weekInfo, holidayActive, DEFAULT_HOLIDAY } from '../engine/arc.js';
+import { weekInfo, holidayActive, DEFAULT_HOLIDAY, inDeload, seasonPlan } from '../engine/arc.js';
 import { yesterdayClass } from '../engine/load.js';
 import { stagnationStatus } from '../engine/stagnation.js';
 import { logDecision } from '../engine/rulelog.js';
-import { PLYO_NAMES, ARC_WEEKS, arcOf } from '../data/arcs.js';
+import { PLYO_NAMES, arcOf, arcWeeks } from '../data/arcs.js';
 import { bossStatus } from '../engine/boss.js';
 import { introDue, quoteOfDay } from '../engine/story.js';
 import { rankEmblem } from './emblem.js';
 import { bossImage } from './lore.js';
-import { BOSSES } from '../data/lore.js';
+import { guardianName } from '../data/lore.js';
 import { REGIONS, elbowStatus, reportElbow, reportPain, physioNoteDue, activeRegions } from '../engine/signals.js';
 import { reviewDue, debriefDue } from '../engine/debrief.js';
 import { buildPlan, createActive, logArena } from '../engine/plan.js';
@@ -22,10 +22,13 @@ import { temperCard, bladeEmblem } from './temper.js';
 import { wristCards, afterCheckin } from './wrist.js';
 import { handsCard } from './hands.js';
 import { feetCard } from './feet.js';
+import { benchmarkCard } from './benchmark.js';
+import { eventToday, weightLoggedThisWeek } from '../engine/events.js';
+import { pillars, MEDAL_NAMES } from '../engine/pillars.js';
 import { W } from '../engine/wrist.js';
 import { bladeTier } from '../engine/temper.js';
 import { playerStats, WEEK_GOAL, rankName } from '../engine/game.js';
-import { addDays, daysBetween, weekStart } from '../engine/dates.js';
+import { addDays, daysBetween, weekStart, formatDay } from '../engine/dates.js';
 import { MISSIONS } from '../data/missions.js';
 import { journalActions } from './journal.js';
 import { getDef, EQUIPMENT } from '../data/exercises.js';
@@ -39,11 +42,11 @@ const Q = {
   sleep: ['Wie hast du geschlafen?', [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4'], ['5', '5']]],
   feeling: ['Wie fühlst du dich?', [['frisch', 'Frisch'], ['normal', 'Normal'], ['platt', 'Platt']]],
   tonightMT: ['Heute Abend Muay Thai?', [['yes', 'Ja'], ['no', 'Nein'], ['maybe', 'Vielleicht']]],
-  where: ['Wo?', [['room', 'Eigener Raum'], ['gym', 'Home Gym'], ['travel', 'Unterwegs / Hotel']]],
+  where: ['Wo?', [['room', 'Fighting Cave'], ['gym', 'Home Gym'], ['travel', 'Unterwegs / Hotel']]],
   time: ['Wie viel Zeit?', [['full', 'Volle Einheit · 45–60 min'], ['kompakt', '30 min'], ['express', '15 min'], ['five', '5 min'], ['mobility', 'Nur Mobility']]],
 };
 
-// Kleiner Status unter der Mission: Rang, Kampfkraft, Boss-Lebensbalken, Arc-Woche (x/6), Wochenziel.
+// Kleiner Status: Rang, Kampfkraft, Saison-Wächter mit 13 Wochen (2 Kapitel + Prüfwoche), Wochenziel.
 export function statusStrip(c) {
   const s = playerStats(c.data, c.today());
   const arc = c.data.engine.arc;
@@ -54,9 +57,49 @@ export function statusStrip(c) {
     <div class="strip-rank${asc ? ' aura' : ''}" style="${asc ? `--aura:${asc.aura}` : ''}">${rankEmblem(s.rank.index, { size: 40 })}<span class="strip-blade" title="Klinge">${bladeEmblem(bladeTier(c.data), 22)}</span></div>
     <div class="strip-main">
       <div class="strip-top"><b>${esc(rankName(s.rank))}</b><span class="num" data-kk="${s.kk}">${s.kk.toLocaleString('de-DE')}</span><small>Kampfkraft</small></div>
-      ${b ? `<div class="strip-boss"><span>${BOSSES[b.id].name}</span><div class="hpbar"><i style="width:${(b.hp / b.max) * 100}%"></i></div><span class="num">${b.hp.toLocaleString('de-DE')}</span></div>` : ''}
-      <div class="strip-bottom">${arc ? `<span>ARC ${arcOf(arc.n).id} · Woche ${arc.week}/6</span>` : ''}<span class="wdots">${dots}</span></div>
+      ${b ? `<div class="strip-boss"><span>${esc(b.name)}</span>${seasonTrack(arc)}${pillarDots(c.data, arc)}</div>` : ''}
+      <div class="strip-bottom">${arc ? `<span>${esc(arcOf(arc.n).name)} · ${b.chapter ? `Kap. ${b.chapterIndex + 1} ${esc(b.chapter.name)}` : 'Prüfwoche'} · ${arc.week}/${arcWeeks(arc.n)}</span>` : ''}<span class="wdots">${dots}</span></div>
     </div></section>`;
+}
+
+// Saison-Extras auf Heute: ZONE 2 (Sommer Kapitel 2), Event pro Kapitel, montags Körpergewicht
+function seasonExtras(c) {
+  const data = c.data;
+  const today = c.today();
+  let out = '';
+  const arc = data.engine.arc;
+  if (arc && weekInfo(arc).rules.zone2 && !data.sessions.some((s) => s.missionId === 'ZONE2' && s.day >= weekStart(today))) {
+    out += `<section class="card flow-card"><div><b>ZONE 2</b><small>Diese Woche einmal 30 min locker, zusätzlich zu den Missionen</small></div><button class="btn" data-act="start" data-id="ZONE2">Start</button></section>`;
+  }
+  const ev = eventToday(data, today);
+  if (ev) {
+    out += `<section class="card event-card"><div class="label">Event · freiwillig</div><b>${esc(ev.event.name)}</b>
+      <p class="small">${esc(ev.event.desc)} ${ev.state === 'announce' ? `Am ${formatDay(ev.day)} und am Tag danach.` : 'Heute und morgen.'}</p>
+      <ul class="cues">${ev.event.parts.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+      ${ev.state === 'live' ? '<button class="btn primary wide" data-act="event-done">Event geschafft</button>' : '<p class="muted small">Zählt nicht für Rotation und Wochenziel. Bringt ein Event-Abzeichen.</p>'}</section>`;
+  }
+  if (new Date(`${today}T12:00:00`).getDay() === 1 && data.settings.weightTrack !== false && !weightLoggedThisWeek(data, today)) {
+    out += `<section class="card flow-card"><div><b>Körpergewicht</b><small>Optional, einmal pro Woche. ${String(data.settings.bodyweight || 80).replace('.', ',')} kg zuletzt</small></div><button class="btn" data-act="go" data-to="profil">Eintragen</button></section>`;
+  }
+  return out;
+}
+
+// Drei Säulen als kleine Marken: B = Benchmark, I = Fortschritts-Index, K = Kapitel durchgezogen.
+// voll = geschafft, halb = unterwegs (Baseline steht, Index aktuell ≥ 60 %, Kapitel 1 geschafft).
+export function pillarDots(data, arc) {
+  const p = pillars(data, arc.n, getDef);
+  const st = (done, half) => (done ? 'on' : half ? 'half' : '');
+  const b = st(p.benchmark.passed, !!p.benchmark.baseline);
+  const i = st(p.index.passed && arc.week >= 13, p.index.ratio != null && p.index.ratio >= 0.6);
+  const k = st(p.chapters.passed, arc.week > 6);
+  return `<span class="pillars" title="Säulen: Benchmark, Index, Kapitel"><i class="${b}">B</i><i class="${i}">I</i><i class="${k}">K</i></span>`;
+}
+
+// 13 Wochen als Leiste: Kapitel 1 (6), Kapitel 2 (6), Prüfwoche. Deload-Wochen gedimmt.
+export function seasonTrack(arc) {
+  const cell = (w) => `<i class="${w < arc.week ? 'on' : w === arc.week ? 'cur' : ''}${w % 6 === 0 && w <= 12 ? ' dl' : ''}${w === 13 ? ' exam' : ''}"></i>`;
+  const seg = (from, to) => `<span>${Array.from({ length: to - from + 1 }, (_, k) => cell(from + k)).join('')}</span>`;
+  return `<div class="season-track">${seg(1, 6)}${seg(7, 12)}${seg(13, 13)}</div>`;
 }
 
 export function hud(c) {
@@ -79,7 +122,7 @@ function recommendation(c) {
   const holiday = data.settings.holiday ?? DEFAULT_HOLIDAY;
   const arc = data.engine.arc;
   const ws = weekStart(today);
-  const fourByFourDue = !!arc && weekInfo(arc).arc.id === 'III'
+  const fourByFourDue = !!arc && !!weekInfo(arc).rules.fourByFour
     && !data.sessions.some((s) => s.missionId === 'NOR4X4' && s.day >= ws);
   const rec = decide({ checkin: ci, hardStreak: hardStreak(data.sessions, today), queue: data.engine.queue,
     overrideRest: ci.overrideRest, yesterday: yesterdayClass(data.sessions, today, ci.yesterdayMT),
@@ -147,7 +190,7 @@ function timeHint(c, f) {
   const next = nextSlot(c.data.engine.queue, f.where || 'room');
   const a = advice({ checkin: f, hardStreak: hardStreak(c.data.sessions, today), yesterday: yesterdayClass(c.data.sessions, today, f.yesterdayMT), next });
   const name = MISSIONS[next]?.name || next;
-  return `<p class="muted small time-hint">Als Nächstes dran: <b>${esc(name)}</b>${f.where !== 'gym' && c.data.engine.queue[0] === 'FORGE' ? ' (FORGE wartet aufs Home Gym)' : ''}.${a.lines.length ? ` ${esc(adviceText(a))}` : ''}</p>`;
+  return `<p class="muted small time-hint">${helpDot('time')} ${helpDot('hints')} Als Nächstes dran: <b>${esc(name)}</b>${f.where !== 'gym' && c.data.engine.queue[0] === 'FORGE' ? ' (FORGE wartet aufs Home Gym)' : ''}.${a.lines.length ? ` ${esc(adviceText(a))}` : ''}</p>`;
 }
 
 function checkinForm(c) {
@@ -186,8 +229,11 @@ export function arcLine(data, today, plan) {
   const info = weekInfo(arc);
   const holiday = holidayActive(today, data.settings.holiday ?? DEFAULT_HOLIDAY);
   const plyo = plan?.plyo ? ` · Plyo ${plan.plyo.stage} (${PLYO_NAMES[plan.plyo.stage]})` : '';
-  return `<div class="arc-line"><b>ARC ${info.arc.id} · ${esc(info.arc.name)}</b><span>Woche ${arc.week}/${ARC_WEEKS} · ${esc(info.label)} · RIR ${plan?.rir ?? info.rir}${plyo}</span>
-    ${holiday ? '<span class="muted">Feiertagsmodus: Arc pausiert, Wochenziel 2 Einsätze.</span>' : ''}</div>`;
+  const plan0 = seasonPlan(arc, today, data.settings.holiday ?? DEFAULT_HOLIDAY);
+  const chap = info.chapter ? `Kapitel ${info.chapterIndex + 1} · ${esc(info.chapter.name)}` : 'Prüfwoche';
+  return `<div class="arc-line"><b>${esc(info.arc.name)} · ${chap} ${helpDot('season')}</b><span>Woche ${arc.week}/${info.weeks} · ${esc(info.label)} · RIR ${plan?.rir ?? info.rir}${plyo}</span>
+    ${plan0?.startsIn ? `<span class="muted">Startet am ${formatDay(plan0.startsIn)}. Bis dahin Vorbereitung.</span>` : ''}
+    ${holiday ? '<span class="muted">Feiertagsmodus: Saison pausiert, Wochenziel 2 Einsätze.</span>' : ''}</div>`;
 }
 
 function adjustNote(c, plan) {
@@ -210,7 +256,7 @@ function stagnationPanel(c) {
   const st = stagnationStatus(data);
   let out = '';
   const recent = data.engine.plateauDismissed && daysBetween(data.engine.plateauDismissed, c.today()) < 7;
-  if (st.stage2 && data.engine.arc?.week !== ARC_WEEKS && !recent) {
+  if (st.stage2 && !inDeload(data.engine.arc) && !recent) {
     out += sys('Stagnation in mehreren Mustern', `<p>${st.stage1.length} Hauptübungen aus verschiedenen Mustern kommen nicht mehr voran. Vorschlag: Deload-Woche jetzt, danach geht es frisch weiter.</p>
       <div class="row gap"><button class="btn primary grow" data-act="deload-yes" data-rule="plateau">Deload-Woche jetzt</button><button class="btn" data-act="deload-no" data-rule="plateau">Ablehnen</button></div>`, { tone: 'warn' });
     return out;
@@ -240,7 +286,7 @@ export default {
     let notes = '';
     if (introDue(data)) {
       const a = arcOf(data.engine.arc.n);
-      notes += `<section class="card intro-card"><div><b>ARC ${a.id} · ${esc(a.name)}</b><small>Das Intro wartet. Wer der Gegner ist und was dieser Arc trainiert.</small></div><button class="btn primary" data-act="go" data-to="intro">Öffnen</button></section>`;
+      notes += `<section class="card intro-card"><div><b>${esc(a.name)} · ${esc(guardianName(data.engine.arc.n))}</b><small>Das Saison-Intro wartet. Wer der Wächter ist und was diese Saison trainiert.</small></div><button class="btn primary" data-act="go" data-to="intro">Öffnen</button></section>`;
     }
     if (data.engine.nemesis?.active) {
       notes += sys('Nemesis', `<div class="boss-row">${bossImage('plateau', { cls: 'lore-small' })}<div><p class="reason">THE PLATEAU steht im Weg.</p>
@@ -268,7 +314,7 @@ export default {
     }
 
     const rec = recommendation(c);
-    if (!rec) return out + checkinForm(c) + temperCard(c) + wristCards(c, null) + handsCard(c) + feetCard(c) + notes;
+    if (!rec) return out + benchmarkCard(c) + seasonExtras(c) + checkinForm(c) + temperCard(c) + wristCards(c, null) + handsCard(c) + feetCard(c) + notes;
 
     const doneToday = data.sessions.filter((s) => s.day === today);
     const trained = doneToday.filter((s) => s.kind === 'mission' || s.kind === 'express').length;
@@ -303,6 +349,8 @@ export default {
     if (trained <= (ci.extra || 0)) {
       out += `<div class="row gap center"><button class="btn ghost" data-act="swap">Andere Einheit</button><button class="btn ghost" data-act="redo-ci">Check-in ändern</button></div>`;
     }
+    out += benchmarkCard(c);
+    out += seasonExtras(c);
     out += wristCards(c, rec);
     out += temperCard(c);
     out += handsCard(c, rec);
@@ -321,7 +369,7 @@ export default {
       out += `<section class="card"><div class="label">Heute erledigt</div>${doneToday.map((s) =>
         `<div class="done-row">✓ ${esc(s.kind === 'arena' ? `ARENA${s.bmt ? ` · BMT W${s.bmt.week}` : ''} · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'}` : s.kind === 'check' ? 'Mobility-Check' : s.kind === 'quest' ? 'Wochen-Quest erfüllt' : s.kind === 'ascension' ? `Ascension: ${ASCENSIONS.find((a) => a.id === s.ascension)?.name}` : MISSIONS[s.missionId]?.name || s.missionId)} <span class="muted">+${s.xp} XP</span></div>`).join('')}</section>`;
     }
-    out += `<p class="foot muted">Rotation: ${data.engine.queue.map((id) => MISSIONS[id].name).join(' → ')}</p>`;
+    out += `<p class="foot muted">Rotation: ${data.engine.queue.map((id) => MISSIONS[id].name).join(' → ')} ${helpDot('rotation')}</p>`;
     return out;
   },
 
@@ -441,9 +489,15 @@ export default {
         return { ...data, checkins };
       });
     },
+    'event-done': (c) => {
+      const ev = eventToday(c.data, c.today());
+      if (!ev) return;
+      c.update((data) => ({ ...data, sessions: [...data.sessions, { id: `ev${Date.now()}`, day: c.today(), kind: 'event', eventId: ev.event.id, name: ev.event.name, n: ev.n, chapter: ev.chapter, xp: XP_CONFIG.sources.event }] }));
+      c.system('Event geschafft', `<p class="reason">${esc(ev.event.name)}. Das System notiert es ohne Kommentar.</p><div class="xp-gain num">+${XP_CONFIG.sources.event} XP</div>`, [['close-modal', 'Weiter', 'primary']], 'gold');
+    },
     swap: (c) => {
       const q = c.data.engine.queue;
-      const ids = [...new Set([...q, 'HOTEL', 'NOR4X4', 'D_LIGHT', 'EXPRESS', 'EXPRESS_BAG', 'FLOW', 'HANDS', 'FEET'])];
+      const ids = [...new Set([...q, 'HOTEL', 'NOR4X4', 'D_LIGHT', 'EXPRESS', 'EXPRESS_BAG', 'FLOW', 'ZONE2', 'HANDS', 'FEET'])];
       c.modal(sys('Andere Einheit', `<div class="swap-list">${ids.map((id) =>
         `<button class="swap" data-act="choose" data-id="${id}"><b>${esc(MISSIONS[id].name)}</b><small>${esc(MISSIONS[id].focus)}${id === q[0] ? ' · als Nächstes dran' : ''}</small></button>`).join('')}</div>
         <button class="btn ghost wide" data-act="close-modal">Abbrechen</button>`, { cls: 'pop' }));

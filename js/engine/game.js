@@ -24,7 +24,8 @@ export function sessionEntries(s) {
   else if (s.kind === 'check') out.push(['check', SRC.check]);
   else if (s.kind === 'arena') out.push(['arena', SRC.arena]);
   else if (s.kind === 'quest') out.push(['quest', SRC.quest]);
-  else if (s.kind === 'ascension') out.push(['ascension', SRC.ascension]);
+  else if (s.kind === 'ascension') out.push(['ascension', s.xp ?? SRC.ascension]);
+  else if (s.kind === 'micro') out.push(['micro', s.xp ?? SRC.micro]);
   else if (SRC[s.kind] != null) out.push([s.kind, SRC[s.kind]]); // temper
   if (s.records?.length) out.push(['record', s.records.length * SRC.record]);
   return out;
@@ -55,7 +56,9 @@ export function xpLedger(data, today) {
   // Boss besiegt
   if (!Array.isArray(data)) {
     for (const [n, e] of Object.entries(data.engine?.bossEvents || {})) {
-      if (e.defeated) entries.push({ day: e.defeated, source: 'boss', xp: SRC.boss, raw: SRC.boss, arc: Number(n) });
+      if (!e.defeated) continue;
+      const xp = e.medal ? SRC.guardian[e.medal] : SRC.boss; // Saison-Wächter nach Medaille
+      entries.push({ day: e.defeated, source: e.medal ? 'guardian' : 'boss', xp, raw: xp, arc: Number(n) });
     }
   }
   // Tagesdeckel für Nebenquellen
