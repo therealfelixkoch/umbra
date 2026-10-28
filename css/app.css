@@ -1,4 +1,4 @@
-:root { --app-version: "v35"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
+:root { --app-version: "v36"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
 @font-face {
   font-family: 'Oxanium';
   src: url('../fonts/oxanium.woff2') format('woff2');
@@ -1264,3 +1264,12 @@ body.scrolled .screen-training .t-mini { display: block; }
   .sg-kick, .sg-name i, .sg-sub, .sg-guard, .sg-actions { animation-duration: 0.01s !important; animation-delay: 0s !important; }
   .sg-line { animation: none; width: 80%; }
 }
+
+/* ——— TEMPER: Sprecher-Intro ——— */
+.temper-intro { text-align: center; }
+.intro-voice { display: flex; justify-content: center; align-items: center; gap: 6px; height: 64px; margin: 28px 0 10px; }
+.intro-voice i { width: 5px; height: 100%; border-radius: 3px; background: var(--sys); box-shadow: 0 0 12px var(--sys-glow); animation: introVoice 1.4s ease-in-out infinite; transform-origin: center; }
+.intro-voice i:nth-child(2) { animation-delay: 0.2s; } .intro-voice i:nth-child(3) { animation-delay: 0.4s; }
+.intro-voice i:nth-child(4) { animation-delay: 0.6s; } .intro-voice i:nth-child(5) { animation-delay: 0.8s; }
+@keyframes introVoice { 0%, 100% { transform: scaleY(0.2); opacity: 0.5; } 50% { transform: scaleY(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .intro-voice i { animation: none; transform: scaleY(0.5); } }
