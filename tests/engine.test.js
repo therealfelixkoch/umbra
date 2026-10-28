@@ -3,18 +3,19 @@ import { decide, advanceQueue, nextSlot } from '../js/engine/decide.js';
 import { hardStreak, gapDays, plattCount } from '../js/engine/history.js';
 import { initialEngine, modifierFor, completeMission, startDeload, shouldSuggestDeload, rotateFrom } from '../js/engine/cycle.js';
 import { progress, initialState, ladderFor, stepLoad, applyLadderChoice } from '../js/engine/progression.js';
-import { buildPlan, createActive, finishSession, resolveExercise, logArena } from '../js/engine/plan.js';
+import { buildPlan, createActive, finishSession, resolveExercise, logArena, ROUND_TYPES } from '../js/engine/plan.js';
+import { BANDS, bandLabel } from '../js/engine/equipment.js';
 import { weekStreak, rankFor, sessionXp } from '../js/engine/game.js';
 import { addDays, weekStart, daysBetween } from '../js/engine/dates.js';
 import { getDef } from '../js/data/exercises.js';
-import { defaultData, normalize } from '../js/state.js';
+import { defaultData as freshData, normalize } from '../js/state.js';
 import { startTimer, advanceTo, nextPhase, totalMinutes } from '../js/engine/roundtimer.js';
 import { levelToScore, priorities, selectStretches, isDue } from '../js/engine/mobility.js';
 import { MISSIONS } from '../js/data/missions.js';
 import { schedule, nextCommand, rng, COMMANDS } from '../js/engine/footwork.js';
 import { weekCoverage, gapsFor, questForWeek, questStatus, checkProgress, ascensionStatus, attributePoints, attrRank, QUESTS } from '../js/engine/progress.js';
 import { swapOptions, plyoFor } from '../js/engine/plan.js';
-import { initialArc, syncArc, jumpToDeload, isHoliday, isHolidayWeek, weekInfo } from '../js/engine/arc.js';
+import { initialArc as arcFor, syncArc, jumpToDeload, isHoliday, isHolidayWeek, weekInfo } from '../js/engine/arc.js';
 import { applyArcChange, syncData } from '../js/engine/arcsync.js';
 import { loadClass, yesterdayClass } from '../js/engine/load.js';
 import { stagnationStatus, isStalled, performance } from '../js/engine/stagnation.js';
@@ -23,6 +24,9 @@ import { migrate, SCHEMA_VERSION } from '../js/state.js';
 import { WEEK_PLAN } from '../js/data/arcs.js';
 import { EXERCISES } from '../js/data/exercises.js';
 
+// Neutrale Ausgangslage für Tests: Winter (n = 0), Prüfwoche ohne Saison-Regler. Unabhängig vom echten Datum.
+const defaultData = () => { const d = freshData(); d.engine.arc = { ...d.engine.arc, n: 0, week: 13 }; return d; };
+const initialArc = (day) => ({ ...arcFor(day), n: 0 });
 const T = '2026-10-16'; // Freitag
 const ci = (o = {}) => ({ yesterdayMT: 'none', feeling: 'normal', tonightMT: 'no', where: 'room', ...o });
 const Q = ['A', 'B', 'C', 'D', 'FORGE'];
@@ -186,6 +190,7 @@ describe('Deload (Arc-Woche 6)', () => {
   });
   it('Deload halbiert die Sätze bei gleichem Gewicht', () => {
     const d = defaultData();
+    d.engine.arc = { ...d.engine.arc, n: 3, week: 8 }; // Herbst Kapitel 2 (ohne Satz-Regler)
     d.engine = startDeload(d.engine);
     d.sessions = [mission(addDays(T, -2), 'D')];
     d.exState.dip = { exId: 'dip', load: 0, target: 8, miss: 0 };
@@ -587,7 +592,7 @@ describe('Phase 3: Abdeckung und Quests', () => {
   });
   it('erfüllte Quest wird genau einmal belohnt', () => {
     const d = defaultData();
-    const quest = questForWeek(d.sessions, T);
+    const quest = questForWeek(d.sessions, T, getDef, null, 'WINTER'); // defaultData = Winter
     const flow = (day) => ({ day, kind: 'flow', missionId: 'FLOW', items: ['ninety_ninety'] });
     const make = { flow5: () => ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16'].map(flow),
       arena2: () => [{ day: T, kind: 'arena', minutes: 60 }, { day: T, kind: 'arena', minutes: 60 }],
@@ -683,13 +688,16 @@ describe('Arcs: Wochen zählen nur mit 2 Missionen', () => {
     expect(WEEK_PLAN[4].failLast).toBe(true);
     expect(WEEK_PLAN[6].deload).toBe(true);
   });
-  it('Woche 6 ist Deload, danach beginnt der nächste Arc', () => {
+  it('Woche 6 ist Deload, danach Kapitel 2; nach Woche 13 die nächste Saison', () => {
     let arc = { ...initialArc(MON), week: 6 };
     expect(modifierFor({ ...initialEngine(MON), arc }, 2).type).toBe('deload');
     arc = syncArc(arc, [full(MON), full(addDays(MON, 1))], wk(1), { holiday: NOHOL }).arc;
+    expect(arc.n).toBe(0);
+    expect(arc.week).toBe(7);
+    expect(weekInfo(arc).chapter.name).toBe('Kraft');
+    arc = syncArc({ ...arc, week: 13 }, [full(wk(1)), full(addDays(wk(1), 1))], wk(2), { holiday: NOHOL }).arc;
     expect(arc.n).toBe(1);
-    expect(arc.week).toBe(1);
-    expect(weekInfo(arc).arc.name).toBe('IGNITION');
+    expect(weekInfo(arc).arc.name).toBe('FRÜHJAHR');
   });
   it('mehrere Wochen auf einmal nachholen', () => {
     const sessions = [full(MON), full(addDays(MON, 1)), full(wk(1)), full(addDays(wk(1), 1)), full(wk(2))];
@@ -697,8 +705,8 @@ describe('Arcs: Wochen zählen nur mit 2 Missionen', () => {
     expect(r.arc.week).toBe(3);
     expect(r.events.map((e) => e.type)).toEqual(['week_done', 'week_done', 'week_repeat']);
   });
-  it('Pause von 10+ Tagen in Woche 6 zählt als Deload', () => {
-    const arc = { ...initialArc(MON), week: 6, through: addDays(MON, -7) };
+  it('Pause von 10+ Tagen in der Prüfwoche schließt die Saison ab', () => {
+    const arc = { ...initialArc(MON), week: 13, through: addDays(MON, -7) };
     const r = syncArc(arc, [], MON, { holiday: NOHOL, gap: 12 });
     expect(r.arc.n).toBe(1);
     expect(r.events[0].byPause).toBe(true);
@@ -873,15 +881,25 @@ describe('Kompakt, Plyo, Kontrast, Top-Satz, Arc IV', () => {
     expect(buildPlan({ missionId: 'B', profile: 'room', data: defaultData(), today: T }).plyo.stage).toBe(1);
   });
   it('Plyo-Stufe aus dem Arc, vor Sparring höchstens 3', () => {
-    const arcII = { n: 1, week: 2 };
+    const arcII = { n: 1, week: 2 }; // Frühjahr Kapitel 1 (Power): Plyo 4
     expect(plyoFor(weekInfo(arcII), arcII, false).stage).toBe(4);
+    expect(plyoFor(weekInfo({ n: 0, week: 8 }), { n: 0, week: 8 }, false).stage).toBe(3); // Winter Kapitel 2 (Kraft): Plyo 3
     const capped = plyoFor(weekInfo(arcII), arcII, true);
     expect(capped.stage).toBe(3);
     expect(capped.wanted).toBe(4);
     const arcI = { n: 0, week: 1 };
     expect(plyoFor(weekInfo(arcI), arcI, false).exId).toBe('landing_drill');
   });
-  it('Arc II: Top-Satz + Backdown und Kontrastpartner', () => {
+  it('Winter Kapitel 2: Top-Satz + Backdown, keine Kontrastpaare', () => {
+    const d = defaultData();
+    d.engine.arc = { ...initialArc(MON), n: 0, week: 8 };
+    d.settings.equipment.room = [...d.settings.equipment.room, 'belt'];
+    const plan = buildPlan({ missionId: 'C', profile: 'room', data: d, today: T });
+    const dip = plan.items.find((i) => i.exId === 'dip');
+    expect(dip.topSet).toBe(true);
+    expect(plan.items.some((i) => i.explosive)).toBe(false);
+  });
+  it('Frühjahr: Kontrastpartner und Top-Satz als Kraft-Erhalt', () => {
     const d = defaultData();
     d.engine.arc = { ...initialArc(MON), n: 1, week: 2 };
     d.settings.equipment.room = [...d.settings.equipment.room, 'belt'];
@@ -1022,16 +1040,15 @@ describe('Migration v1 → v2', () => {
     expect(m.engine.queue).toEqual(['C', 'D', 'FORGE', 'A', 'B']);
     expect(m.engine.fullSinceDeload).toBe(undefined);
     expect(m.settings.holiday.enabled).toBe(true);
-    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7', 'migration:v8']);
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7', 'migration:v8', 'migration:v9', 'migration:v10']);
     expect(m.mobility.length).toBe(1);
   });
   it('nach der Migration startet Arc I am Tag der ersten Mission (v3)', () => {
     const m = normalize(JSON.parse(JSON.stringify(v1)));
     const r = syncData(m, T);
-    expect(r.data.engine.arc.n).toBe(0);
-    expect(r.data.engine.arc.startedDay).toBe('2026-10-10');
-    // Sa/So der Startwoche: Ziel 1 Mission, B am 10.10. erfüllt → am 16.10. läuft Woche 2
-    expect(r.data.engine.arc.week).toBe(2);
+    // Seit v10: Die Saison startet am Montag nach der Migration mit Woche 1.
+    expect(r.data.engine.arc.week).toBe(1);
+    expect(new Date(`${r.data.engine.arc.startedDay}T12:00:00Z`).getUTCDay()).toBe(1);
   });
   it('Migration ist wiederholbar (v2 bleibt v2)', () => {
     const once = migrate(JSON.parse(JSON.stringify(v1)));
@@ -1051,11 +1068,11 @@ import { loreImage, guardianImage, bossImage, comicPanels } from '../js/ui/lore.
 describe('Lore-Bilder', () => {
   it('Dateinamen wie in der Bildliste', () => {
     const files = allLoreFiles();
-    ['guardian-0-shade.webp', 'guardian-2-warden.webp', 'guardian-5-unbreakable.webp', 'boss-torpor.webp', 'nemesis-plateau.webp',
-      'arc1-establishing.webp', 'arc4-retreat.webp', 'nemesis-appears.webp', 'nemesis-fades.webp', 'splash.webp', 'mission-forge.webp']
+    ['guardian-0-shade.webp', 'guardian-2-warden.webp', 'guardian-5-unbreakable.webp', 'warden-coldiron.webp', 'nemesis-plateau.webp',
+      'season1-establishing.webp', 'season4-retreat.webp', 'nemesis-appears.webp', 'nemesis-fades.webp', 'splash.webp', 'mission-forge.webp']
       .forEach((f) => expect(files).toContain(f));
     expect(LG.length).toBe(6);
-    expect(sceneFile(1, 'victory')).toBe('arc2-victory.webp');
+    expect(sceneFile(1, 'victory')).toBe('season2-victory.webp');
   });
   it('Gesamtrang → Wächter-Stufe 0–5', () => {
     expect(['SHADE', 'BLADE', 'WARDEN', 'PHANTOM', 'UMBRA', 'UNBREAKABLE'].map(guardianTier)).toEqual([0, 1, 2, 3, 4, 5]);
@@ -1071,14 +1088,14 @@ describe('Lore-Bilder', () => {
     expect(guardianImage(3).includes('lore-aura')).toBe(false);
     expect(guardianImage(5).includes('lore-aura')).toBe(true); // Endstufe: Gold
   });
-  it('Boss-Zustände nach Lebensbalken', () => {
-    expect(bossImage('torpor', { hp: 15, max: 15 }).includes('is-damaged')).toBe(false);
-    const half = bossImage('torpor', { hp: 7.5, max: 15 });
+  it('Wächter-Bildzustände', () => {
+    expect(bossImage('coldiron', { hp: 15, max: 15 }).includes('is-damaged')).toBe(false);
+    const half = bossImage('coldiron', { hp: 7.5, max: 15 });
     expect(half.includes('is-damaged')).toBe(true);
     expect(half.includes('--damage:0.50')).toBe(true);
-    expect(bossImage('torpor', { state: 'defeated' }).includes('is-defeated')).toBe(true);
-    expect(bossImage('torpor', { state: 'defeated' }).includes('lore-ash')).toBe(true);
-    expect(bossImage('fracture', { state: 'retreat' }).includes('is-retreat')).toBe(true);
+    expect(bossImage('coldiron', { state: 'defeated' }).includes('is-defeated')).toBe(true);
+    expect(bossImage('coldiron', { state: 'defeated' }).includes('lore-ash')).toBe(true);
+    expect(bossImage('stormlung', { state: 'retreat' }).includes('is-retreat')).toBe(true);
     expect(Object.keys(LB).length).toBe(5);
   });
   it('Comic-Panels: Bild-Panel mit Text, Statistik-Panel ohne Bild', () => {
@@ -1091,7 +1108,7 @@ describe('Lore-Bilder', () => {
 
 // ——————————————————— Update v2 · Paket 2 ———————————————————
 import { showsElbowTap, elbowStatus, reportElbow, reportPain, activeRegions, adjustment, painPatterns, physioNoteDue, stressedRegions } from '../js/engine/signals.js';
-import { bossStatus, BOSS_HP } from '../js/engine/boss.js';
+import { bossStatus } from '../js/engine/boss.js';
 import { reviewDue, reviewSnapshot, debriefDue, debriefStats, debriefExport } from '../js/engine/debrief.js';
 import { ensureSideQuest } from '../js/engine/progress.js';
 
@@ -1132,12 +1149,12 @@ describe('Ellbogen', () => {
     const d = defaultData();
     for (let i = 0; i < 3; i++) Object.assign(d, reportElbow(d, { day: T, source: 'checkin' }));
     const plan = buildPlan({ missionId: 'A', profile: 'room', data: d, today: T });
-    const curl = plan.items.find((i) => i.originalKey === 'goblet_curl');
-    expect(curl.exId).toBe('hammer_curl_kb');
-    expect(curl.adjust.length > 5).toBe(true);
+    const row = plan.items.find((i) => i.originalKey === 'kb_row_ballistic');
+    expect(row.exId).toBe('bw_row');
+    expect(row.adjust.length > 5).toBe(true);
     d.engine.signalsDeclined = T;
     const plan2 = buildPlan({ missionId: 'A', profile: 'room', data: d, today: T });
-    expect(plan2.items.some((i) => i.exId === 'goblet_curl')).toBe(true);
+    expect(plan2.items.some((i) => i.exId === 'kb_row_ballistic')).toBe(true);
   });
   it('Prehab fest in A und C, nicht im Kompakt-Modus', () => {
     const a = buildPlan({ missionId: 'A', profile: 'room', data: defaultData(), today: T });
@@ -1208,40 +1225,27 @@ describe('Side Quest', () => {
   });
 });
 
-describe('Boss-Lebensbalken', () => {
-  const arcData = () => { const d = defaultData(); d.engine.arc = { ...initialArc(MON), n: 0, week: 2 }; return d; };
-  const at = (s, week = 2) => ({ ...s, arc: { n: 0, week } });
-  it('Schaden: Mission 1 · Kompakt 0,6 · Express 0,3 · Arena 0,5 · Rekord +0,5', () => {
-    const d = arcData();
-    d.sessions = [at(full(MON)), at(full(MON, 'A', { compact: true })), at({ day: MON, kind: 'express', missionId: 'EXPRESS' }),
-      at({ day: MON, kind: 'arena', rpe: 5, minutes: 60 }), at(full(MON, 'C', { records: [{ exId: 'dip' }] }))];
-    const b = bossStatus(d);
-    expect(b.damage).toBe(3.9);
-    expect(b.hp).toBe(BOSS_HP - 3.9);
-    expect(b.id).toBe('torpor');
+describe('Saison-Wächter', () => {
+  it('ein Wächter pro Saison, jedes Jahr stärker', () => {
+    const d = defaultData();
+    d.engine.arc = { ...initialArc(MON), n: 0, week: 2 };
+    expect(bossStatus(d).id).toBe('coldiron');
+    expect(bossStatus(d).name).toBe('COLDIRON');
+    d.engine.arc.n = 4;
+    expect(bossStatus(d).name).toBe('COLDIRON II');
+    d.engine.arc.n = 1;
+    expect(bossStatus(d).id).toBe('stormlung');
   });
-  it('heilt nie, verpasste Tage kosten nichts', () => {
-    const d = arcData();
-    d.sessions = [at(full(MON))];
-    const h1 = bossStatus(d).hp;
-    d.engine.arc.week = 5;
-    expect(bossStatus(d).hp).toBe(h1);
+  it('Kapitel und Prüfwoche', () => {
+    const d = defaultData();
+    d.engine.arc = { ...initialArc(MON), n: 0, week: 8 };
+    expect(bossStatus(d).chapterIndex).toBe(1);
+    d.engine.arc.week = 13;
+    expect(bossStatus(d).chapterIndex).toBe('exam');
   });
-  it('Deload-Woche zählt nicht, Boss zieht sich zurück', () => {
-    const d = arcData();
-    d.sessions = [at(full(MON), 6)];
-    d.engine.arc.week = 6;
-    const b = bossStatus(d);
-    expect(b.hp).toBe(BOSS_HP);
-    expect(b.retreating).toBe(true);
-  });
-  it('fällt bei 15 Treffern', () => {
-    const d = arcData();
-    d.sessions = Array.from({ length: 15 }, () => at(full(MON)));
-    expect(bossStatus(d).defeated).toBe(true);
-  });
-  it('Arena-Log trägt den Arc', () => {
-    const d = arcData();
+  it('Arena-Log trägt die Saison', () => {
+    const d = defaultData();
+    d.engine.arc = { ...initialArc(MON), n: 0, week: 2 };
     expect(logArena(d, { day: T, rpe: 6 }).session.arc.n).toBe(0);
   });
 });
@@ -1265,11 +1269,11 @@ describe('Wochenrückblick und Debrief', () => {
     expect(s.einsaetze).toBe(3);
     expect(s.classes).toEqual({ high: 1, normal: 1, low: 1 });
     expect(s.regions).toEqual(['knie']);
-    expect(s.boss.id).toBe('torpor');
+    expect(s.boss.id).toBe('coldiron');
   });
-  it('Debrief in Woche 6 fällig, Export enthält Logs, Antworten, Rückblicke, Regel-Protokoll', () => {
+  it('Debrief in der Prüfwoche fällig, Export enthält Logs, Antworten, Rückblicke, Regel-Protokoll', () => {
     let d = defaultData();
-    d.engine.arc = { ...initialArc(MON), week: 6 };
+    d.engine.arc = { ...initialArc(MON), week: 13 };
     d.sessions = [{ ...full('2026-10-13'), arc: { n: 0, week: 2 } }];
     d.reviews = { '2026-10-12': { fun: 4, strain: 3 } };
     d = logDecision(d, { rule: 'stagnation:1', day: '2026-10-14', suggestion: 'x', decision: 'declined' });
@@ -1304,7 +1308,7 @@ describe('Namen und Ränge', () => {
     expect(['A', 'B', 'C', 'D', 'EXPRESS', 'FLOW', 'FORGE'].map((id) => MISSIONS[id].name)).toEqual(['ASCENT', 'BEDROCK', 'IMPACT', 'INFILTRATION', 'SHADOWSTEP', 'FLOW', 'FORGE']);
     const qs = buildPlan({ missionId: 'A', profile: 'room', data: defaultData(), today: T, compact: true });
     expect(qs.name.startsWith('QUICK STRIKE')).toBe(true);
-    expect(weekInfo({ n: 0, week: 1 }).arc.name).toBe('IRONROOT');
+    expect(weekInfo({ n: 0, week: 1 }).arc.name).toBe('WINTER ARC');
   });
   it('Gesamtränge SHADE → UMBRA → Unzerbrechlich, Emblem je Stufe', () => {
     expect(RANKS.map((r) => r.id)).toEqual(['SHADE', 'BLADE', 'WARDEN', 'PHANTOM', 'UMBRA', 'UNBREAKABLE']);
@@ -1336,25 +1340,10 @@ describe('Nemesis und Boss-Ausgang', () => {
     // Pause zählt nicht als abgeschlossene Deload-Woche
     expect(storyEvents(r.data, T, [{ type: 'arc_complete', n: 0, byPause: true }]).events.some((e) => e.type === 'nemesis_fades')).toBe(false);
   });
-  it('Boss fällt vor Woche 6 → Sieg, einmalig', () => {
-    const d = defaultData();
-    d.engine.arc = { ...initialArc(MON), week: 4 };
-    d.sessions = Array.from({ length: 15 }, (_, i) => ({ ...full(MON), id: `b${i}`, arc: { n: 0, week: 3 } }));
-    const r = storyEvents(d, T);
-    expect(r.events.some((e) => e.type === 'boss_defeated')).toBe(true);
-    expect(storyEvents(r.data, T).events.some((e) => e.type === 'boss_defeated')).toBe(false);
-  });
-  it('Boss steht in Woche 6 → Rückzug, keine Strafe', () => {
-    const d = defaultData();
-    d.engine.arc = { ...initialArc(MON), week: 6 };
-    const r = storyEvents(d, T);
-    expect(r.events.some((e) => e.type === 'boss_retreat')).toBe(true);
-    expect(r.data.engine.bossEvents[0].retreat).toBe(T);
-  });
-  it('Arc-Intro wartet, bis es gesehen wurde', () => {
+  it('Saison-Intro wartet, bis es gesehen wurde', () => {
     const d = defaultData();
     expect(introDue(d)).toBe(true);
-    d.engine.introSeen = { 0: T };
+    d.engine.introSeen = { [d.engine.arc.n]: T };
     expect(introDue(d)).toBe(false);
   });
 });
@@ -1365,7 +1354,7 @@ describe('Codex, Titel, Zitate', () => {
     d.sessions = [{ day: T, kind: 'mission', missionId: 'C', exercises: [{ exId: 'dip', sets: [{ done: true, value: 8 }] }], records: [{ exId: 'dip', value: 9, load: 8 }] }];
     const u = unlockCodex(d, T);
     expect(!!u.codex['ex:dip']).toBe(true);
-    expect(!!u.codex['boss:torpor']).toBe(true);
+    expect(!!u.codex['boss:coldiron']).toBe(true);
     const rec = Object.keys(u.codex).find((k) => k.startsWith('rec:dip'));
     expect(!!rec).toBe(true);
     const e = codexEntry(rec, u.codex[rec]);
@@ -1414,7 +1403,7 @@ describe('Comic-Panels mit echten Zahlen', () => {
   it('Intro: Welt, Boss, Konfrontation, Arc-Inhalt (3–5 Panels)', () => {
     const p = introPanels(defaultData(), 0);
     expect(p.length >= 3 && p.length <= 5).toBe(true);
-    expect(p[1].boss).toBe('torpor');
+    expect(p[1].boss).toBe('coldiron');
     expect(p.some((x) => x.stats)).toBe(true);
   });
   it('Debrief: Zahlen aus dem Arc stehen in den Panels', () => {
@@ -1562,7 +1551,7 @@ describe('v3 · Angebrochene Arc-Woche', () => {
     const r = completeWeekManually({ n: 0, week: 2, through: '2026-10-05' }, '2026-10-16');
     expect(r.arc.week).toBe(3);
     expect(r.event.manual).toBe(true);
-    const last = completeWeekManually({ n: 1, week: 6, through: '2026-10-05' }, '2026-10-16');
+    const last = completeWeekManually({ n: 1, week: 13, through: '2026-10-05' }, '2026-10-16');
     expect(last.arc.n).toBe(2);
     expect(last.arc.week).toBe(1);
   });
@@ -1807,8 +1796,8 @@ describe('v3 · Migration v2 → v3', () => {
     const m = normalize(JSON.parse(JSON.stringify(v2)));
     expect(m.exState.pullup.target).toBe(6);
     expect(m.engine.queue).toEqual(['B', 'C', 'D', 'FORGE', 'A']);
-    expect(m.engine.arc.startedDay).toBe('2026-10-15');
-    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7', 'migration:v8']);
+    expect(m.engine.arc.week).toBe(1);
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7', 'migration:v8', 'migration:v9', 'migration:v10']);
     expect(m.techChecks).toEqual({});
   });
   it('Migration ist wiederholbar', () => {
@@ -2291,7 +2280,7 @@ describe('Handgelenk · Einbau und Dosis', () => {
     const plan = buildPlan({ missionId: 'A', profile: 'room', data: d, today: T });
     expect(plan.items.at(-1).wrist).toBe(true);
     expect(plan.items.some((i) => i.prehab)).toBe(false); // Prehab ersetzt
-    expect(plan.items.some((i) => i.exId === 'goblet_curl')).toBe(true); // Armübungen bleiben
+    expect(plan.items.some((i) => i.exId === 'hammer_curl_kb')).toBe(true); // Armübungen bleiben
     const b = buildPlan({ missionId: 'B', profile: 'room', data: d, today: T });
     expect(b.items[1].wristKey).toBe('w_iso');
     expect(b.wrist.kind).toBe('activation');
@@ -2619,5 +2608,368 @@ describe('Einheit löschen', () => {
     const back = deleteSession(d, sA.id);
     expect(back.engine.queue[0]).toBe('A');
     expect(back.sessions.length).toBe(1);
+  });
+});
+
+// ——— Update 27.10.: Arcs aufeinander aufbauend, Saisonziel, Arm-Finisher ———
+import { arcWeeks, planWeek, ARCS } from '../js/data/arcs.js';
+import { seasonPlan, seasonStartFrom, inDeload as arcInDeload } from '../js/engine/arc.js';
+
+describe('Saisons: 2 Kapitel + Prüfwoche', () => {
+  it('vier Saisons à 13 Wochen, Winter zuerst', () => {
+    expect(ARCS.map((a) => a.id)).toEqual(['WINTER', 'SPRING', 'SUMMER', 'AUTUMN']);
+    expect(ARCS.every((a) => a.weeks === 13 && a.chapters.length === 2)).toBe(true);
+    expect(arcWeeks(0)).toBe(13);
+  });
+  it('Kapitelwochen, Deload in Woche 6 und 12, Prüfwoche 13', () => {
+    expect(planWeek({ n: 0, week: 3 })).toBe(3);
+    expect(planWeek({ n: 0, week: 9 })).toBe(3);
+    expect(planWeek({ n: 0, week: 13 })).toBe('exam');
+    expect(arcInDeload({ n: 0, week: 6 })).toBe(true);
+    expect(arcInDeload({ n: 0, week: 12 })).toBe(true);
+    expect(arcInDeload({ n: 0, week: 13 })).toBe(false);
+    expect(jumpToDeload({ n: 0, week: 8 }).week).toBe(12);
+  });
+  it('Regler: Winter Kapitel 1 +1 Satz, Kapitel 2 Top-Satz', () => {
+    const d = defaultData();
+    d.settings.equipment.room = [...d.settings.equipment.room, 'belt'];
+    d.engine.arc = { ...initialArc(MON), n: 0, week: 2 };
+    const k1 = buildPlan({ missionId: 'C', profile: 'room', data: d, today: T }).items.find((i) => i.exId === 'dip');
+    expect(k1.sets).toBe(5);
+    d.engine.arc.week = 8;
+    const k2 = buildPlan({ missionId: 'C', profile: 'room', data: d, today: T }).items.find((i) => i.exId === 'dip');
+    expect(k2.topSet).toBe(true);
+  });
+  it('Frühjahr: Kontrastpaare, Kapitel 2 mit 4x4', () => {
+    const info = weekInfo({ n: 1, week: 8 });
+    expect(info.rules.contrast).toBe(true);
+    expect(info.rules.fourByFour).toBe(true);
+  });
+  it('Herbst: −1 Satz und belastete Mobility', () => {
+    const d = defaultData();
+    d.engine.arc = { ...initialArc(MON), n: 3, week: 2 };
+    const plan = buildPlan({ missionId: 'A', profile: 'room', data: d, today: T });
+    expect(plan.items.find((i) => i.exId === 'pullup_tactical').sets).toBe(3);
+    expect(plan.items.some((i) => i.exId === 'kb_windmill')).toBe(true);
+  });
+  it('Saison läuft nach Woche 13 in die nächste', () => {
+    const r = syncArc({ n: 0, week: 13, through: addDays(MON, -7), startedWeek: MON, startedDay: MON },
+      [full(MON, 'A'), full(addDays(MON, 2), 'B')], addDays(MON, 7), { holiday: NOHOL });
+    expect(r.arc.n).toBe(1);
+    expect(r.arc.week).toBe(1);
+  });
+  it('Start am nächsten Montag, Saison nach Monat', () => {
+    const a = seasonStartFrom('2026-10-27');
+    expect(a.startedDay).toBe('2026-11-02');
+    expect(a.n).toBe(0);
+    expect(arcFor('2026-05-10').n).toBe(2);
+  });
+  it('Plan: Ende verschiebt sich um Feiertagswochen', () => {
+    const plan = seasonPlan({ n: 0, week: 1, startedDay: '2026-11-02' }, '2026-10-27');
+    expect(plan.startsIn).toBe('2026-11-02');
+    expect(plan.end).toBe('2027-02-14');
+  });
+  it('Migration v9 → v10: Saison ab nächstem Montag, alte Sessions als Vorbereitung', () => {
+    const m = normalize({ schemaVersion: 9, settings: {}, engine: { queue: ['A', 'B', 'C', 'D', 'FORGE'], arc: { n: 0, week: 3 }, bossEvents: { 0: {} } },
+      sessions: [{ id: 'x', day: '2026-10-21', kind: 'mission', missionId: 'A', arc: { n: 0, week: 2 } }] });
+    expect(m.engine.arc.week).toBe(1);
+    expect(m.sessions[0].arc.n).toBe(-1);
+    expect(m.engine.bossEvents).toEqual({});
+  });
+});
+
+describe('Arm-Finisher', () => {
+  it('Bizeps in ASCENT, Trizeps in IMPACT, beide optional', () => {
+    const a = buildPlan({ missionId: 'A', profile: 'room', data: defaultData(), today: T }).items.find((i) => i.exId === 'hammer_curl_kb');
+    const c = buildPlan({ missionId: 'C', profile: 'room', data: defaultData(), today: T }).items.find((i) => i.exId === 'kb_overhead_triceps');
+    expect(a.optional).toBe(true);
+    expect(c.optional).toBe(true);
+  });
+  it('Home Gym: Kurzhantel-Hammer-Curls und Kabel-Pushdown', () => {
+    const d = defaultData();
+    d.settings.equipment.gym = ['barbell', 'rack', 'dumbbells', 'cable', 'rower', 'bar', 'dipbars', 'bench'];
+    expect(buildPlan({ missionId: 'A', profile: 'gym', data: d, today: T }).items.some((i) => i.exId === 'db_hammer_curl')).toBe(true);
+    expect(buildPlan({ missionId: 'C', profile: 'gym', data: d, today: T }).items.some((i) => i.exId === 'cable_pushdown')).toBe(true);
+  });
+});
+
+// ——— Update 27.10.: Equipment pro Ort, Bestand, Freischalten ———
+import { unlocks, missionGaps, canDo as eqCanDo, weightsOf } from '../js/engine/equipment.js';
+import { profileContext } from '../js/engine/plan.js';
+
+describe('Equipment: Fighting Cave und Home Gym', () => {
+  it('Kletterseil schaltet Rope Climb frei', () => {
+    const u = unlocks('climb_rope', ['bar'], EXERCISES);
+    expect(u.ids.includes('rope_climb')).toBe(true);
+  });
+  it('Gewichtsweste zählt wie Dip-Gürtel', () => {
+    expect(eqCanDo({ equipment: ['belt'] }, ['vest'])).toBe(true);
+    expect(unlocks('vest', ['bar', 'dipbars', 'kb'], EXERCISES).ids.includes('dip')).toBe(true);
+  });
+  it('Lücken: ohne Dip-Gürtel laufen Klimmzüge und Dips ohne Zusatzgewicht', () => {
+    const gaps = missionGaps('room', ['bag', 'bar', 'box', 'dipbars', 'harness', 'kb', 'rope', 'hammer'], getDef);
+    const belt = gaps.find((g) => g.item === 'belt');
+    expect(belt.slots.some((x) => x.includes('Zusatzgewicht'))).toBe(true);
+  });
+  it('Bestand pro Ort: KB-Stufen kommen aus dem Ort', () => {
+    const settings = { ...defaultData().settings, kbWeights: [8, 12], equipment: { room: ['kb'], gym: ['kb'] },
+      inventory: { room: { kb: { 8: 1, 12: 1 } }, gym: { kb: { 16: 2, 24: 1 } } } };
+    expect(profileContext(settings, 'room').settings.kbWeights).toEqual([8, 12]);
+    expect(profileContext(settings, 'gym').settings.kbWeights).toEqual([16, 24]);
+    expect(weightsOf({ kb: { 8: 0, 12: 2 } }, 'kb')).toEqual([12]);
+  });
+  it('Air Bike ersetzt das Rudergerät', () => {
+    const d = defaultData();
+    d.settings.equipment.gym = ['barbell', 'rack', 'dumbbells', 'bike'];
+    const plan = buildPlan({ missionId: 'B', profile: 'gym', data: d, today: T });
+    expect(plan.items[0].exId).toBe('bike_warmup');
+  });
+  it('Migration v8 → v9: KB-Gewichte als Bestand, Kletterseil eigenes Teil', () => {
+    const m = normalize({ schemaVersion: 8, settings: { kbWeights: [8, 12], equipment: { room: ['kb', 'rings'], gym: ['barbell'] } }, sessions: [], engine: {} });
+    expect(m.settings.inventory.room.kb).toEqual({ 8: 1, 12: 1 });
+    expect(m.settings.inventory.gym).toEqual({});
+    expect(m.settings.equipment.room.includes('climb_rope')).toBe(true);
+  });
+});
+
+// ——— Paket 2: Säulen, Benchmarks, Fortschritts-Index, Wächter-Ergebnis ———
+import { benchmarkOf, benchmarkDue, logBenchmark, beats, progressIndex, pillars, formatScore } from '../js/engine/pillars.js';
+import { storyEvents as storyEv } from '../js/engine/story.js';
+import { xpLedger as ledger2 } from '../js/engine/game.js';
+
+describe('Säule 1 · Benchmark', () => {
+  const season = (week) => { const d = defaultData(); d.engine.arc = { n: 0, week, startedDay: MON, startedWeek: MON, through: addDays(MON, -7) }; return d; };
+  it('Winter = Cave-Murph auf Zeit, voll und halb', () => {
+    const b = benchmarkOf(0);
+    expect(b.name).toBe('CAVE-MURPH');
+    expect(b.score).toBe('time');
+    expect(Object.keys(b.variants)).toEqual(['full', 'half']);
+    expect(benchmarkOf(1).score).toBe('count');
+  });
+  it('Baseline im ersten Kapitel, Revanche in der Prüfwoche, nicht vor Saisonstart', () => {
+    expect(benchmarkDue(season(2), T)).toBe('baseline');
+    expect(benchmarkDue(season(2), addDays(MON, -1))).toBe(null);
+    const d = logBenchmark(season(2), { kind: 'baseline', variant: 'half', value: 1900, day: T });
+    expect(benchmarkDue(d, T)).toBe(null);
+    d.engine.arc.week = 13;
+    expect(benchmarkDue(d, T)).toBe('revenge');
+  });
+  it('zählt als volle Mission auf dem Zirkel-Platz', () => {
+    const d = logBenchmark(season(2), { kind: 'baseline', variant: 'full', value: 2400, day: T });
+    const s = d.sessions.at(-1);
+    expect(s.missionId).toBe('BENCH');
+    expect(s.xp).toBe(100);
+    expect(d.engine.queue.at(-1)).toBe('D');
+  });
+  it('Zeit: weniger ist besser, Anzahl: mehr ist besser', () => {
+    expect(beats(benchmarkOf(0), 1900, 1800)).toBe(true);
+    expect(beats(benchmarkOf(1), 40, 38)).toBe(false);
+    expect(formatScore(benchmarkOf(0), 1925)).toBe('32:05 min');
+  });
+});
+
+describe('Säule 2 · Fortschritts-Index', () => {
+  const at = (s, week) => ({ ...s, arc: { n: 0, week } });
+  const ex = (exId, value, load = 0, rir = 2) => ({ exId, sets: [{ value, load, rir, done: true }] });
+  it('Hauptübungen früh vs. spät, RIR-bereinigt; Fokus Kraft zählt doppelt', () => {
+    const d = defaultData();
+    d.engine.arc = { n: 0, week: 13, startedDay: MON };
+    d.sessions = [
+      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 6), ex('suitcase_carry', 40, 12)] }, 2),
+      at({ day: MON, kind: 'mission', missionId: 'C', exercises: [ex('dip', 7)] }, 2),
+      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 8), ex('suitcase_carry', 50, 12)] }, 10),
+      at({ day: MON, kind: 'mission', missionId: 'C', exercises: [ex('dip', 10)] }, 10),
+    ];
+    const ix = progressIndex(d, 0, getDef);
+    expect(ix.areas.length).toBe(3);
+    expect(ix.better).toBe(3);
+    expect(ix.passed).toBe(true);
+  });
+  it('deutlich schlechter (> 10 %) verhindert die Säule', () => {
+    const d = defaultData();
+    d.engine.arc = { n: 0, week: 13, startedDay: MON };
+    d.sessions = [
+      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 6), ex('suitcase_carry', 60, 12), ex('dip', 8)] }, 2),
+      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 8), ex('suitcase_carry', 30, 12), ex('dip', 10)] }, 10),
+    ];
+    const ix = progressIndex(d, 0, getDef);
+    expect(ix.worse.length).toBe(1);
+    expect(ix.passed).toBe(false);
+  });
+  it('zu wenig Daten: keine Säule', () => {
+    expect(progressIndex(defaultData(), 0, getDef).enough).toBe(false);
+  });
+});
+
+describe('Wächter-Ergebnis', () => {
+  it('Säulen zählen: Benchmark geschlagen + Kapitel durch = Silber', () => {
+    let d = defaultData();
+    d.engine.arc = { n: 0, week: 2, startedDay: MON, startedWeek: MON, through: addDays(MON, -7) };
+    d = logBenchmark(d, { kind: 'baseline', variant: 'half', value: 2000, day: MON });
+    d.engine.arc.week = 13;
+    d = logBenchmark(d, { kind: 'revenge', variant: 'half', value: 1800, day: T });
+    const p = pillars(d, 0, getDef);
+    expect(p.benchmark.passed).toBe(true);
+    expect(p.chapters.passed).toBe(true);
+    expect(p.medal).toBe('silver');
+  });
+  it('Saisonende: Ergebnis einmal, Medaille bringt XP, ohne Säule Rückzug', () => {
+    let d = defaultData();
+    d.engine.arc = { n: 1, week: 1, startedDay: T, startedWeek: MON, through: MON };
+    d.engine.arcHistory = [{ n: 0, from: '2026-07-01', to: addDays(MON, -1) }];
+    d.benchmarks = { 0: { variant: 'half', baseline: { day: '2026-07-02', value: 2000 }, revenge: { day: '2026-09-30', value: 1900 } } };
+    const r = storyEv(d, T, [{ type: 'arc_complete', n: 0 }]);
+    const ev = r.events.find((e) => e.type === 'boss_defeated');
+    expect(ev.medal).toBe('silver');
+    expect(r.data.engine.bossEvents[0].medal).toBe('silver');
+    expect(storyEv(r.data, T, [{ type: 'arc_complete', n: 0 }]).events.some((e) => e.type === 'boss_defeated')).toBe(false);
+    expect(ledger2(r.data, T).entries.some((e) => e.source === 'guardian' && e.xp === 350)).toBe(true);
+    const none = storyEv({ ...defaultData(), engine: { ...defaultData().engine, arc: { n: 0, week: 1 } } }, T, [{ type: 'arc_complete', n: 5 }]);
+    expect(none.events.some((e) => e.type === 'boss_retreat')).toBe(true);
+  });
+});
+
+// ——— Paket 3: saisonale Quests, Kapitel-Erfolge, große Errungenschaften ———
+import { microStatus, ASCENSIONS as ASC, TIERS } from '../js/engine/progress.js';
+import { checkProgress as checkProg, questForWeek as qfw, QUESTS as QS } from '../js/engine/progress.js';
+
+describe('Saisonale Wochen-Quests', () => {
+  it('jede Saison hat mindestens 4 Quests, Quest kommt aus der Saison', () => {
+    for (const id of ['WINTER', 'SPRING', 'SUMMER', 'AUTUMN']) expect(QS.filter((q) => q.seasons.includes(id)).length >= 4).toBe(true);
+    for (let k = 0; k < 6; k++) expect(qfw([], addDays(MON, k * 7), getDef, null, 'WINTER').seasons.includes('WINTER')).toBe(true);
+  });
+  it('IRON CLIMB zählt Klimmzug-Wiederholungen der Woche', () => {
+    const q = QS.find((x) => x.id === 'pullvol');
+    const s = { kind: 'mission', exercises: [{ exId: 'pullup_tactical', sets: [{ value: 6, done: true }, { value: 6, done: true }, { value: 5, done: false }] }] };
+    expect(q.progress([s, s], getDef)).toBe(24);
+  });
+});
+
+describe('Kapitel-Erfolge', () => {
+  const at = (s, week) => ({ ...s, arc: { n: 0, week } });
+  it('Kapitel durchgezogen, sobald die Saison über Woche 6 hinaus ist', () => {
+    const d = defaultData();
+    d.engine.arc = { n: 0, week: 7 };
+    d.sessions = [at({ day: MON, kind: 'mission', missionId: 'A', exercises: [] }, 3)];
+    expect(microStatus(d, 0, 0).find((m) => m.id === 'chapter').reached).toBe(true);
+    expect(microStatus(d, 0, 1).find((m) => m.id === 'chapter').reached).toBe(false);
+  });
+  it('Bestwerte nur in Hauptübungen, Winter-Tat „volle Last“', () => {
+    const d = defaultData();
+    d.engine.arc = { n: 0, week: 4 };
+    const full3 = Array.from({ length: 3 }, (_, i) => at({ id: `f${i}`, day: MON, kind: 'mission', missionId: 'A', completion: 1, exercises: [{ exId: 'pullup_tactical', sets: [] }],
+      records: [{ exId: 'pullup_tactical' }, { exId: 'neck_flex_side' }] }, 2));
+    d.sessions = full3;
+    const m = microStatus(d, 0, 0);
+    expect(m.find((x) => x.id === 'records').reached).toBe(true);
+    expect(m.find((x) => x.id === 'deed').reached).toBe(true);
+  });
+  it('wird einmal verbucht, mit XP', () => {
+    const d = defaultData();
+    d.engine.arc = { n: 0, week: 7 };
+    d.sessions = [at({ day: MON, kind: 'mission', missionId: 'A', exercises: [] }, 3)];
+    const r = checkProg(d, T, 1);
+    const micro = r.data.sessions.filter((s) => s.kind === 'micro');
+    expect(micro.some((s) => s.micro === 'chapter' && s.xp === 100)).toBe(true);
+    expect(checkProg(r.data, T, 2).data.sessions.filter((s) => s.kind === 'micro').length).toBe(micro.length);
+  });
+});
+
+describe('Erfolge in Stufen', () => {
+  it('Abzeichen, Errungenschaften, große Errungenschaften', () => {
+    expect(Object.keys(TIERS)).toEqual(['badge', 'feat', 'legend']);
+    expect(ASC.find((a) => a.id === 'erwacht').tier).toBe('badge');
+    expect(ASC.find((a) => a.id === 'irongrip').tier).toBe('feat');
+    expect(ASC.filter((a) => a.tier === 'legend').length >= 12).toBe(true);
+  });
+  it('große Errungenschaft bringt 750 XP, Kreuzheben 2 × Körpergewicht', () => {
+    const d = defaultData();
+    d.settings.bodyweight = 80;
+    d.records = { deadlift: { value: 1, load: 160, score: 1 } };
+    const r = checkProg(d, T, 3);
+    const s = r.data.sessions.find((x) => x.ascension === 'dead2x');
+    expect(s.xp).toBe(750);
+    expect(s.tier).toBe('legend');
+  });
+});
+
+// ——— Paket 4 und 5: Zone 2, Events, Körpergewicht, Hilfe ———
+import { eventOf, eventToday, weightSeries, weightLoggedThisWeek } from '../js/engine/events.js';
+import { HELP } from '../js/data/help.js';
+
+describe('Zone 2', () => {
+  it('lockere Einheit, zählt nicht für Rotation, 40 XP', () => {
+    const d = defaultData();
+    const plan = buildPlan({ missionId: 'ZONE2', profile: 'room', data: d, today: T });
+    expect(plan.calm).toBe(true);
+    expect(plan.kind).toBe('zone2');
+    const a = createActive(plan, T);
+    a.roundsDone = 1;
+    const r = finishSession(d, a);
+    expect(r.session.xp).toBe(40);
+    expect(JSON.stringify(r.data.engine.queue)).toBe(JSON.stringify(d.engine.queue));
+  });
+  it('Sommer Kapitel 2 empfiehlt Zone 2', () => {
+    expect(weekInfo({ n: 2, week: 8 }).rules.zone2).toBe(true);
+    expect(!!weekInfo({ n: 0, week: 8 }).rules.zone2).toBe(false);
+  });
+});
+
+describe('Events pro Kapitel', () => {
+  const at = (week, today) => { const d = defaultData(); d.engine.arc = { n: 0, week, startedDay: '2026-01-01' }; return eventToday(d, today); };
+  it('Ankündigung in Kapitelwoche 3, live am Wochenende von Woche 4, nicht in der Prüfwoche', () => {
+    expect(at(3, MON).state).toBe('announce');
+    expect(at(4, MON).state).toBe('announce');
+    expect(at(4, addDays(MON, 5)).state).toBe('live');
+    expect(at(10, addDays(MON, 6)).state).toBe('live');
+    expect(at(13, addDays(MON, 5))).toBe(null);
+  });
+  it('erledigt = keine Karte mehr, Kapitel bekommen verschiedene Events', () => {
+    const d = defaultData();
+    d.engine.arc = { n: 0, week: 4, startedDay: '2026-01-01' };
+    d.sessions = [{ day: MON, kind: 'event', n: 0, chapter: 0 }];
+    expect(eventToday(d, addDays(MON, 5))).toBe(null);
+    expect(eventOf(0, 0).id === eventOf(0, 1).id).toBe(false);
+  });
+});
+
+describe('Körpergewicht', () => {
+  it('Verlauf ab Saisonstart, Woche erkannt', () => {
+    const d = { bodyLog: { '2026-10-05': 84, '2026-10-12': 83.5, '2026-10-19': 83.2 } };
+    expect(weightSeries(d, '2026-10-10').map((p) => p.kg)).toEqual([83.5, 83.2]);
+    expect(weightLoggedThisWeek(d, '2026-10-21')).toBe(true);
+    expect(weightLoggedThisWeek(d, '2026-10-27')).toBe(false);
+  });
+});
+
+describe('Hilfe', () => {
+  it('jede Erklärung hat Titel, Gruppe und 1–4 Sätze, ohne Ausrufezeichen', () => {
+    for (const h of Object.values(HELP)) {
+      expect(!!h.title && !!h.group).toBe(true);
+      expect(h.text.includes('!')).toBe(false);
+    }
+    expect(Object.keys(HELP).length >= 15).toBe(true);
+  });
+});
+
+describe('v34 · Runden-Blöcke und Bänder', () => {
+  it('ARENA-Blöcke: Sparringsrunden ergeben sich aus den Sparring-Blöcken, leere fallen weg', () => {
+    const s = logArena(defaultData(), { day: T, rpe: 7, minutes: 60, content: ['Sparring'], blocks: [
+      { type: 'Sparring', rounds: 4, min: 3, note: '' },
+      { type: 'Footwork-Drill', rounds: 3, min: 2, note: ' Leiter ' },
+      { type: 'Sparring', rounds: 2, min: 2.5 },
+      { type: 'Sonstiges', rounds: 0, min: 3 }] }).session;
+    expect(s.blocks.length).toBe(3);
+    expect(s.sparRounds).toBe(6);
+    expect(s.blocks[1].note).toBe('Leiter');
+    expect(ROUND_TYPES.length).toBe(4);
+  });
+  it('ohne Blöcke bleibt das Feld leer', () => {
+    expect(logArena(defaultData(), { day: T, rpe: 5 }).session.blocks).toBe(undefined);
+  });
+  it('Bänder haben Farbe und kg-Bereich', () => {
+    expect(BANDS.length).toBe(6);
+    expect(bandLabel('rot')).toBe('Rot (7–16 kg)');
+    expect(BANDS.every((b) => /^#/.test(b.color) && /\d–\d/.test(b.kg))).toBe(true);
   });
 });

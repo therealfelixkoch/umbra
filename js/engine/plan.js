@@ -472,7 +472,7 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
       const it = p.items[i];
       session.exercises.push({ exId: entry.exId, key: entry.key, sets: entry.sets, rpe: entry.rpe ?? undefined,
         swappedFrom: it.swappedFrom || undefined, swapScope: it.swapScope || undefined,
-        elbow: entry.elbowReported || undefined, adjust: it.adjust || undefined, note: entry.note || undefined,
+        elbow: entry.elbowReported || undefined, adjust: it.adjust || undefined, note: entry.note || undefined, band: entry.band || undefined,
         intervals: entry.intervals || undefined });
       if (!done.length) return;
       const def = getDef(entry.exId);
@@ -587,14 +587,21 @@ export function deleteSession(data, id) {
 // Ab diesem Gefühlswert zählt eine Arena-Einheit als hart (wie Sparring).
 export const HARD_RPE = 7;
 
+export const ROUND_TYPES = ['Sparring', 'Footwork-Drill', 'Hand-Footwork-Drill', 'Sonstiges'];
+
 export function logArena(data, { day, intensity, rpe, minutes = 60, bmt = null, content = null, sparRounds = null,
-  focus = null, now = Date.now() }) {
+  focus = null, blocks = null, now = Date.now() }) {
+  const rb = (blocks || []).filter((b) => b.rounds > 0).map((b) => ({ type: b.type, rounds: b.rounds, min: b.min, note: b.note?.trim() || undefined }));
+  if (rb.length) {
+    const spar = rb.filter((b) => b.type === 'Sparring').reduce((n, b) => n + b.rounds, 0);
+    if (spar) sparRounds = spar;
+  }
   const r = rpe ?? (intensity === 'hard' ? 8 : 4);
   const arc = data.engine?.arc;
   const session = { id: `a${now}`, day, kind: 'arena', missionId: 'ARENA', rpe: r,
     intensity: r >= HARD_RPE ? 'hard' : 'light', minutes, arc: arc ? { n: arc.n, week: arc.week } : undefined,
     bmt: bmt || undefined, content: content?.length ? content : undefined, sparRounds: sparRounds || undefined,
-    focus: focus?.trim() || undefined, load: Math.round(r * minutes) };
+    focus: focus?.trim() || undefined, blocks: rb.length ? rb : undefined, load: Math.round(r * minutes) };
   session.xp = sessionXp(session);
   return { data: { ...data, sessions: [...data.sessions, session] }, session };
 }

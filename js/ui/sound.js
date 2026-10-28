@@ -47,25 +47,55 @@ export function pulse(strong = false) {
   setTimeout(() => b.classList.remove('signal-pulse', 'signal-strong'), strong ? 2600 : 1600);
 }
 
+let hapticEl = null;
+/** Kurzer Haptik-Impuls. iOS kennt kein vibrate(), gibt aber beim Umschalten eines Systemschalters (input switch) ein Klick-Feedback. */
+export function haptic() {
+  if (typeof navigator.vibrate === 'function') { navigator.vibrate(12); return; }
+  if (!hapticEl) {
+    hapticEl = document.createElement('label');
+    hapticEl.setAttribute('aria-hidden', 'true');
+    hapticEl.style.cssText = 'position:fixed;left:-200px;top:0;opacity:0;pointer-events:none';
+    hapticEl.innerHTML = '<input type="checkbox" switch tabindex="-1">';
+    document.body.append(hapticEl);
+  }
+  hapticEl.click();
+}
+
+/** Audio-Kontext wecken (nach Hintergrund, Anruf, Sperre) und danach abspielen, statt den Ton zu verwerfen. */
+function whenRunning(fn) {
+  if (!audio) return;
+  if (audio.state === 'running') { fn(); return; }
+  audio.resume().then(() => { if (audio.state === 'running') fn(); }).catch(() => {});
+}
+
+// Kontext wach halten: beim Zurückkommen in die App sofort wieder aufwecken
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && audio && audio.state !== 'running') audio.resume().catch(() => {});
+});
+
 export function beep(times = 1, freq = 880) {
-  if (!soundOn || !audio) return;
-  if (audio.state !== 'running') {
-    audio.resume().catch(() => {});
-    return;
-  }
-  for (let i = 0; i < times; i++) {
-    const t = audio.currentTime + i * 0.28;
-    const o = audio.createOscillator();
-    const g = audio.createGain();
-    o.type = 'sine';
-    o.frequency.value = i === times - 1 && times > 1 ? freq * 1.5 : freq;
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.35, t + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
-    o.connect(g).connect(audio.destination);
-    o.start(t);
-    o.stop(t + 0.22);
-  }
+  if (!soundOn) return;
+  whenRunning(() => {
+    const dest = out(1.8);
+    for (let i = 0; i < times; i++) {
+      const t = audio.currentTime + 0.02 + i * 0.3;
+      const f = i === times - 1 && times > 1 ? freq * 1.5 : freq;
+      // Grundton + Oktave (Dreieck) klingt durchsetzungsfähiger als ein reiner Sinus
+      for (const [type, mult, amp] of [['triangle', 1, 0.9], ['sine', 2, 0.35]]) {
+        const o = audio.createOscillator();
+        const g = audio.createGain();
+        o.type = type;
+        o.frequency.value = f * mult;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(amp, t + 0.015);
+        g.gain.setValueAtTime(amp, t + 0.14);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+        o.connect(g).connect(dest);
+        o.start(t);
+        o.stop(t + 0.28);
+      }
+    }
+  });
 }
 
 // Signal am Ende eines Timers: Ton + violettes Pulsieren
@@ -89,12 +119,17 @@ export function testSound() {
   };
 }
 
-function out() {
-  // Kompressor macht Gong und Glocke laut, ohne zu verzerren.
+function out(boost = 2.2) {
+  // Kompressor + Nachverstärkung: laut, ohne zu verzerren.
   const comp = audio.createDynamicsCompressor();
-  comp.threshold.value = -18;
-  comp.ratio.value = 6;
-  comp.connect(audio.destination);
+  comp.threshold.value = -24;
+  comp.knee.value = 6;
+  comp.ratio.value = 8;
+  comp.attack.value = 0.002;
+  comp.release.value = 0.12;
+  const makeup = audio.createGain();
+  makeup.gain.value = boost;
+  comp.connect(makeup).connect(audio.destination);
   return comp;
 }
 
@@ -102,12 +137,11 @@ function out() {
 // times = 3 → „Ding Ding Ding“ (Rundenende), times = 1 → Rundenstart. Ertönt auch bei „Ton aus“.
 export function ringBell(times = 1) {
   pulse(times > 1);
-  if (!audio) return;
-  if (audio.state !== 'running') {
-    audio.resume().catch(() => {});
-    return;
-  }
-  const dest = out();
+  whenRunning(() => playBell(times));
+}
+
+function playBell(times) {
+  const dest = out(2.6);
   // Teiltöne einer kleinen Messingglocke (inharmonisch), jeweils mit eigener Abklingzeit.
   const partials = [[1, 1, 1.6], [2.76, 0.55, 1.1], [5.4, 0.3, 0.7], [8.93, 0.16, 0.45], [0.5, 0.25, 1.2]];
   const f0 = 830;
@@ -119,7 +153,7 @@ export function ringBell(times = 1) {
       o.type = 'sine';
       o.frequency.value = f0 * ratio;
       g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(amp * 0.9, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(amp, t + 0.004);
       g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
       o.connect(g).connect(dest);
       o.start(t);
@@ -135,7 +169,7 @@ export function ringBell(times = 1) {
     hp.type = 'highpass';
     hp.frequency.value = 3000;
     const ng = audio.createGain();
-    ng.gain.value = 0.6;
+    ng.gain.value = 0.9;
     n.buffer = buf;
     n.connect(hp).connect(ng).connect(dest);
     n.start(t);
@@ -144,15 +178,18 @@ export function ringBell(times = 1) {
 
 // Kurzes Klacken als 10-Sekunden-Warnung.
 export function clack() {
-  if (!audio) return;
-  const dest = out();
+  whenRunning(playClack);
+}
+
+function playClack() {
+  const dest = out(2);
   [0, 0.14, 0.28].forEach((d) => {
     const t = audio.currentTime + d;
     const o = audio.createOscillator();
     const g = audio.createGain();
     o.type = 'square';
     o.frequency.value = 900;
-    g.gain.setValueAtTime(0.3, t);
+    g.gain.setValueAtTime(0.5, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
     o.connect(g).connect(dest);
     o.start(t);

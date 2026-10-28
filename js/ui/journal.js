@@ -8,6 +8,7 @@ import { filterSessions, filterOptions, exerciseCurve, doneSets } from '../engin
 import { xpLedger, xpBySource } from '../engine/game.js';
 import { SOURCE_LABELS } from '../data/xp-config.js';
 import { deleteSession } from '../engine/plan.js';
+import { bandLabel } from '../engine/equipment.js';
 import { logDecision } from '../engine/rulelog.js';
 
 const RIR_TXT = (r) => (r == null ? '' : ` · RIR ${r === 4 ? '4+' : r}`);
@@ -35,6 +36,7 @@ function detail(s) {
       ${sets.length ? `<ol class="j-sets">${sets.map((x) => `<li>${esc(setLine(def, x))}${x.label ? ` <small class="muted">${esc(x.label)}</small>` : ''}</li>`).join('')}</ol>` : '<p class="muted small">nicht gemacht</p>'}
       ${e.swappedFrom ? `<p class="muted small">Getauscht statt ${esc(getDef(e.swappedFrom)?.name || e.swappedFrom)} · ${e.swapScope === 'arc' ? 'für den Arc' : 'nur heute'}</p>` : ''}
       ${e.adjust ? `<p class="muted small">Angepasst: ${esc(e.adjust)}</p>` : ''}
+      ${e.band ? `<p class="muted small">Band: ${esc(bandLabel(e.band))}</p>` : ''}
       ${e.elbow ? '<p class="warn-tag small">Ellbogen gemeldet</p>' : ''}
       ${e.note ? `<p class="small">${esc(e.note)}</p>` : ''}</div>`);
   }
@@ -46,6 +48,7 @@ function detail(s) {
     parts.push(`<p class="muted small">${s.items.map((id) => esc(getDef(id)?.name || id)).join(', ')}${s.roundsDone ? ` · ${s.roundsDone} Runden` : ''}</p>`);
   }
   if (s.kind === 'arena') {
+    if (s.blocks?.length) parts.push(`<ul class="cues">${s.blocks.map((b) => `<li>${b.rounds} × ${String(b.min).replace('.', ',')} min ${esc(b.type)}${b.note ? `: ${esc(b.note)}` : ''}</li>`).join('')}</ul>`);
     parts.push(`<p class="small">${[s.content?.length ? s.content.join(', ') : null, s.sparRounds ? `${s.sparRounds} Sparringsrunden` : null,
       s.focus ? esc(s.focus) : null].filter(Boolean).join(' · ') || 'Keine Details eingetragen.'}</p>`);
   }

@@ -72,6 +72,24 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 28.10.2026 (v35): Winter-Look und Award-Details
+- Hintergrund ohne Figur: Die Silhouette im Nebel ist weg, nur Licht, Nebel und Partikel bleiben.
+- Winter Arc: feiner Schnee in drei Tiefen auf allen Seiten außer Training und Checks. Die Oberfläche wird zu Eisglas (Glas, Linien, Text, Tabbar, Leuchten frostblau). Der Hintergrund bleibt neutral, damit die Rang-Bilder auf ihrem Grund stehen.
+- Saison-Headline auf Heute unter der Statusleiste: Saisonname groß in der UMBRA-Schrift mit Eis-Schimmer, darunter „● aktiv · Woche x/13 · Kapitel“.
+- Saisonwechsel-Intro: Beim ersten Öffnen einer neuen Saison baut sich der Name Buchstabe für Buchstabe auf (im Winter mit Schnee). „Eintreten“ führt ins Saison-Intro, „Später“ merkt es sich für diese Saison.
+- Setup → Saison-Look: Vorschau jeder Saison (nur Farben, Partikel, Headline) und „Saisonwechsel-Intro ansehen“.
+- Training: Der Kopf schwebt beim Scrollen als Glasleiste mit Übung, Satz x/y und Gesamtzeit. Abhaken gibt einen kurzen Haptik-Impuls (iOS 18+).
+- Zahlen-Ticker: Kampfkraft und XP rollen zum neuen Wert.
+
+### Update 28.10.2026 (v34): Feedback aus dem Training
+- Signaltöne: Pausen-Piep geht nicht mehr verloren, wenn iOS den Audio-Kontext schlafen legt (erst aufwecken, dann spielen). Piep, Gong und Klack laufen über Kompressor plus Nachverstärkung, deutlich lauter. 3 s vor Pausenende kommt ein Vorwarn-Piep.
+- Pausen-Timer: mit ▾ nach unten einklappen (schmale Leiste mit Restzeit und Balken), Tipp auf die Leiste klappt ihn wieder auf. Der Zustand bleibt für die nächste Pause.
+- Bänder nach Farbe mit Widerstand in Klammern (Gelb 2–7 kg bis Blau 29–68 kg). Im Bestand pro Ort wählbar, bei Band-Übungen im Training als Farb-Chips. Die Wahl wird pro Übung gemerkt und im Verlauf gezeigt.
+- Zeitübungen: kein RIR mehr, nur RPE am Ende. Der Timer endet bei der Zielzeit und hakt den Satz ab, statt ins Plus zu zählen.
+- ARENA: Runden-Blöcke (Sparring, Footwork-Drill, Hand-Footwork-Drill, Sonstiges) mit Rundenzahl, Minuten je Runde und Bemerkung. Die Sparringsrunden ergeben sich aus den Sparring-Blöcken. Nach dem Rundentimer ist ein Block schon vorausgefüllt.
+- UI: Bildschirme gleiten beim Wechsel ein. Mission-Karte als Hero (leuchtendes Buchstaben-Abzeichen, pulsierender Start-Knopf). Leuchtstrich unter dem aktiven Tab. Druck-Feedback auf Chips und Tasten.
+- Rang- und Lore-Bilder: Der dunkle Bildgrund wird per Blend-Modus durchsichtig, kein sichtbarer Rand mehr auf Glas und Saisonfarben.
+
 ### Design-Update 27.10.2026: Obsidian-Glas
 
 - **Material:** Karten, Panels und Tabbar als dunkles Glas mit Lichtkante und Weichzeichner. Die alten Systemrahmen-Ecken sind weg.

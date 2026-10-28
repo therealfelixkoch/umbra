@@ -113,6 +113,8 @@ function parseHash() {
   app.param = param ? decodeURIComponent(param) : null;
 }
 
+let lastRoute = null;
+
 function render() {
   if (!app.data) return;
   let route = app.route;
@@ -120,13 +122,38 @@ function render() {
   const screen = SCREENS[route];
   const showTabs = !['onboarding', 'training', 'check', 'review', 'debrief', 'intro', 'temper', 'wristcheck', 'feetcheck', 'benchmark'].includes(route);
   syncAtmosphere(app.data, route);
-  root.innerHTML = `<main class="screen screen-${route}">${screen.render(ctx)}</main>${showTabs ? tabbar(route) : ''}`;
+  const entering = route !== lastRoute;
+  lastRoute = route;
+  root.innerHTML = `<main class="screen screen-${route}${entering ? ' enter' : ''}">${screen.render(ctx)}</main>${showTabs ? tabbar(route) : ''}`;
   screen.mount?.(ctx, root);
   animateKK();
+  animateTicks();
   if (tourActive()) setTimeout(() => drawTour(ctx), 50);
 }
 
 // Kampfkraft zählt sichtbar hoch, wenn sie gestiegen ist.
+// Zahlen rollen zum neuen Wert statt zu springen ([data-tick]: Schlüssel, data-to: Zielwert)
+const ticks = {};
+function animateTicks() {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  root.querySelectorAll('[data-tick]').forEach((el) => {
+    const key = el.dataset.tick;
+    const to = Number(el.dataset.to);
+    const from = ticks[key];
+    ticks[key] = to;
+    if (from == null || from === to || reduce) return;
+    const t0 = performance.now();
+    const step = (t) => {
+      const p = Math.min(1, (t - t0) / 900);
+      el.textContent = Math.round(from + (to - from) * (1 - (1 - p) ** 3)).toLocaleString('de-DE');
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+window.addEventListener('scroll', () => document.body.classList.toggle('scrolled', window.scrollY > 72), { passive: true });
+
 function animateKK() {
   const el = root.querySelector('[data-kk]');
   if (!el) return;

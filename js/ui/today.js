@@ -7,7 +7,8 @@ import { weekInfo, holidayActive, DEFAULT_HOLIDAY, inDeload, seasonPlan } from '
 import { yesterdayClass } from '../engine/load.js';
 import { stagnationStatus } from '../engine/stagnation.js';
 import { logDecision } from '../engine/rulelog.js';
-import { PLYO_NAMES, arcOf, arcWeeks } from '../data/arcs.js';
+import { PLYO_NAMES, arcOf, arcWeeks, ARCS, chapterOf } from '../data/arcs.js';
+import { lookSeason, realSeason } from './atmosphere.js';
 import { bossStatus } from '../engine/boss.js';
 import { introDue, quoteOfDay } from '../engine/story.js';
 import { rankEmblem } from './emblem.js';
@@ -60,6 +61,41 @@ export function statusStrip(c) {
       ${b ? `<div class="strip-boss"><span>${esc(b.name)}</span>${seasonTrack(arc)}${pillarDots(c.data, arc)}</div>` : ''}
       <div class="strip-bottom">${arc ? `<span>${esc(arcOf(arc.n).name)} · ${b.chapter ? `Kap. ${b.chapterIndex + 1} ${esc(b.chapter.name)}` : 'Prüfwoche'} · ${arc.week}/${arcWeeks(arc.n)}</span>` : ''}<span class="wdots">${dots}</span></div>
     </div></section>`;
+}
+
+// Saison-Headline unter der Statusleiste: Name der Saison groß in der UMBRA-Schrift, darunter Woche und Kapitel.
+function seasonHero(c) {
+  const arc = c.data.engine.arc;
+  if (!arc) return '';
+  const look = lookSeason(c.data);
+  const a = ARCS.find((x) => x.id.toLowerCase() === look);
+  const real = look === realSeason(c.data);
+  const ch = chapterOf(arc.week);
+  const sub = real ? `Woche ${arc.week}/${arcWeeks(arc.n)} · ${ch === 'exam' ? 'Prüfwoche' : `Kap. ${ch + 1} ${esc(arcOf(arc.n).chapters[ch].name)}`}` : `Woche ${arc.week}/${arcWeeks(arc.n)} · nur Look`;
+  return `<section class="season-hero s-${look}"><h1 class="sh-name">${esc(a.name)}</h1>
+    <p class="sh-sub"><span class="sh-live">${real ? 'aktiv' : 'Vorschau'}</span>${sub}</p></section>`;
+}
+
+// Saisonwechsel: Vollbild-Sequenz beim ersten Öffnen einer neuen Saison (oder als Vorschau aus dem Setup)
+function seasonGate(c) {
+  const data = c.data;
+  const preview = c.ui.gatePreview;
+  const n = data.engine.arc?.n ?? 0;
+  if (!preview && (!introDue(data) || data.settings.gateSeen === n)) return '';
+  const look = preview ? lookSeason(data) : realSeason(data);
+  const a = ARCS.find((x) => x.id.toLowerCase() === look);
+  const letters = [...a.name].map((ch, i) => `<i style="animation-delay:${(0.5 + i * 0.07).toFixed(2)}s">${ch === ' ' ? '&nbsp;' : esc(ch)}</i>`).join('');
+  const flakes = Array.from({ length: 30 }, (_, i) => `<b style="left:${((i * 37) % 100)}%;animation-duration:${(7 + (i % 5) * 1.6).toFixed(1)}s;animation-delay:${(-(i % 7) * 1.1).toFixed(1)}s;width:${1 + (i % 3)}px;height:${1 + (i % 3)}px"></b>`).join('');
+  return `<div class="season-gate s-${look}" role="dialog" aria-label="${esc(a.name)} beginnt">
+    <div class="sg-snow" aria-hidden="true">${look === 'winter' ? flakes : ''}</div>
+    <div class="sg-core">
+      <small class="sg-kick">Neue Saison</small>
+      <h1 class="sg-name">${letters}</h1>
+      <div class="sg-line"></div>
+      <p class="sg-sub">${esc(a.focus)}</p>
+      <p class="sg-guard">Wächter: ${esc(guardianName(n))}</p>
+      <div class="sg-actions"><button class="btn primary wide" data-act="gate-enter">Eintreten</button><button class="btn ghost" data-act="gate-later">Später</button></div>
+    </div></div>`;
 }
 
 // Saison-Extras auf Heute: ZONE 2 (Sommer Kapitel 2), Event pro Kapitel, montags Körpergewicht
@@ -282,7 +318,7 @@ export default {
     const data = c.data;
     const today = c.today();
     // Ganz oben: Status (Rang, Kampfkraft, Boss, Arc-Woche). Darunter Check-in bzw. Mission, dann Hinweise.
-    let out = statusStrip(c) + dailyQuote(c);
+    let out = seasonGate(c) + statusStrip(c) + seasonHero(c) + dailyQuote(c);
     let notes = '';
     if (introDue(data)) {
       const a = arcOf(data.engine.arc.n);
@@ -340,11 +376,11 @@ export default {
       c.ui.lastRec = { ...rec, plyoCap: ci.sparTomorrow === true };
       const sparQ = plan.plyo && plan.plyo.wanted >= 4 && ci.sparTomorrow == null
         ? `<div class="q"><div class="q-label">Morgen hartes Sparring geplant?</div>${chips('sparTomorrow', [['no', 'Nein'], ['yes', 'Ja']], null).replace(/data-act="pick"/g, 'data-act="spar"')}<p class="muted small">Heute steht Plyo-Stufe ${plan.plyo.wanted} an. Vor hartem Sparring bleibt es bei Stufe 3.</p></div>` : '';
-      out += sys('Mission verfügbar', `<div class="mission-title"><span class="mid">${rec.missionId.length === 1 ? rec.missionId : '◆'}</span><div><h2>${esc(plan.name)}</h2><small>${esc(plan.focus)} · ca. ${plan.minutes} min${rec.profile === 'gym' && plan.kind === 'mission' && rec.missionId !== 'FORGE' ? ' · Home Gym' : rec.profile === 'travel' ? ' · Unterwegs' : ''}</small></div></div>
+      out += sys('Mission verfügbar', `<div class="mission-title hero"><span class="mid">${rec.missionId.length === 1 ? rec.missionId : '◆'}</span><div><h2>${esc(plan.name)}</h2><small>${esc(plan.focus)} · ca. ${plan.minutes} min${rec.profile === 'gym' && plan.kind === 'mission' && rec.missionId !== 'FORGE' ? ' · Home Gym' : rec.profile === 'travel' ? ' · Unterwegs' : ''}</small></div></div>
         ${plan.kind === 'mission' ? arcLine(data, today, plan) : ''}
         <p class="reason">${esc(rec.reason)}</p>${rec.hint?.lines.length && !rec.manual ? `<p class="note">${esc(adviceText(rec.hint))}</p>` : ''}${rec.walk ? '<p class="note">Danach 20–30 Minuten spazieren.</p>' : ''}${modifierNote(plan)}
         ${sparQ}${adjustNote(c, plan)}${plan.wrist && rec.missionId !== 'WRIST' ? `<div class="signal-note"><span>${esc(plan.wrist.reason)}</span><button class="btn small ghost" data-act="wrist-decline">Heute ohne Handgelenk-Block</button></div>` : ''}${planPreview(plan)}
-        <button class="btn primary wide" data-act="start-rec">Mission starten</button>`);
+        <button class="btn primary wide pulse" data-act="start-rec">Mission starten</button>`);
     }
     if (trained <= (ci.extra || 0)) {
       out += `<div class="row gap center"><button class="btn ghost" data-act="swap">Andere Einheit</button><button class="btn ghost" data-act="redo-ci">Check-in ändern</button></div>`;
@@ -374,6 +410,18 @@ export default {
   },
 
   actions: {
+    // Einmal pro Saison: gesehen merken, danach bleibt nur die Intro-Karte auf Heute
+    'gate-enter': (c) => {
+      const prev = c.ui.gatePreview;
+      c.ui.gatePreview = false;
+      if (prev) { if (introDue(c.data)) c.go('intro'); else c.render(); return; }
+      c.update((data) => ({ ...data, settings: { ...data.settings, gateSeen: data.engine.arc?.n ?? 0 } }));
+      c.go('intro');
+    },
+    'gate-later': (c) => {
+      if (c.ui.gatePreview) { c.ui.gatePreview = false; c.render(); return; }
+      c.update((data) => ({ ...data, settings: { ...data.settings, gateSeen: data.engine.arc?.n ?? 0 } }));
+    },
     pick: (c, d) => {
       const v = d.name === 'morning' ? d.value === 'yes' : d.name === 'painOpen' ? d.value === 'yes' : d.value;
       c.ui.ci = { ...c.ui.ci, [d.name]: v, ...(d.name === 'painOpen' && !v ? { pain: [] } : {}) };

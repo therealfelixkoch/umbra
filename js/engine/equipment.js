@@ -4,6 +4,17 @@ import { MISSIONS } from '../data/missions.js';
 
 export const PLACE_NAMES = { room: 'Fighting Cave', gym: 'Home Gym', travel: 'Unterwegs' };
 
+// Widerstandsbänder nach Farbe, mit üblichem Widerstandsbereich in Klammern (Hersteller weichen leicht ab)
+export const BANDS = [
+  { id: 'gelb', name: 'Gelb', kg: '2–7', color: '#f2d43c' },
+  { id: 'rot', name: 'Rot', kg: '7–16', color: '#e5484d' },
+  { id: 'schwarz', name: 'Schwarz', kg: '11–36', color: '#2b2b30' },
+  { id: 'lila', name: 'Lila', kg: '16–39', color: '#8e5bd8' },
+  { id: 'gruen', name: 'Grün', kg: '23–57', color: '#3fae5a' },
+  { id: 'blau', name: 'Blau', kg: '29–68', color: '#3b82f6' },
+];
+export const bandLabel = (id) => { const b = BANDS.find((x) => x.id === id); return b ? `${b.name} (${b.kg} kg)` : id; };
+
 // Katalog: nur Teile, die mindestens eine Übung in UMBRA nutzt (sonst wäre es Deko).
 export const EQUIPMENT_GROUPS = [
   { id: 'weights', name: 'Gewichte', items: ['kb', 'dumbbells', 'barbell', 'rack', 'bench', 'belt', 'vest'] },
@@ -18,7 +29,7 @@ export const INVENTORY = {
   kb: { label: 'Kettlebells', unit: 'kg', options: [4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 32, 36, 40, 44, 48], counted: true },
   dumbbells: { label: 'Kurzhanteln (Paare)', unit: 'kg', options: [2, 4, 5, 6, 8, 10, 12, 12.5, 14, 15, 16, 17.5, 18, 20, 22, 22.5, 24, 25, 26, 27.5, 28, 30, 32, 35, 40, 45, 50], counted: true },
   box: { label: 'Plyo-Boxen', unit: 'cm', options: [20, 30, 40, 50, 60, 75, 90] },
-  band: { label: 'Widerstandsbänder', unit: '', options: ['leicht', 'mittel', 'schwer', 'sehr schwer'] },
+  band: { label: 'Widerstandsbänder (Farbe, Widerstand)', unit: '', options: BANDS.map((b) => b.id), labels: Object.fromEntries(BANDS.map((b) => [b.id, `${b.name} (${b.kg} kg)`])) },
 };
 
 /** Bestand eines Ortes: { kb: {12: 1}, dumbbells: {...}, box: [50], band: ['mittel'] } */

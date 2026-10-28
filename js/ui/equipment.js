@@ -2,7 +2,7 @@
 // Box-Höhen, Bandstärken) und sehen, was ein Teil freischalten würde. Hilft beim Bauen und Kaufen.
 import { esc, helpDot } from './kit.js';
 import { EQUIPMENT, EXERCISES, getDef } from '../data/exercises.js';
-import { EQUIPMENT_GROUPS, INVENTORY, PLACE_NAMES, inventoryOf, unlocks, missionGaps } from '../engine/equipment.js';
+import { EQUIPMENT_GROUPS, INVENTORY, PLACE_NAMES, BANDS, inventoryOf, unlocks, missionGaps } from '../engine/equipment.js';
 
 const MAX_COUNT = 4;
 const label = (id) => EQUIPMENT[id] || id;
@@ -15,7 +15,8 @@ function inventoryEditor(place, key, inv) {
       const n = cur[v] || 0;
       return `<button class="kb${n ? ' on' : ''}" data-act="inv-cycle" data-place="${place}" data-key="${key}" data-v="${v}">${String(v).replace('.', ',')}${n > 1 ? `<small>×${n}</small>` : ''}</button>`;
     }
-    return `<button class="kb${cur.includes(v) ? ' on' : ''}" data-act="inv-toggle" data-place="${place}" data-key="${key}" data-v="${esc(String(v))}">${esc(String(v))}</button>`;
+    const band = key === 'band' ? BANDS.find((b) => b.id === v) : null;
+    return `<button class="kb${band ? ' band' : ''}${cur.includes(v) ? ' on' : ''}" data-act="inv-toggle" data-place="${place}" data-key="${key}" data-v="${esc(String(v))}">${band ? `<i class="band-dot" style="background:${band.color}"></i>` : ''}${esc(meta.labels?.[v] || String(v))}</button>`;
   };
   return `<div class="inv"><div class="label">${meta.label}${meta.unit ? ` (${meta.unit})` : ''}</div>
     <div class="kbgrid">${meta.options.map(chip).join('')}</div>

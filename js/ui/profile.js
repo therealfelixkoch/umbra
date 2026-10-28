@@ -29,6 +29,7 @@ import { bladeEmblem } from './temper.js';
 import { wristView } from './wrist.js';
 import { feetView, mountPhotos } from './feet.js';
 import { equipmentSetup, equipmentActions } from './equipment.js';
+import { SEASON_LOOKS } from './atmosphere.js';
 import { overviewView } from './overview.js';
 import { setStory, shareStory } from './storycard.js';
 import { bladeTier } from '../engine/temper.js';
@@ -173,7 +174,7 @@ export default {
         <div class="rank-row emblems">${RANKS.map((r, i) => `<span class="${i <= st.rank.index ? 'on' : ''}${i === st.rank.index ? ' cur' : ''}" title="${rankName(r)}">${rankEmblem(i, { size: i === st.rank.index ? 40 : 30 })}</span>`).join('')}</div>
         <div class="xpbar big"><i style="width:${Math.round(st.rank.progress * 100)}%"></i></div>
         <p class="lore">${RANK_LORE[st.rank.id]}</p>
-        <p class="muted">${st.xp.toLocaleString('de-DE')} XP${next ? ` · noch ${(next.xp - st.xp).toLocaleString('de-DE')} bis ${rankName(next)}` : ''}</p>
+        <p class="muted"><span class="num" data-tick="xp" data-to="${st.xp}">${st.xp.toLocaleString('de-DE')}</span> XP${next ? ` · noch ${(next.xp - st.xp).toLocaleString('de-DE')} bis ${rankName(next)}` : ''}</p>
         <dl class="facts">
           <div><dt>Kampfkraft ${helpDot("kk")}</dt><dd class="num">${st.kk.toLocaleString("de-DE")}</dd></div>
           <div><dt>Wochen-Streak</dt><dd class="num">${st.week.streak} (Rekord ${st.week.best})</dd></div>
@@ -221,7 +222,12 @@ export default {
     }
 
     const s = data.settings;
+    const look = s.seasonLook || 'auto';
     return out + `
+      <section class="card"><div class="label">Saison-Look</div>
+        <div class="chips">${SEASON_LOOKS.map(([id, name]) => `<button class="chip${look === id ? ' on' : ''}" data-act="p-look" data-v="${id}">${name}</button>`).join('')}</div>
+        <p class="muted small">Nur Farben, Partikel und Headline. Training und Saison-Regeln bleiben bei der echten Saison. Automatisch folgt der laufenden Saison.</p>
+        <button class="btn wide" data-act="p-gate">Saisonwechsel-Intro ansehen</button></section>
       ${equipmentSetup(c)}
       <section class="card"><div class="label">Körpergewicht</div>${stepper('p-bw', kg(s.bodyweight), 'kg')}
         <div class="label">Satzpausen</div>
@@ -249,6 +255,8 @@ export default {
   },
   mount(c, root) { mountPhotos(root); },
   actions: {
+    'p-look': (c, d) => c.update((data) => ({ ...data, settings: { ...data.settings, seasonLook: d.v } })),
+    'p-gate': (c) => { c.ui.gatePreview = true; c.go('heute'); },
     ...journalActions,
     ...equipmentActions,
     ptab: (c, d) => c.setUi({ ptab: d.v }),

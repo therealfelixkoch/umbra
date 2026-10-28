@@ -20,9 +20,10 @@ import { logDecision } from '../engine/rulelog.js';
 import { stepFrom } from '../data/ladders.js';
 import { guardianTier } from '../data/lore.js';
 import { rankName } from '../engine/game.js';
-import { beep, keepAwake, signal, unlockAudio } from './sound.js';
+import { beep, keepAwake, signal, unlockAudio, haptic } from './sound.js';
 import { playTone } from './temper-audio.js';
 import { setStory } from './storycard.js';
+import { BANDS } from '../engine/equipment.js';
 import { MISSIONS as MISSIONS_ALL } from '../data/missions.js';
 import { RIR_CHOICES, restFor, REST_STEP, exercisePhases, exerciseTimerAt, timerState, intervalPhases, phaseAt, workDone, PHASE_LABEL, activeMinutes } from '../engine/session.js';
 
@@ -35,7 +36,7 @@ const fmt = (sec) => {
 const restEl = () => document.getElementById('rest');
 let rest = null;
 function startRest(sec, label = 'Pause', exId = null) {
-  rest = { endAt: Date.now() + sec * 1000, total: sec, label, fired: false, exId };
+  rest = { endAt: Date.now() + sec * 1000, total: sec, label, fired: false, exId, min: !!rest?.min };
   drawRest();
 }
 function drawRest() {
@@ -61,13 +62,20 @@ function drawRest() {
   }
   const C = 452;
   const frac = Math.max(0, Math.min(1, left / Math.max(1, rest.total || 60)));
-  el.innerHTML = `<div class="rest-inner"><small>${esc(rest.label)}</small>
+  if (left > 0 && left <= 3.2 && !rest.warned) { rest.warned = true; beep(1, 660); }
+  if (rest.min) {
+    el.className = `open min${left <= 0 ? ' over' : ''}`;
+    el.innerHTML = `<button class="rest-mini" data-act="rest-toggle" aria-label="Pause aufklappen"><span>${esc(rest.label)}</span>
+      <i class="rest-mini-bar"><i style="width:${(frac * 100).toFixed(1)}%"></i></i><b class="num">${left > 0 ? fmt(left) : 'Los'}</b><em>▴</em></button>`;
+  } else {
+  el.innerHTML = `<div class="rest-inner"><button class="rest-collapse" data-act="rest-toggle" aria-label="Pause einklappen">▾</button><small>${esc(rest.label)}</small>
     <div class="rest-ring"><svg viewBox="0 0 160 160" width="168" height="168" aria-hidden="true"><circle cx="80" cy="80" r="72" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="6"/>
       <circle cx="80" cy="80" r="72" fill="none" stroke="var(--sys)" stroke-width="6" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${(C * (1 - frac)).toFixed(1)}"/></svg>
       <b class="num">${left > 0 ? fmt(left) : 'Los'}</b></div>
     ${rest.resetOffer && left > 40 ? '<button class="btn small ghost rest-reset" data-act="rest-reset">Reset?</button>' : ''}
     <div class="row gap"><button class="btn" data-act="rest-sub">−15 s</button><button class="btn" data-act="rest-add">+15 s</button><button class="btn primary" data-act="rest-skip">${left > 0 ? 'Überspringen' : 'Weiter'}</button></div>
     ${rest.exId ? '<small class="rest-note">±15 s merkt sich die App für diese Übung.</small>' : ''}</div>`;
+  }
   if (left <= 0 && !rest.fired) {
     rest.fired = true;
     signal(3);
@@ -142,11 +150,13 @@ function tick(c) {
       ct.fired = true;
       signal(3);
       if (ct.rounds) { finishRounds(c, a, ct, st.round); return; }
+      // Zielzeit erreicht: Timer beenden und Satz mit der Zielzeit abhaken (nicht weiterzählen)
+      training.actions['t-timer-stop'](c, { k: ct.k });
+      return;
     }
     const el = document.querySelector('[data-bigclock]');
     if (el) {
-      el.textContent = st.over ? `+${fmt(st.elapsed - st.sec)}` : fmt(st.left);
-      el.classList.toggle('over', st.over);
+      el.textContent = fmt(Math.max(0, st.left));
     }
   }
   if (p.format === 'amrap' && a.clockEnd && now >= a.clockEnd && !a.clockFired) {
@@ -247,7 +257,7 @@ function setsView(c, a) {
   const fixed = def.mode === 'fixed';
   const r = it.rir ?? 2;
   const setCount = entry.sets.length;
-  const showRir = !fixed && !it.explosive && it.rir != null;
+  const showRir = !fixed && !it.explosive && it.rir != null && def.mode !== 'time';
   const hasTimer = timed(def);
   const ct = a.cardTimer?.i === i ? a.cardTimer : null;
   if (ct?.phases) return bigTimerView(a, ct, def);
@@ -258,6 +268,7 @@ function setsView(c, a) {
     : it.topSet ? `<p class="rir">Top-Satz: 3–5 Wdh., 1 Wdh. im Tank. Backdown: 6–10 Wdh. mit ca. 18 % weniger Last. ${helpDot('topset')}</p>`
       : def.mode === 'amrap' ? `<p class="rir">${it.noFailure ? `Ein Satz, ${r} Wdh. im Tank.` : 'Ein Satz bis kurz vor Versagen, saubere Technik.'}</p>`
         : it.failLast && setCount > 1 ? `<p class="rir">Satz 1–${setCount - 1}: ${r} Wdh. im Tank. Letzter Satz darf ans Versagen.</p>`
+          : def.mode === 'time' ? '<p class="rir">Sauber bis zur Zielzeit halten. Der Timer endet von selbst, am Ende der Übung gibst du die Anstrengung (RPE) an.</p>'
           : `<p class="rir">Alle Sätze mit ${r} Wdh. im Tank${it.noFailure ? ', kein Versagen' : ''}. ${helpDot('rir')}</p>`;
 
   const nextK = entry.sets.findIndex((x) => !x.done);
@@ -331,6 +342,7 @@ function setsView(c, a) {
       ${hasTimer ? '<p class="muted small">Timer starten, Bildschirm anlassen für das Signal. Stopp loggt die echte Zeit.</p>' : ''}
       ${ss}
       ${loadRow}
+      ${bandRow(c, a, i, def, entry)}
       ${ramp}
       ${is4x4(def) ? card4x4(a, i, entry) : `<div class="sets">${rows}</div>
       <div class="set-adj"><button class="btn small ghost" data-act="t-set-add">+ Satz</button>${entry.sets.length > 1 && entry.sets.some((x) => !x.done) ? '<button class="btn small ghost" data-act="t-set-del">− Satz</button>' : ''}<small class="muted">nur heute ${helpDot('sets')}</small></div>`}
@@ -343,6 +355,16 @@ function setsView(c, a) {
       ${isLast ? '<button class="btn gold grow" data-act="t-finish">Mission abgeschlossen</button>'
         : '<button class="btn primary grow" data-act="t-next">Nächste Übung →</button>'}
     </footer>`;
+}
+
+// Band-Übungen: Farbe wählen (aus dem Bestand des Ortes, sonst alle Farben), wird pro Übung gemerkt
+function bandRow(c, a, i, def, entry) {
+  if (!(def.equipment || []).includes('band')) return '';
+  const owned = c.data.settings.inventory?.[a.plan.profile]?.band || [];
+  const list = owned.length ? BANDS.filter((b) => owned.includes(b.id)) : BANDS;
+  const cur = entry.band || c.data.settings.bandFor?.[def.id] || null;
+  return `<div class="band-row"><div class="label">Band</div><div class="chips">${list.map((b) =>
+    `<button class="chip band${cur === b.id ? ' on' : ''}" data-act="t-band" data-v="${b.id}"><i class="band-dot" style="background:${b.color}"></i>${b.name} <small>(${b.kg} kg)</small></button>`).join('')}</div></div>`;
 }
 
 // Ghost-Leiste: erledigte Sätze heute gegen dieselben Sätze beim letzten Mal (Wdh. bzw. Sekunden)
@@ -416,8 +438,12 @@ const formatShort = (day) => { const [, m, d] = day.split('-'); return `${Number
 const elapsedOf = (a, now = Date.now()) => fmt(Math.floor(activeMinutes([a.startedAt, ...(a.marks || []), now]).ms / 1000));
 
 function head(c, a, counter, comp) {
+  // Beim Scrollen wird der Kopf zur schwebenden Leiste: aktuelle Übung und Satz statt Missionsname
+  const entry = a.log?.[a.index];
+  const sets = entry?.sets || [];
+  const mini = entry?.exId && sets.length ? `${esc(getDef(entry.exId).name)} · Satz ${Math.min(sets.length, sets.filter((s) => s.done).length + 1)}/${sets.length}` : '';
   return `<header class="t-head"><button class="icon-btn" data-act="t-menu" aria-label="Menü">☰</button>
-    <div><small>${a.plan.modifier?.type === 'deload' ? 'Deload' : a.plan.modifier?.type === 'comeback' ? 'Wiedereinstieg' : 'Mission'}</small><b>${esc(a.plan.name)}</b></div>
+    <div><small>${a.plan.modifier?.type === 'deload' ? 'Deload' : a.plan.modifier?.type === 'comeback' ? 'Wiedereinstieg' : 'Mission'}</small><b>${esc(a.plan.name)}</b>${mini ? `<em class="t-mini">${mini}</em>` : ''}</div>
     <span class="t-head-r"><b class="num t-elapsed" data-elapsed aria-label="Gesamtzeit">${elapsedOf(a)}</b><small class="num">${counter}</small></span></header>
     <div class="t-progress"><i style="width:${Math.round(comp * 100)}%"></i></div>`;
 }
@@ -793,9 +819,10 @@ const training = {
       const k = Number(d.k);
       sets[k].done = !sets[k].done;
       a.justDone = sets[k].done ? { i: a.index, k, at: Date.now() } : null;
+      if (sets[k].done) haptic();
       if (sets[k].done) {
         // RIR vorausgewählt mit dem Ziel der Arc-Woche: ein Tap, wenn es passt
-        if (sets[k].rir == null && it.rir != null && !it.explosive && getDef(entry.exId).mode !== 'fixed') sets[k].rir = it.rir;
+        if (sets[k].rir == null && it.rir != null && !it.explosive && !['fixed', 'time'].includes(getDef(entry.exId).mode)) sets[k].rir = it.rir;
         if (a.cardTimer?.i === a.index && a.cardTimer.k === k) a.cardTimer = null;
       }
       const pair = sets[k].done ? activePair(a, a.index) : null;
@@ -839,6 +866,13 @@ const training = {
       const sets = a.log[a.index].sets;
       const k = sets.map((x) => x.done).lastIndexOf(false);
       if (sets.length > 1 && k >= 0) sets.splice(k, 1);
+      save(c);
+    },
+    't-band': (c, d) => {
+      const a = c.data.active;
+      const entry = a.log[a.index];
+      entry.band = d.v;
+      c.data.settings = { ...c.data.settings, bandFor: { ...(c.data.settings.bandFor || {}), [entry.exId]: d.v } };
       save(c);
     },
     't-ramp': (c, d) => {
@@ -1066,6 +1100,7 @@ const training = {
     'rest-reset': () => { if (rest) { rest.reset = Date.now(); drawRest(); } },
     'rest-reset-stop': () => { if (rest) { rest.reset = null; drawRest(); } },
     'rest-skip': () => { rest = null; drawRest(); },
+    'rest-toggle': () => { if (rest) { rest.min = !rest.min; drawRest(); } },
     't-menu': (c) => c.system('Mission', '<p>Was möchtest du tun?</p>',
       [['t-pause', 'Später weitermachen'], ['t-finish', 'Jetzt beenden (zählt anteilig)'], ['t-discard', 'Verwerfen']]),
     't-pause': (c) => { c.modal(null); rest = null; drawRest(); keepAwake(false); c.go('heute'); },

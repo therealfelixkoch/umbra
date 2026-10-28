@@ -1,6 +1,6 @@
 // ARENA: Muay Thai loggen (Gefühl 1–10, Dauer in h) und ein eigenständiger Rundentimer mit Gong.
 import { esc, stepper } from './kit.js';
-import { logArena, HARD_RPE } from '../engine/plan.js';
+import { logArena, HARD_RPE, ROUND_TYPES } from '../engine/plan.js';
 import { addDays, formatDay } from '../engine/dates.js';
 import { startTimer, advanceTo, totalMinutes, WARN_SEC } from '../engine/roundtimer.js';
 import { ringBell, clack, keepAwake } from './sound.js';
@@ -128,16 +128,25 @@ const screen = {
         <div class="field"><span class="muted">Zeit der Einheit</span>${stepper('a-dur', hours(f.minutes), '')}</div>
         <div class="label">Inhalte <small class="muted">optional</small></div>
         <div class="chips">${ARENA_CONTENT.map((k) => `<button class="chip${(f.content || []).includes(k) ? ' on' : ''}" data-act="a-content" data-v="${k}">${k}</button>`).join('')}</div>
-        ${(f.content || []).includes('Sparring') ? `<div class="field"><span class="muted">Sparringsrunden</span>${stepper('a-spar', `${f.sparRounds || 0}`, '')}</div>` : ''}
+        <div class="label">Runden <small class="muted">optional</small></div>
+        ${(f.blocks || []).map((b, k) => `<div class="round-block">
+          <div class="chips">${ROUND_TYPES.map((t) => `<button class="chip${b.type === t ? ' on' : ''}" data-act="a-btype" data-k="${k}" data-v="${t}">${t}</button>`).join('')}</div>
+          <div class="row gap rb-steps"><div class="field"><span class="muted">Runden</span>${stepper('a-brounds', `${b.rounds}`, '', { idx: String(k) })}</div>
+            <div class="field"><span class="muted">Minuten je Runde</span>${stepper('a-bmin', `${String(b.min).replace('.', ',')}`, '', { idx: String(k) })}</div></div>
+          <input class="search" data-input="a-bnote" data-k="${k}" placeholder="${b.type === 'Sonstiges' ? 'Was war es? (z. B. Clinch-Runden)' : 'Bemerkung (optional)'}" value="${esc(b.note || '')}" autocomplete="off">
+          <button class="btn ghost small" data-act="a-bdel" data-k="${k}">Block entfernen</button></div>`).join('')}
+        <button class="btn wide" data-act="a-badd">+ Runden-Block</button>
+        ${(f.blocks || []).length ? `<p class="muted small">${(f.blocks || []).reduce((n, b) => n + b.rounds, 0)} Runden · ${(f.blocks || []).reduce((n, b) => n + b.rounds * b.min, 0).toLocaleString('de-DE')} min Rundenzeit</p>` : ''}
         <input class="search" data-input="a-focus" placeholder="Fokus oder Notiz (optional)" value="${esc(f.focus || '')}" autocomplete="off">
         <div class="label">Wann</div>
         <div class="chips"><button class="chip${f.when === 'today' ? ' on' : ''}" data-act="a-when" data-v="today">Heute</button><button class="chip${f.when === 'yesterday' ? ' on' : ''}" data-act="a-when" data-v="yesterday">Gestern</button></div>
       </section>
       <button class="btn primary wide big" data-act="a-save" ${f.rpe ? '' : 'disabled'}>ARENA eintragen</button>
       ${recent.length ? `<section class="card"><div class="label">Zuletzt</div>${recent.map((s) =>
-        `<div class="done-row"><span>${formatDay(s.day)}${s.bmt ? ` · BMT W${s.bmt.week}` : ''} · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'} · ${hours(s.minutes)}</span><button class="x" data-act="a-del" data-id="${esc(s.id)}" aria-label="Löschen">×</button></div>`).join('')}</section>` : ''}`;
+        `<div class="done-row"><span>${formatDay(s.day)}${s.bmt ? ` · BMT W${s.bmt.week}` : ''} · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'} · ${hours(s.minutes)}${s.blocks ? `<br><small class="muted">${s.blocks.map((b) => `${b.rounds} × ${String(b.min).replace('.', ',')} min ${esc(b.type)}${b.note ? ` (${esc(b.note)})` : ''}`).join(' · ')}</small>` : ''}</span><button class="x" data-act="a-del" data-id="${esc(s.id)}" aria-label="Löschen">×</button></div>`).join('')}</section>` : ''}`;
   },
-  onInput(c, name, value) {
+  onInput(c, name, value, el) {
+    if (name === 'a-bnote' && c.ui.arena?.blocks?.[Number(el?.dataset.k)]) c.ui.arena.blocks[Number(el.dataset.k)].note = value.slice(0, 120);
     bmtInput(c, name, value);
     arenaStatusInput(c, name, value);
     if (name === 'a-focus' && c.ui.arena) c.ui.arena.focus = value.slice(0, 160);
@@ -151,6 +160,11 @@ const screen = {
       c.ui.arena.content = cur.includes(d.v) ? cur.filter((x) => x !== d.v) : [...cur, d.v];
       c.render();
     },
+    'a-badd': (c) => { const f = c.ui.arena; f.blocks = [...(f.blocks || []), { type: 'Sparring', rounds: 3, min: 3, note: '' }]; c.render(); },
+    'a-bdel': (c, d) => { const f = c.ui.arena; f.blocks = f.blocks.filter((_, k) => k !== Number(d.k)); c.render(); },
+    'a-btype': (c, d) => { c.ui.arena.blocks[Number(d.k)].type = d.v; c.render(); },
+    'a-brounds': (c, d) => { const b = c.ui.arena.blocks[Number(d.idx)]; b.rounds = Math.max(1, Math.min(30, b.rounds + Number(d.dir))); c.render(); },
+    'a-bmin': (c, d) => { const b = c.ui.arena.blocks[Number(d.idx)]; b.min = Math.max(0.5, Math.min(10, b.min + Number(d.dir) * 0.5)); c.render(); },
     'a-spar': (c, d) => { c.ui.arena.sparRounds = Math.max(0, Math.min(30, (c.ui.arena.sparRounds || 0) + Number(d.dir))); c.render(); },
     // Block mit Zeitangabe → Rundentimer mit 1 min Pause
     'bmt-timer': (c, d) => {
@@ -217,8 +231,9 @@ const screen = {
     },
     'rt-log': (c) => {
       const minutes = Math.max(15, Math.round(totalMinutes(timer.cfg, timer.st.round) / 15) * 15);
+      const block = { type: 'Sparring', rounds: Math.max(1, timer.st.round), min: timer.cfg.work / 60, note: '' };
       timer = null;
-      c.ui.arena = { minutes, when: 'today' };
+      c.ui.arena = { minutes, when: 'today', blocks: [block] };
       c.setUi({ atab: 'log' });
     },
     'rt-close': (c) => { timer = null; c.render(); },
@@ -227,11 +242,11 @@ const screen = {
 
 export default screen;
 
-function save(c, day, { rpe, minutes, bmt = null, content, sparRounds, focus }) {
+function save(c, day, { rpe, minutes, bmt = null, content, sparRounds, focus, blocks }) {
   let xp = 0;
   let session = null;
   c.update((data) => {
-    const r = logArena(data, { day, rpe, minutes, bmt, content, sparRounds: (content || []).includes('Sparring') ? sparRounds : null, focus });
+    const r = logArena(data, { day, rpe, minutes, bmt, content, sparRounds: (content || []).includes('Sparring') ? sparRounds : null, focus, blocks });
     xp = r.session.xp;
     session = r.session;
     return r.data;
