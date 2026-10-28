@@ -72,6 +72,11 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 28.10.2026 (v36): TEMPER-Sprecherclips
+- Clip-Player (`js/ui/temper-clips.js`): Intro vor der Übung (mit „Intro überspringen“), Begleit-Clips zur Sekunde, Check-ins als Sprecher-Clip (zufällig, nie in eine laufende Stimme hinein), Outro 3 s nach der Schlussglocke. Clips laufen nacheinander, nie übereinander.
+- Dateien in `assets/temper/b1/` (Namen siehe docs/temper-b1-elevenlabs-e01-e10.md). Fehlt ein Clip, läuft die Episode wie bisher mit Tönen und Text. Zeitplan der Begleit-Clips für Episode 1–10 steht in `PLAN`.
+- Der Service Worker cacht alle MP3s aus `assets/temper` einzeln (offline nutzbar, fehlende brechen nichts).
+
 ### Update 28.10.2026 (v35): Winter-Look und Award-Details
 - Hintergrund ohne Figur: Die Silhouette im Nebel ist weg, nur Licht, Nebel und Partikel bleiben.
 - Winter Arc: feiner Schnee in drei Tiefen auf allen Seiten außer Training und Checks. Die Oberfläche wird zu Eisglas (Glas, Linien, Text, Tabbar, Leuchten frostblau). Der Hintergrund bleibt neutral, damit die Rang-Bilder auf ihrem Grund stehen.

@@ -28,6 +28,14 @@ def lore_files():
     names.discard('icon-1024.png')  # nur Quelle fürs App-Icon
     return sorted(names)
 
+def temper_files():
+    # TEMPER-Sprecherclips: alles, was in assets/temper liegt (wie Lore einzeln gecacht, fehlende brechen nichts)
+    out = []
+    base = os.path.join(ROOT, 'assets/temper')
+    for dp, _, fs in os.walk(base):
+        out += [os.path.relpath(os.path.join(dp, f), ROOT) for f in fs if f.endswith('.mp3')]
+    return sorted(out)
+
 sw_path = os.path.join(ROOT, 'sw.js')
 old = open(sw_path, encoding='utf-8').read() if os.path.exists(sw_path) else ''
 if not version:
@@ -44,7 +52,7 @@ css = re.sub(r'^:root \{ --app-version: "[^"]*"; \} /\* Versionsstempel[^\n]*\n'
 open(css_path, 'w', encoding='utf-8').write(stamp + css)
 
 assets = "\n".join(f"  './{f}'," for f in app_files())
-lore = "\n".join(f"  './assets/lore/{f}'," for f in lore_files())
+lore = "\n".join([f"  './assets/lore/{f}'," for f in lore_files()] + [f"  './{f}'," for f in temper_files()])
 sw = f"""// Service Worker – erzeugt von tools/build_sw.py, nicht von Hand ändern.
 // App-Dateien: komplett vorab gecacht (Versionswechsel = neuer Cache). Beim Installieren wird jede Datei
 // frisch vom Server geholt (cache: 'reload'), sonst mischt der Browser-Cache (GitHub Pages: 10 min) alte Dateien
@@ -93,7 +101,7 @@ self.addEventListener('fetch', (e) => {{
     e.respondWith(caches.open(VERSION).then((c) => c.match('./index.html').then((r) => r || c.match('./'))).then((r) => r || fetch(req)));
     return;
   }}
-  if (url.pathname.includes('/assets/lore/')) {{
+  if (url.pathname.includes('/assets/lore/') || url.pathname.includes('/assets/temper/')) {{
     e.respondWith(caches.open(LORE_CACHE).then((c) => c.match(req, {{ ignoreSearch: true }}).then((hit) => hit || fetch(req).then((res) => {{
       if (res.ok) c.put(req, res.clone());
       return res;
@@ -107,4 +115,4 @@ self.addEventListener('fetch', (e) => {{
 }});
 """
 open(sw_path, 'w', encoding='utf-8').write(sw)
-print(f"sw.js geschrieben: {version}, {len(app_files())} App-Dateien, {len(lore_files())} Lore-Bilder")
+print(f"sw.js geschrieben: {version}, {len(app_files())} App-Dateien, {len(lore_files())} Lore-Bilder, {len(temper_files())} TEMPER-Clips")

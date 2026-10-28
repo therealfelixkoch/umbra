@@ -3,6 +3,7 @@
 import { sys, esc, stepper } from './kit.js';
 import { keepAwake, unlockAudio, setAudioMode, pulse } from './sound.js';
 import { TONES, playTone, pacerStart, pacerSet, pacerStop, ambienceStart, stopAll } from './temper-audio.js';
+import { episodeClips, prefetch, prepare, hasClip, playClip, checkinClip, speaking, stopClips } from './temper-clips.js';
 import { formatDay } from '../engine/dates.js';
 import { BOOKS, STAGES, WHY, MAP_PLACES, ECHO_DEFAULT } from '../data/temper.js';
 import { breathAt, slowPattern, SIGH, NSDR_CUES, cueAt, whStart, whTap, whTick, whSafetyDue, WH_RECOVER } from '../engine/breath.js';
@@ -106,7 +107,15 @@ function tick() {
   const clock = document.querySelector('[data-tclock]');
   if (clock) clock.textContent = fmt(st.left);
   // Leiser Check-in-Ton ca. jede Minute: zurück zum Atem bzw. zur Zahl
-  if (run.ci && run.ci[0] != null && st.elapsed >= run.ci[0]) { run.ci.shift(); playTone('checkin'); }
+  if (run.ci && run.ci[0] != null && st.elapsed >= run.ci[0]) {
+    const clip = s.t === 'count' ? checkinClip() : null;
+    if (!clip) { run.ci.shift(); playTone('checkin'); } else if (!speaking()) { run.ci.shift(); playTone('checkin'); setTimeout(() => playClip(clip), 900); }
+  }
+  // Sprecher-Begleit-Clips zur Sekunde im Abschnitt (bei 0 s erst nach dem Glocken- bzw. Doppelton)
+  for (const cue of run.clips?.cues || []) {
+    const key = `${cue.seg}:${cue.at}`;
+    if (cue.seg === run.i && !run.cuesDone.has(key) && st.elapsed >= (cue.at || 1.5)) { run.cuesDone.add(key); playClip(cue.clip); }
+  }
   // Doppelton bei jeder neuen Station im ECHO-Scan
   if (s.t === 'scan') {
     const idx = scanCue(s, st.elapsed).index;
@@ -153,7 +162,12 @@ function next() {
   if (run.i >= run.segs.length) {
     playTone('bell'); // Ende
     pulse();
-    setTimeout(stopTicker, 4500); // Glocke ausklingen lassen
+    const outro = run.clips?.outro;
+    if (outro && hasClip(outro)) {
+      clearInterval(ticker);
+      ticker = null;
+      setTimeout(() => playClip(outro).then(() => setTimeout(() => { if (!ticker) stopTicker(); }, 600)), 3000);
+    } else setTimeout(stopTicker, 4500); // Glocke ausklingen lassen
     run.stage = 'clarity';
     rerender();
     return;
@@ -362,6 +376,16 @@ function echoSetupView(c, head) {
     <button class="btn primary wide" data-act="tp-echo-save">So ist ECHO</button>`, { tone: 'gold' })}</div>`;
 }
 
+// Sprecher-Intro: läuft vor der Übung, Augen dürfen schon zu sein
+function introView() {
+  const e = run.ep;
+  return `<div class="temper-story temper-intro"><small class="bigtimer-count">Buch ${run.book.n} · Episode ${e.n}</small>
+    <h1>${esc(e.title)}</h1>
+    <div class="intro-voice" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+    <p class="muted center">Hör zu. Die Übung beginnt danach mit der Glocke.</p>
+    <button class="btn ghost wide" data-act="tp-intro-skip">Intro überspringen</button></div>`;
+}
+
 function clarityView() {
   return `<div class="temper-story"><h1>${run.ep ? 'Episode beendet' : 'Einsatz beendet'}</h1>${sys('Wie klar bist du jetzt?', `<div class="effort-chips mood">${[1, 2, 3, 4, 5].map((v) => `<button class="${run.clarity === v ? 'on' : ''}" data-act="tp-clarity" data-v="${v}">${v}</button>`).join('')}</div>
     <div class="effort-scale"><span>Nebel</span><span>klar</span></div><button class="btn primary wide" data-act="tp-save" ${run.clarity ? '' : 'disabled'}>Abschließen</button>`, { tone: 'gold' })}</div>`;
@@ -376,7 +400,9 @@ function begin(c, { book, ep, mission }) {
   if (ep && c.data.settings.echo?.desc) segs = segs.filter((s) => s.t !== 'echo');
   const sug = suggestion(c.data, c.today());
   if (ep && sug.co2 && !segs.some((s) => s.t === 'co2')) segs = [{ t: 'co2' }, ...segs];
-  run = { book, ep, mission, segs, i: 0, segStart: Date.now(), stage: 'story', taps: 0, countSec: 0, startedAt: Date.now() };
+  const clips = episodeClips(ep);
+  prefetch(clips.all);
+  run = { book, ep, mission, segs, i: 0, segStart: Date.now(), stage: 'story', taps: 0, countSec: 0, startedAt: Date.now(), clips, cuesDone: new Set() };
   c.render();
 }
 
@@ -386,6 +412,7 @@ const screen = {
     if (!run) return homeView(c);
     if (run.stage === 'story') return storyView(c);
     if (run.stage === 'clarity') return clarityView();
+    if (run.stage === 'intro') return introView();
     return runView(c);
   },
   mount(c) {
@@ -400,10 +427,28 @@ const screen = {
   actions: {
     'tp-episode': (c) => { const n = nextEpisode(c.data); if (n) begin(c, n); },
     'tp-mission': (c, d) => begin(c, { mission: missionsAvailable(c.data).find((m) => m.id === d.id) }),
-    'tp-go': (c) => {
+    'tp-go': async (c) => {
       // Musik pausieren, Töne auch bei Lautlos: Audio-Sitzung „playback“ (muss im Tap passieren)
       setAudioMode('playback');
       unlockAudio();
+      if (!c.data.settings.temperBriefed) c.update((data) => ({ ...data, settings: { ...data.settings, temperBriefed: true } }));
+      const intro = run.clips?.intro;
+      if (intro && hasClip(intro)) {
+        run.stage = 'intro';
+        c.render();
+        if (c.data.settings.temperAmbience !== false) setTimeout(ambienceStart, 150);
+        await prepare(run.clips.all);
+        const token = run;
+        if (run !== token || run.stage !== 'intro') return; // übersprungen, während geladen wurde
+        await playClip(intro);
+        if (run === token && run.stage === 'intro') setTimeout(() => { if (run === token && run.stage === 'intro') screen.actions['tp-run'](c); }, 1200);
+        return;
+      }
+      prepare(run.clips?.all || []);
+      screen.actions['tp-run'](c);
+    },
+    'tp-intro-skip': (c) => { stopClips(); screen.actions['tp-run'](c); },
+    'tp-run': (c) => {
       run.stage = 'run';
       run.segStart = Date.now();
       run.startedAt = Date.now();
@@ -413,8 +458,7 @@ const screen = {
         if (c.data.settings.temperAmbience !== false) ambienceStart();
       }, 150);
       startTicker();
-      if (!c.data.settings.temperBriefed) c.update((data) => ({ ...data, settings: { ...data.settings, temperBriefed: true } }));
-      else c.render();
+      c.render();
     },
     'tp-tone': (c, d) => {
       setAudioMode('playback');
@@ -437,7 +481,7 @@ const screen = {
       setTimeout(() => document.querySelector('.temper-tap')?.classList.remove('flash'), 250);
     },
     'tp-cancel': (c) => c.system('Abbrechen?', '<p>Nichts geht verloren. Die Episode bleibt die nächste.</p>', [['tp-cancel-yes', 'Abbrechen'], ['close-modal', 'Weitermachen', 'primary']]),
-    'tp-cancel-yes': (c) => { c.modal(null); stopTicker(); run = null; c.render(); },
+    'tp-cancel-yes': (c) => { c.modal(null); stopClips(); stopTicker(); run = null; c.render(); },
     'tp-voice': (c, d) => c.update((data) => ({ ...data, settings: { ...data.settings, temperVoice: d.v === '1' } })),
     'tp-hint': (c, d) => c.update((data) => ({ ...data, settings: { ...data.settings, temperResetHint: d.v === '1' } })),
     // Wim Hof (eine Runde)
