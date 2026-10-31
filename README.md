@@ -72,6 +72,12 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 31.10.2026 (v38): Update-Fix gegen GitHub-Sperre
+
+- Ursache, dass v37 nicht ankam: Der Service Worker lud bei jedem App-Start alle Lore-Bilder und TEMPER-Clips gleichzeitig neu, bei jedem Update dazu alle App-Dateien. Mit den neuen Clips wurde GitHub Pages das zu viel, es sperrte die IP („429 Rate limit exceeded“), die Installation brach ab und die App blieb auf v36.
+- `sw.js` (aus `tools/build_sw.py`): Jede Datei hat jetzt einen Inhalts-Hash. Geladen wird nur, was neu oder geändert ist, Unverändertes kommt aus dem alten Cache. Höchstens 3 Anfragen gleichzeitig, bei 429 oder 5xx wartet er und versucht es erneut. Ein normaler App-Start stellt keine Anfragen mehr.
+- Lore-Bilder, die es noch gar nicht gibt, stehen nicht mehr in der Liste (vorher 404er bei jedem Start).
+
 ### Update 31.10.2026 (v37): TEMPER-Sektion, freies Gewicht, Nacken
 - TEMPER hat einen eigenen Tab (Heute · Arena · Temper · Kodex · Profil). Die Tab-Leiste verschwindet nur während einer Übung.
 - Schmiede-Übersicht: Glut (Minuten gesamt), Episoden x/30 und Siegel x/6 als Zahlen-Ticker; Buch I als Pfad mit 6 Teilen à 5 Episoden (Siegel je fertigem Teil, aktuelle Episode pulsiert); „Der Weg der Klinge“ mit allen fünf Büchern (I Anfänger offen, II–V „bald“); Glutspur als Heatmap über 18 Wochen; 16 Schmiedezeichen (neu erreichte glühen einmal auf). Es zählt nur Erreichtes, keine Serien, die reißen.
