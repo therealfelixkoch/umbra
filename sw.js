@@ -4,7 +4,7 @@
 // in die neue Version. Ausgeliefert wird nur aus dem Cache der eigenen Version.
 // Lore-Bilder: eigener Cache, einzeln geladen. Fehlende Bilder brechen die Installation nicht ab;
 // bei jedem App-Start mit Netz holt der Service Worker neue oder geänderte Bilder nach.
-const VERSION = 'v35';
+const VERSION = 'v37';
 const LORE_CACHE = 'umbra-lore';
 const ASSETS = [
   './',
@@ -92,6 +92,7 @@ const ASSETS = [
   './js/ui/sound.js',
   './js/ui/storycard.js',
   './js/ui/temper-audio.js',
+  './js/ui/temper-clips.js',
   './js/ui/temper.js',
   './js/ui/today.js',
   './js/ui/tour.js',
@@ -146,6 +147,34 @@ const LORE = [
   './assets/lore/warden-scorch.webp',
   './assets/lore/warden-stormlung.webp',
   './assets/lore/warden-wither.webp',
+  './assets/temper/b1/b1-ci-1.mp3',
+  './assets/temper/b1/b1-ci-2.mp3',
+  './assets/temper/b1/b1-ci-3.mp3',
+  './assets/temper/b1/b1-ci-4.mp3',
+  './assets/temper/b1/b1-ci-5.mp3',
+  './assets/temper/b1/b1-ci-6.mp3',
+  './assets/temper/b1/b1-count-start.mp3',
+  './assets/temper/b1/b1-e06-intro.mp3',
+  './assets/temper/b1/b1-e06-outro.mp3',
+  './assets/temper/b1/b1-e07-intro.mp3',
+  './assets/temper/b1/b1-e07-outro.mp3',
+  './assets/temper/b1/b1-e08-c1.mp3',
+  './assets/temper/b1/b1-e08-c2.mp3',
+  './assets/temper/b1/b1-e08-c3.mp3',
+  './assets/temper/b1/b1-e08-c4.mp3',
+  './assets/temper/b1/b1-e08-intro.mp3',
+  './assets/temper/b1/b1-e08-outro.mp3',
+  './assets/temper/b1/b1-e09-intro.mp3',
+  './assets/temper/b1/b1-e09-outro.mp3',
+  './assets/temper/b1/b1-e10-intro.mp3',
+  './assets/temper/b1/b1-e10-outro.mp3',
+  './assets/temper/b1/b1-end-tone.mp3',
+  './assets/temper/b1/b1-silent.mp3',
+  './assets/temper/b1/b1-thought-1.mp3',
+  './assets/temper/b1/b1-thought-2.mp3',
+  './assets/temper/b1/b1-wave-end.mp3',
+  './assets/temper/b1/b1-wave-peak.mp3',
+  './assets/temper/b1/b1-wave-start.mp3',
 ];
 
 async function cacheLore() {
@@ -180,7 +209,7 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(caches.open(VERSION).then((c) => c.match('./index.html').then((r) => r || c.match('./'))).then((r) => r || fetch(req)));
     return;
   }
-  if (url.pathname.includes('/assets/lore/')) {
+  if (url.pathname.includes('/assets/lore/') || url.pathname.includes('/assets/temper/')) {
     e.respondWith(caches.open(LORE_CACHE).then((c) => c.match(req, { ignoreSearch: true }).then((hit) => hit || fetch(req).then((res) => {
       if (res.ok) c.put(req, res.clone());
       return res;

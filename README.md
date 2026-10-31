@@ -72,6 +72,16 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 31.10.2026 (v37): TEMPER-Sektion, freies Gewicht, Nacken
+- TEMPER hat einen eigenen Tab (Heute · Arena · Temper · Kodex · Profil). Die Tab-Leiste verschwindet nur während einer Übung.
+- Schmiede-Übersicht: Glut (Minuten gesamt), Episoden x/30 und Siegel x/6 als Zahlen-Ticker; Buch I als Pfad mit 6 Teilen à 5 Episoden (Siegel je fertigem Teil, aktuelle Episode pulsiert); „Der Weg der Klinge“ mit allen fünf Büchern (I Anfänger offen, II–V „bald“); Glutspur als Heatmap über 18 Wochen; 16 Schmiedezeichen (neu erreichte glühen einmal auf). Es zählt nur Erreichtes, keine Serien, die reißen.
+- ECHO spricht nie: Der Erzähler beschreibt, was ECHO tut (Episoden, Einsätze, Scan, Geschichten-Doku).
+- Sprecher-Clips für Episode 7–10 sind dabei. ECHO-Scan mit Stimme: Regions-Clip je Station (`b1-r-…`) und `b1-scan-out`. Begleit-Clips treffen jetzt auch, wenn ein CO2-Test vorgeschaltet ist.
+- Freies Gewicht: Der kg-Wert im Training ist ein Eingabefeld. Jede Zahl geht (auch ohne passende KB im Bestand) und wird für diese Übung als eigene Stufe gemerkt; + und − springen zur nächsten echten Stufe.
+- Manual Neck Isometrics: ein Satz = 4 Richtungen am Stück (vorn, hinten, links, rechts) mit 3 s Umgreifen, der Vollbild-Timer zeigt Richtung und „Gleich: …“.
+- Neck Flexion & Lateral Flexion: optional mit Gewicht (0–20 kg, Scheibe oder Kurzhantel).
+- Schnee fällt auch bei „Bewegung reduzieren“ auf dem iPhone (alle anderen Animationen bleiben aus).
+
 ### Update 28.10.2026 (v36): TEMPER-Sprecherclips
 - Clip-Player (`js/ui/temper-clips.js`): Intro vor der Übung (mit „Intro überspringen“), Begleit-Clips zur Sekunde, Check-ins als Sprecher-Clip (zufällig, nie in eine laufende Stimme hinein), Outro 3 s nach der Schlussglocke. Clips laufen nacheinander, nie übereinander.
 - Dateien in `assets/temper/b1/` (Namen siehe docs/temper-b1-elevenlabs-e01-e10.md). Fehlt ein Clip, läuft die Episode wie bisher mit Tönen und Text. Zeitplan der Begleit-Clips für Episode 1–10 steht in `PLAN`.
