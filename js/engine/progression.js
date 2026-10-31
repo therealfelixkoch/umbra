@@ -13,9 +13,13 @@ export function ladderFor(loadType, settings) {
     case 'barbell': return Array.from({ length: 113 }, (_, i) => 20 + i * 2.5);
     case 'dumbbell': return settings.dbWeights?.length ? [...settings.dbWeights].sort((a, b) => a - b) : Array.from({ length: 30 }, (_, i) => 2 + i * 2);
     case 'cable': return Array.from({ length: 40 }, (_, i) => 5 + i * 2.5);
+    case 'plate': return [0, 1.25, 2.5, 5, 7.5, 10, 12.5, 15, 20];
     default: return [0];
   }
 }
+
+/** Frei eingegebenes Gewicht in die Stufen aufnehmen, damit es nicht auf die nächste Stufe springt. */
+export const withLoad = (ladder, kg) => (kg > 0 && !ladder.includes(kg) ? [...ladder, kg].sort((a, b) => a - b) : ladder);
 
 export function snap(ladder, kg) {
   return ladder.reduce((best, w) => (Math.abs(w - kg) < Math.abs(best - kg) ? w : best), ladder[0]);
@@ -101,7 +105,7 @@ function baseProgress(def, st, sets, ctx, easy = false) {
   const step = def.mode === 'time' ? TIME_STEP : 1;
   // Lernen aus dem Log: die tatsächlich genutzte Last wird zur neuen Basis.
   const load = Math.max(...sets.map((s) => s.load || 0));
-  const ladder = ladderFor(def.load, ctx.settings);
+  const ladder = withLoad(ladderFor(def.load, ctx.settings), load);
   const loadable = canLoad(def, ctx.equipment);
   const harder = def.harder && ctx.getDef(def.harder);
   const easier = def.easier && ctx.getDef(def.easier);

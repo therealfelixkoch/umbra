@@ -1,6 +1,6 @@
 // TEMPER: Fortschritt, Freischaltung, Einsätze, Skript-Auflösung und Messwerte. Reine Funktionen.
 // Freischaltung pro gemachter Episode, nicht pro Kalendertag. Keine Serien, keine Strafen für Lücken.
-import { BOOKS, MISSIONS_T, BODY, ECHO_DEFAULT } from '../data/temper.js';
+import { BOOKS, MISSIONS_T, BODY, ECHO_DEFAULT, MARKS } from '../data/temper.js';
 import { addDays, daysBetween, weekStart } from './dates.js';
 import { sessionXp } from './game.js';
 
@@ -94,7 +94,7 @@ export function segAt(seg, startAt, now) {
   return { elapsed, left: seg.sec - elapsed, done: elapsed >= seg.sec };
 }
 
-/** ECHO-Scan: aktuelle Region und Anweisung. ECHO spricht mit „du“ und deinem Namen. */
+/** ECHO-Scan: aktuelle Region und Anweisung. ECHO spricht nie, der Erzähler beschreibt ihn und nennt deinen Namen. */
 export function scanCue(seg, elapsed, { name = '', echo = '' } = {}) {
   const regions = seg.regions;
   const per = seg.sec / regions.length;
@@ -106,7 +106,7 @@ export function scanCue(seg, elapsed, { name = '', echo = '' } = {}) {
   const text = {
     see: i === 0 && echo ? `ECHO ${echo}. Er geht zu: ${region}. ${you}nur wahrnehmen.` : `ECHO geht zu: ${region}. ${i === 0 ? `${you}nur wahrnehmen.` : 'Wahrnehmen.'}`,
     word: seg.mode === 'name' ? 'Ein Wort dafür. Eng, heiß, schwer, leer …'
-      : seg.mode === 'ask' ? 'ECHO fragt: „Was hält das fest?“ Keine Antwort nötig.'
+      : seg.mode === 'ask' ? 'ECHO bleibt stehen. Was hält das fest? Keine Antwort nötig.'
         : seg.mode === 'warm' ? 'Wärme. Gewicht. Nichts verändern wollen.' : 'Wahrnehmen.',
     out: seg.soft ? 'Ausatmen. Schwer werden.' : 'Beim Ausatmen lösen.',
   }[step];
@@ -148,6 +148,44 @@ export function temperMetrics(data, today) {
     return { ws, minutes: ss.filter((s) => s.day >= ws && s.day <= addDays(ws, 6)).reduce((n, s) => n + (s.minutes || 0), 0) };
   });
   return { clarity: series('clarity'), co2: series('co2'), taps: series('tapsPerMin'), retention: series('retention'), weeks, episodes: ss.filter((s) => s.ep).length };
+}
+
+// ——— Schmiede: Fortschritt, Glutspur, Schmiedezeichen ———
+export const PART_SIZE = 5;
+export const HEAT_WEEKS = 18;
+
+/**
+ * Alles für die TEMPER-Übersicht: Glut (Minuten gesamt), Siegel je Teil, Glutspur (Tage × Minuten)
+ * und die Schmiedezeichen. Zählt nur Erreichtes.
+ */
+export function temperForge(data, today) {
+  const ss = temperSessions(data);
+  const done = doneEpisodes(data);
+  const b1 = done[1] || new Set();
+  const minutes = ss.reduce((n, s) => n + (s.minutes || 0), 0);
+  const parts = Array.from({ length: Math.ceil((BOOKS[0]?.episodes.length || 0) / PART_SIZE) }, (_, p) =>
+    Array.from({ length: PART_SIZE }, (_, k) => p * PART_SIZE + k + 1).every((n) => b1.has(n)));
+  const perDay = {};
+  for (const s of ss) perDay[s.day] = (perDay[s.day] || 0) + (s.minutes || 1);
+  const start = addDays(weekStart(today), -7 * (HEAT_WEEKS - 1));
+  const heat = [];
+  for (let col = 0; col < HEAT_WEEKS; col++) {
+    for (let row = 0; row < 7; row++) {
+      const day = addDays(start, col * 7 + row);
+      heat.push({ day, min: day > today ? -1 : perDay[day] || 0 });
+    }
+  }
+  const days = Object.keys(perDay).sort();
+  const seven = days.some((d, i) => i + 6 < days.length && daysBetween(d, days[i + 6]) <= 9);
+  const has = {
+    spark: b1.size >= 1, co2: ss.some((s) => s.co2 != null), echo: b1.has(11), mission: ss.some((s) => s.mission),
+    hour: minutes >= 60, five: minutes >= 300, thousand: minutes >= 1000, seven,
+    night: ss.filter((s) => s.evening).length >= 5, heat: bookComplete(data, 1),
+    ...Object.fromEntries(parts.map((ok, p) => [`part${p + 1}`, ok])),
+  };
+  const marks = MARKS.map((m) => ({ ...m, on: !!has[m.id] }));
+  return { minutes, episodes: b1.size, total: BOOKS[0]?.episodes.length || 0, parts, seals: parts.filter(Boolean).length,
+    heat, activeDays: days.length, marks, done };
 }
 
 /** Wert einer bestimmten Episode (für Vergleiche wie „Episode 5 → 25“). */

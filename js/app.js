@@ -21,7 +21,7 @@ import check from './ui/check.js';
 import review from './ui/review.js';
 import debrief from './ui/debrief.js';
 import intro from './ui/intro.js';
-import temper from './ui/temper.js';
+import temper, { temperRunning } from './ui/temper.js';
 import { wristCheckScreen, wristActions } from './ui/wrist.js';
 import { feetCheckScreen, feetActions } from './ui/feet.js';
 import benchmark from './ui/benchmark.js';
@@ -31,7 +31,7 @@ import { storyActions } from './ui/storycard.js';
 import { tourActions, tourActive, drawTour, startTour } from './ui/tour.js';
 
 const SCREENS = { heute: today, training, arena, kodex, profil: profile, onboarding, check, review, debrief, intro, temper, wristcheck: wristCheckScreen, feetcheck: feetCheckScreen, benchmark };
-const TABS = [['heute', 'Heute'], ['arena', 'Arena'], ['kodex', 'Kodex'], ['profil', 'Profil']];
+const TABS = [['heute', 'Heute'], ['arena', 'Arena'], ['temper', 'Temper'], ['kodex', 'Kodex'], ['profil', 'Profil']];
 
 const app = {
   data: null,
@@ -120,7 +120,8 @@ function render() {
   let route = app.route;
   if (!app.data.settings.onboarded) route = 'onboarding';
   const screen = SCREENS[route];
-  const showTabs = !['onboarding', 'training', 'check', 'review', 'debrief', 'intro', 'temper', 'wristcheck', 'feetcheck', 'benchmark'].includes(route);
+  const showTabs = !['onboarding', 'training', 'check', 'review', 'debrief', 'intro', 'wristcheck', 'feetcheck', 'benchmark'].includes(route)
+    && !(route === 'temper' && temperRunning());
   syncAtmosphere(app.data, route);
   const entering = route !== lastRoute;
   lastRoute = route;

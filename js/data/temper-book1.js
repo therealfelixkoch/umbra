@@ -133,7 +133,7 @@ export const BOOK1_TEXT = [
    "Du öffnest den Mund, und etwas tritt heraus.",
    "Klein. Dunkel. Mit deinen Augen. Eine Version von dir, die nicht kämpft, sondern sieht.",
    "Das System nennt es ECHO.",
-   "ECHO: „Ich war immer da. Du warst nur zu laut, um mich zu hören.“"
+   "ECHO sagt nichts. Er sieht dich nur an, als wäre er immer schon da gewesen. Du warst nur zu laut, um ihn zu bemerken."
   ],
   "dur": "6 min",
   "exercise": "Erster **ECHO-Scan**, nur Kopf und Gesicht: Stirn, Kiefer, Augen, Zunge. ECHO geht hin, schaut, und beim Ausatmen wird losgelassen.",
@@ -144,7 +144,7 @@ export const BOOK1_TEXT = [
   "title": "Der Kiefer",
   "story": [
    "ECHO bleibt an deinem Kiefer stehen.",
-   "ECHO: „Hier hältst du fest. Den ganzen Tag schon. Du merkst es nicht mal mehr.“",
+   "Er legt eine Hand darauf. Hier hältst du fest. Den ganzen Tag schon, und du merkst es nicht mal mehr.",
    "Ein Wächter, der seinen Kiefer nicht lösen kann, schlägt verspannt. Und denkt verspannt."
   ],
   "dur": "6 min",
@@ -156,7 +156,7 @@ export const BOOK1_TEXT = [
   "title": "Der Knoten",
   "story": [
    "ECHO steigt tiefer. Am Hals bleibt er stehen und klopft zweimal.",
-   "ECHO: „Da ist ein Knoten. Du weißt, woher er kommt.“",
+   "Da ist ein Knoten. Du weißt, woher er kommt.",
    "Du musst nicht antworten. Es reicht, dass du hinsiehst."
   ],
   "dur": "7 min",
@@ -168,7 +168,7 @@ export const BOOK1_TEXT = [
   "title": "Die Hände",
   "story": [
    "ECHO wandert durch deine Arme bis in die Hände.",
-   "ECHO: „Diese Hände tragen bald etwas, das wichtiger ist als jede Hantel.“",
+   "Er legt seine kleinen Hände in deine. Diese Hände tragen bald etwas, das wichtiger ist als jede Hantel.",
    "Für einen Moment sind sie ganz ruhig."
   ],
   "dur": "7 min",
@@ -181,7 +181,7 @@ export const BOOK1_TEXT = [
   "story": [
    "Zum ersten Mal geht ECHO den ganzen Weg. Vom Scheitel bis in die Fußsohlen.",
    "Als er fertig ist, setzt er sich auf deine Schulter.",
-   "ECHO: „Jetzt weißt du, wo du wohnst.“"
+   "Jetzt weißt du, wo du wohnst."
   ],
   "dur": "8 min",
   "exercise": "Vollständiger ECHO-Scan, Kopf bis Fuß.",
@@ -204,7 +204,7 @@ export const BOOK1_TEXT = [
   "title": "Stress",
   "story": [
    "Heute findet ECHO keinen Knoten, sondern einen Alarm. Brust, Atem flach, Gedanken schnell.",
-   "ECHO: „Das ist Stress. Er ist nicht du. Er ist ein Signal, das zu laut eingestellt ist.“",
+   "ECHO legt den Finger darauf. Das ist Stress. Er ist nicht du. Er ist ein Signal, das zu laut eingestellt ist.",
    "Dann zeigt er dir den Hebel am Ende des Ausatmens."
   ],
   "dur": "6 min",
@@ -217,7 +217,7 @@ export const BOOK1_TEXT = [
   "story": [
    "Es gibt ein Feuer in dir, das das System nicht löschen will.",
    "Wut ist Kraft. Ungelenkt verbrennt sie dich. Gelenkt ist sie eine Klinge.",
-   "ECHO: „Wo sitzt sie gerade? Zeig sie mir. Ich halte sie, du atmest.“"
+   "ECHO sucht die Stelle, an der sie gerade sitzt, und hält sie fest. Du atmest."
   ],
   "dur": "6 min",
   "exercise": "An einen Moment denken, der wütend gemacht hat. ECHO findet den Ort im Körper, benennt ihn, und langes Ausatmen senkt die Glut, ohne sie zu löschen.",
@@ -229,7 +229,7 @@ export const BOOK1_TEXT = [
   "story": [
    "Manche Abende ist da kein Feuer. Nur Leere. Der Atemräuber war da.",
    "ECHO setzt sich daneben, ohne etwas reparieren zu wollen.",
-   "ECHO: „Leer ist auch ein Name. Du darfst ihn sagen.“"
+   "Er wartet. Leer ist auch ein Name. Du darfst ihn sagen."
   ],
   "dur": "6 min",
   "exercise": "ECHO-Scan langsam, mit Fokus auf Wärme und Gewicht. Benennen, nichts verändern wollen.",
@@ -253,7 +253,7 @@ export const BOOK1_TEXT = [
   "story": [
    "Bis heute hast du gelernt, den Lärm zu senken. Heute lernst du das Gegenteil.",
    "Es gibt Morgen, an denen du nicht Ruhe brauchst, sondern Feuer.",
-   "ECHO: „Wir zünden. Einmal. Kontrolliert.“"
+   "ECHO hebt eine Hand. Einmal zünden. Kontrolliert."
   ],
   "dur": "5 min, morgens",
   "exercise": "**Eine Runde Wim Hof:** 30 tiefe Atemzüge, ausatmen, halten (Tap Start/Stopp), 15 s Erholungsatem. Danach 2 min zählen. *Sicherheit: nur im Sitzen oder Liegen, nie im oder am Wasser.*",
@@ -288,7 +288,7 @@ export const BOOK1_TEXT = [
   "title": "Feuer und Wasser",
   "story": [
    "Heute beides. Erst zünden, dann senken, in einer einzigen Sitzung.",
-   "ECHO: „Spür, wie schnell du wechseln kannst. Das ist Kontrolle.“"
+   "ECHO wechselt mit dir hin und her. Spür, wie schnell das geht. Das ist Kontrolle."
   ],
   "dur": "7 min",
   "exercise": "1 Runde Wim Hof → 1 min normal atmen → 3 min langes Ausatmen → 1 min zählen.",
@@ -312,10 +312,10 @@ export const BOOK1_TEXT = [
   "story": [
    "Die Kammer ist sicher. Draußen ist sie es nicht.",
    "Ab heute nimmst du sie mit. Drei Atemzüge. Lang aus. Überall.",
-   "ECHO: „Du brauchst keine Stille mehr, um mich zu finden.“"
+   "ECHO kommt mit. Du brauchst keine Stille mehr, um ihn zu finden."
   ],
   "dur": "5 min",
-  "exercise": "Den **3-Atemzüge-Reset** üben (3x langes Ausatmen, Schultern sinken, ein Wort von ECHO). Fünfmal hintereinander, dazwischen 30 s normal. Danach 2 min zählen.",
+  "exercise": "Den **3-Atemzüge-Reset** üben (3x langes Ausatmen, Schultern sinken, ein ruhiges Wort an dich selbst). Fünfmal hintereinander, dazwischen 30 s normal. Danach 2 min zählen.",
   "field": "den Reset heute einmal im echten Leben einsetzen."
  },
  {
@@ -336,7 +336,7 @@ export const BOOK1_TEXT = [
   "story": [
    "Heute suchst du dir keinen ruhigen Ort. Küche, Büro, Auto auf dem Parkplatz.",
    "Die Welt hört nicht auf, nur weil du anfängst.",
-   "ECHO: „Lärm ist nur Wetter.“"
+   "ECHO sitzt mitten im Lärm und rührt sich nicht. Lärm ist nur Wetter."
   ],
   "dur": "6 min",
   "exercise": "Zählen an einem lauten Ort. Abschweif-Taps zählen, Vergleich mit Episode 3 wird angezeigt.",
@@ -348,7 +348,7 @@ export const BOOK1_TEXT = [
   "story": [
    "Heute ist eine Arena-Nacht. Oder ein Termin, vor dem dein Magen sich meldet.",
    "ECHO steigt aus und läuft dir voraus.",
-   "ECHO: „Ich hab nachgesehen. Du bist bereit. Atme.“"
+   "ECHO kommt zurück und nickt. Du bist bereit. Atme."
   ],
   "dur": "5 min",
   "exercise": "2 min ECHO-Scan der Stress-Orte aus deiner Innenkarte, dann 3-Atemzüge-Reset, dann 2 min innerlich die erste Minute des Kampfs bzw. Termins durchgehen, ruhig und klar.",

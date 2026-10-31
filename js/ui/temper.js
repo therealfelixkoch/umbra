@@ -3,13 +3,14 @@
 import { sys, esc, stepper } from './kit.js';
 import { keepAwake, unlockAudio, setAudioMode, pulse } from './sound.js';
 import { TONES, playTone, pacerStart, pacerSet, pacerStop, ambienceStart, stopAll } from './temper-audio.js';
-import { episodeClips, prefetch, prepare, hasClip, playClip, checkinClip, speaking, stopClips } from './temper-clips.js';
+import { episodeClips, prefetch, prepare, hasClip, playClip, checkinClip, speaking, stopClips, regionClip, scanStepClip } from './temper-clips.js';
 import { formatDay } from '../engine/dates.js';
-import { BOOKS, STAGES, WHY, MAP_PLACES, ECHO_DEFAULT } from '../data/temper.js';
+import { BOOKS, STAGES, WHY, MAP_PLACES, ECHO_DEFAULT, BOOK_PATH } from '../data/temper.js';
 import { breathAt, slowPattern, SIGH, NSDR_CUES, cueAt, whStart, whTap, whTick, whSafetyDue, WH_RECOVER } from '../engine/breath.js';
 import {
   nextEpisode, missionsAvailable, suggestion, expandScript, isTimed, segAt, scanCue, echoDesc, logTemper, temperMetrics,
   episodeValue, bladeTier, doneEpisodes, scriptMinutes, checkinTimes, briefingSteps, briefingTones,
+  temperForge, bookComplete, PART_SIZE, HEAT_WEEKS,
 } from '../engine/temper.js';
 import { sideCapLeft } from '../engine/game.js';
 import { XP_CONFIG } from '../data/xp-config.js';
@@ -114,13 +115,19 @@ function tick() {
   // Sprecher-Begleit-Clips zur Sekunde im Abschnitt (bei 0 s erst nach dem Glocken- bzw. Doppelton)
   for (const cue of run.clips?.cues || []) {
     const key = `${cue.seg}:${cue.at}`;
-    if (cue.seg === run.i && !run.cuesDone.has(key) && st.elapsed >= (cue.at || 1.5)) { run.cuesDone.add(key); playClip(cue.clip); }
+    if (cue.seg === s.src && !run.cuesDone.has(key) && st.elapsed >= (cue.at || 1.5)) { run.cuesDone.add(key); playClip(cue.clip); }
   }
   // Doppelton bei jeder neuen Station im ECHO-Scan
   if (s.t === 'scan') {
-    const idx = scanCue(s, st.elapsed).index;
+    const sc = scanCue(s, st.elapsed);
+    const idx = sc.index;
     if (run.station != null && idx !== run.station) playTone('next');
     run.station = idx;
+    // Sprecher: Region zu Beginn der Station (nach dem Ton), dann der Clip zum Loslassen
+    const into = st.elapsed - idx * (s.sec / s.regions.length);
+    const say = sc.step === 'see' ? (into >= 1.5 ? regionClip(sc.region) : null) : scanStepClip(s.mode);
+    const key = `scan:${run.i}:${idx}:${sc.step === 'see' ? 'see' : 'out'}`;
+    if (say && run.clips && !run.cuesDone.has(key) && hasClip(say)) { run.cuesDone.add(key); playClip(say); }
   }
   if (s.t === 'breath' || s.t === 'sigh') {
     const b = breathAt(run.segStart, now, s.t === 'sigh' ? SIGH : slowPattern(s.out || 6));
@@ -186,26 +193,34 @@ function homeView(c) {
   const sug = suggestion(data, c.today());
   const tier = bladeTier(data);
   const m = temperMetrics(data, c.today());
-  const done = doneEpisodes(data);
-  const book = BOOKS[0];
-  const dots = book.episodes.map((e) => `<i class="${done[1]?.has(e.n) ? 'on' : ''}${sug.ep?.n === e.n ? ' cur' : ''}"></i>`).join('');
-  let out = `<button class="btn ghost back" data-act="go" data-to="heute">← Heute</button>
-    <div class="temper-head">${bladeEmblem(tier, 40)}<div><h1 class="h">TEMPER</h1><small class="muted">Stufe ${STAGES[Math.min(tier, 4)]} · Buch ${Math.min(tier + 1, 5)}</small></div></div>`;
+  const f = temperForge(data, c.today());
+  const seen = new Set(data.settings.temperMarksSeen || []);
+  let out = `<header class="forge-hero">${bladeEmblem(tier, 56)}
+    <div><small class="forge-kicker">Die Kammer · Stufe ${STAGES[Math.min(tier, 4)]}</small><h1 class="forge-title">TEMPER</h1>
+    <p class="muted small">Der Körper wird draußen geschmiedet. Der Geist hier.</p></div></header>
+    <div class="forge-stats">
+      <div><b class="num" data-tick="tglut" data-to="${f.minutes}">${f.minutes}</b><small>min Glut</small></div>
+      <div><b class="num" data-tick="tep" data-to="${f.episodes}">${f.episodes}</b><small>von ${f.total} Episoden</small></div>
+      <div><b class="num" data-tick="tseal" data-to="${f.seals}">${f.seals}</b><small>von ${f.parts.length} Siegeln</small></div>
+    </div>`;
   if (sug.kind === 'mission') {
     out += sys(sug.mission.name, `<p>${esc(sug.reason)}</p><button class="btn primary wide" data-act="tp-mission" data-id="${sug.mission.id}">NSDR starten</button>`, { tone: 'calm' });
   }
   if (sug.kind !== 'done') {
     const nx = sug.ep ? sug : nextEpisode(data);
     if (nx?.ep) {
-      out += sys(`Buch ${nx.book.n} · ${nx.book.name}`, `<p class="t-target">Episode ${nx.ep.n} · ${esc(nx.ep.title)}</p>
+      out += sys(`Buch ${nx.book.n} · ${nx.book.name} · Teil ${Math.ceil(nx.ep.n / PART_SIZE)}`, `<p class="t-target">Episode ${nx.ep.n} · ${esc(nx.ep.title)}</p>
         <p class="muted small">${esc(nx.ep.dur)} · ${esc(nx.ep.exercise.replace(/\*\*/g, ''))}</p>
         ${sug.co2 ? '<p class="note">Vorher kurz: der wöchentliche CO2-Test.</p>' : ''}
-        <button class="btn primary wide" data-act="tp-episode">Episode starten</button>
-        <div class="ep-dots">${dots}</div>`, { tone: 'gold' });
+        <button class="btn primary wide pulse" data-act="tp-episode">Episode starten</button>`, { tone: 'gold' });
     }
   } else {
     out += sys('Alle Episoden gemacht', '<p>Das nächste Buch folgt. Die Einsätze bleiben jederzeit abrufbar.</p>');
   }
+  out += bookOnePath(f, sug);
+  out += booksCard(data);
+  out += heatCard(f);
+  out += marksCard(f, seen);
   const ms = missionsAvailable(data);
   out += sys('Einsätze', ms.length ? `<div class="pull-list">${ms.map((x) => `<button class="swap" data-act="tp-mission" data-id="${x.id}"><b>${esc(x.name)}</b><small>${esc(x.sub)}</small></button>`).join('')}</div>`
     : '<p class="muted small">Schalten sich mit den Episoden frei: Verlangen ab Episode 9, NSDR ab 15, Stress ab 18, Einschlafen ab 22, Vor dem Kampf ab 26.</p>');
@@ -220,6 +235,58 @@ function homeView(c) {
     <div class="chips"><button class="chip${data.settings.temperResetHint !== false ? ' on' : ''}" data-act="tp-hint" data-v="1">An</button><button class="chip${data.settings.temperResetHint === false ? ' on' : ''}" data-act="tp-hint" data-v="0">Aus</button></div>
     <p class="muted small">Ab Episode 26: In der Pause vor dem letzten Satz einer Hauptübung erscheint „Reset?“.</p></section>`;
   return out;
+}
+
+// Buch I als Pfad: sechs Teile, je fünf Episoden, jeder fertige Teil bekommt ein Siegel
+function bookOnePath(f, sug) {
+  const book = BOOKS[0];
+  const parts = book.parts.map((name, p) => {
+    const eps = book.episodes.slice(p * PART_SIZE, (p + 1) * PART_SIZE);
+    const sealed = f.parts[p];
+    return `<div class="fp-part${sealed ? ' sealed' : ''}">
+      <div class="fp-head"><span class="fp-seal" aria-hidden="true">${sealed ? '◆' : '◇'}</span><b>Teil ${p + 1} · ${esc(name)}</b></div>
+      <div class="fp-nodes">${eps.map((e) => {
+        const on = f.done[1]?.has(e.n);
+        const isCur = !on && sug.ep?.n === e.n;
+        return `<span class="fp-node${on ? ' on' : ''}${isCur ? ' cur' : ''}" title="${esc(e.title)}"><i>${e.n}</i></span>`;
+      }).join('<span class="fp-link"></span>')}</div></div>`;
+  }).join('');
+  return `<section class="card forge-path"><div class="label">Buch I · ERWACHEN · Anfänger</div>
+    <div class="fp-bar"><i style="width:${Math.round((f.episodes / Math.max(1, f.total)) * 100)}%"></i></div>
+    ${parts}<p class="muted small">Eine Episode pro Tag ist der Weg, kein Muss. Du machst weiter, wo du aufgehört hast.</p></section>`;
+}
+
+// Die fünf Bücher: Buch I offen, II–V als Platzhalter
+function booksCard(data) {
+  return `<section class="card"><div class="label">Der Weg der Klinge</div><div class="book-path">${BOOK_PATH.map((b) => {
+    const open = BOOKS.some((x) => x.n === b.n);
+    const done = bookComplete(data, b.n);
+    return `<div class="bp-book${open ? ' open' : ' soon'}${done ? ' done' : ''}">${bladeEmblem(b.n - 1, 34)}
+      <div><small>Buch ${['I', 'II', 'III', 'IV', 'V'][b.n - 1]} · ${b.stage} · ${b.level}</small><b>${esc(b.name)}</b><span class="muted small">${esc(open ? b.sub : b.line)}</span></div>
+      <em class="bp-tag">${done ? 'geschmiedet' : open ? 'offen' : 'bald'}</em></div>`;
+  }).join('')}</div></section>`;
+}
+
+// Glutspur: jede Spalte eine Woche, jede Zeile ein Tag, Helligkeit = Minuten
+function heatCard(f) {
+  const cells = [];
+  for (let row = 0; row < 7; row++) {
+    for (let col = 0; col < HEAT_WEEKS; col++) {
+      const { day, min } = f.heat[col * 7 + row];
+      cells.push(`<i class="${min >= 11 ? 'l3' : min >= 6 ? 'l2' : min > 0 ? 'l1' : ''}"${min < 0 ? ' style="opacity:.25"' : ''} title="${day}"></i>`);
+    }
+  }
+  return `<section class="card"><div class="label">Glutspur · ${f.activeDays} Tage in der Kammer</div>
+    <div class="heat forge-heat" style="grid-template-columns:repeat(${HEAT_WEEKS},minmax(0,1fr))">${cells.join('')}</div>
+    <p class="muted small">Jede Glut bleibt. Leere Tage sind keine Lücke, sondern Ruhe.</p></section>`;
+}
+
+// Schmiedezeichen: erreicht leuchtet, neu erreicht glüht einmal auf
+function marksCard(f, seen) {
+  const got = f.marks.filter((m) => m.on).length;
+  return `<section class="card"><div class="label">Schmiedezeichen · ${got}/${f.marks.length}</div><div class="marks">${f.marks.map((m) =>
+    `<div class="mark${m.on ? ' on' : ''}${m.on && !seen.has(m.id) ? ' new' : ''}"><span class="mark-glyph" aria-hidden="true">${m.on ? '◆' : '◇'}</span>
+      <b>${esc(m.name)}</b><small>${esc(m.how)}</small></div>`).join('')}</div></section>`;
 }
 
 function curve(points, label, unit = '') {
@@ -370,7 +437,7 @@ function co2View(c, head) {
 
 function echoSetupView(c, head) {
   const e = run.echo || (run.echo = { name: c.data.settings.echo?.name || '', desc: c.data.settings.echo?.desc || ECHO_DEFAULT });
-  return `<div class="temper-run">${head}${sys('ECHO einrichten', `<p class="muted small">Einmalig. ECHO spricht dich mit „du“ und deinem Namen an.</p>
+  return `<div class="temper-run">${head}${sys('ECHO einrichten', `<p class="muted small">Einmalig. ECHO spricht nie. Der Erzähler beschreibt, was er tut, und nennt dich beim Namen.</p>
     <div class="q"><div class="q-label">Dein Name (optional)</div><input class="search" data-input="tp-echo-name" value="${esc(e.name)}" autocomplete="off"></div>
     <div class="q"><div class="q-label">Wie sieht ECHO aus, wie kommt er heraus?</div><textarea data-input="tp-echo-desc" rows="3">${esc(e.desc)}</textarea></div>
     <button class="btn primary wide" data-act="tp-echo-save">So ist ECHO</button>`, { tone: 'gold' })}</div>`;
@@ -396,7 +463,8 @@ function begin(c, { book, ep, mission }) {
   unlockAudio();
   const script = ep ? ep.script : mission.script;
   const map = c.data.settings.innerMap || [];
-  let segs = expandScript(script, { map });
+  // src = Index im Episodenskript, damit Begleit-Clips auch nach vorgeschaltetem CO2-Test oder ohne ECHO-Formular treffen
+  let segs = expandScript(script.map((s, k) => ({ ...s, src: k })), { map });
   if (ep && c.data.settings.echo?.desc) segs = segs.filter((s) => s.t !== 'echo');
   const sug = suggestion(c.data, c.today());
   if (ep && sug.co2 && !segs.some((s) => s.t === 'co2')) segs = [{ t: 'co2' }, ...segs];
@@ -418,6 +486,16 @@ const screen = {
   mount(c) {
     ctxRef = c;
     if (run?.stage === 'run' && !ticker) startTicker();
+    if (!run) {
+      const got = temperForge(c.data, c.today()).marks.filter((m) => m.on).map((m) => m.id);
+      const seen = c.data.settings.temperMarksSeen || [];
+      if (got.some((id) => !seen.includes(id))) {
+        setTimeout(() => {
+          if (run || !location.hash.startsWith('#temper')) return;
+          c.update((data) => ({ ...data, settings: { ...data.settings, temperMarksSeen: got } }));
+        }, 4000);
+      }
+    }
   },
   onInput(c, name, value) {
     if (!run?.echo) return;
@@ -559,6 +637,9 @@ const screen = {
 };
 
 export default screen;
+
+/** Läuft gerade eine Übung? (Dann keine Tab-Leiste.) */
+export const temperRunning = () => !!run;
 
 // ——— Karte auf Heute (unter der Tagesmission) ———
 export function temperCard(c) {

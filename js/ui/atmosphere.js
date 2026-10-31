@@ -24,7 +24,7 @@ function particle(i, kind, color) {
     const size = 1 + depth * 1.8;
     const dur = 26 - depth * 12 + rnd(i, 2) * 6;
     const dx = (rnd(i, 6) - 0.5) * 70;
-    return `<i class="atmo-p snow" style="left:${(rnd(i, 1) * 100).toFixed(1)}%;width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;background:${color};opacity:${(0.35 + depth * 0.5).toFixed(2)};${depth < 0.3 ? 'filter:blur(0.6px);' : ''}--dx:${dx.toFixed(0)}px;animation:atmoFall ${dur.toFixed(1)}s linear ${(-rnd(i, 3) * dur).toFixed(1)}s infinite"></i>`;
+    return `<i class="atmo-p snow" style="left:${(rnd(i, 1) * 100).toFixed(1)}%;width:${size.toFixed(1)}px;height:${size.toFixed(1)}px;background:${color};opacity:${(0.35 + depth * 0.5).toFixed(2)};${depth < 0.3 ? 'filter:blur(0.6px);' : ''}--dx:${dx.toFixed(0)}px;--anim:atmoFall ${dur.toFixed(1)}s linear ${(-rnd(i, 3) * dur).toFixed(1)}s infinite;animation:var(--anim)"></i>`;
   }
   const dur = (kind === 'rain' ? 1.4 : kind === 'ember' ? 7 : 12) + rnd(i, 2) * 6;
   const size = kind === 'rain' ? 1.2 : kind === 'leaf' ? 5 + rnd(i, 4) * 3 : 2 + rnd(i, 4) * 3;

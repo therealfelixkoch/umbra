@@ -1,5 +1,6 @@
 // Training: Übung für Übung, Satz-Logging, Pausen-Timer, Zirkel, SHADOWSTEP, FLOW.
 import { sys, esc, glyphChips, targetText, loadText, setsText, trendBadge, stepper, kg, helpDot } from './kit.js';
+import { withLoad } from '../engine/progression.js';
 import { getDef } from '../data/exercises.js';
 import { finishSession, completionOf, swapGroups, itemFor, stateKey, profileContext } from '../engine/plan.js';
 import { EXERCISES, CATEGORIES } from '../data/exercises.js';
@@ -191,7 +192,7 @@ const save = (c) => {
 // Zeitübungen und Runden-Übungen (Sack, Seil in Minuten) bekommen einen Timer in der Karte.
 const timed = (def) => (def.mode === 'time' && def.cat !== 'mobility') || (def.mode === 'fixed' && def.unit === 'min');
 const timerTarget = (def, s) => (def.mode === 'fixed' ? def.range[0] * 60 : s.value);
-const PHASE_NAME = { work: 'Los', side1: 'Seite 1', switch: 'Seitenwechsel', side2: 'Seite 2', rest: 'Pause', relax: 'Locker lassen' };
+const PHASE_NAME = { work: 'Los', side1: 'Seite 1', switch: 'Seitenwechsel', side2: 'Seite 2', rest: 'Pause', relax: 'Locker lassen', dir: 'Richtung' };
 
 // Phasenwechsel im Übungs-Timer: Signal, bei Runden die fertige Runde abhaken
 function cardPhaseChange(c, a, ct, st) {
@@ -222,10 +223,10 @@ function bigTimerView(a, ct, def) {
   return `<div class="bigtimer phase-${st.phase}">
     <small class="bigtimer-count">${counter}</small>
     <h1>${esc(def.name)}</h1>
-    <b class="bigtimer-phase">${st.phase === 'work' && !ct.rounds && !st.of ? '' : `${PHASE_NAME[st.phase]}${st.of > 1 ? ` · Hold ${st.hold}/${st.of}` : ''}`}</b>
+    <b class="bigtimer-phase">${st.phase === 'dir' ? `${esc(st.label)} · ${st.hold}/${st.of}` : st.next ? 'Umgreifen' : st.phase === 'work' && !ct.rounds && !st.of ? '' : `${PHASE_NAME[st.phase]}${st.of > 1 ? ` · Hold ${st.hold}/${st.of}` : ''}`}</b>
     ${a.log[ct.i].sets[ct.k]?.label && !['Top-Satz', 'Backdown'].includes(a.log[ct.i].sets[ct.k].label) ? `<p class="bigtimer-hint">${esc(a.log[ct.i].sets[ct.k].label)}</p>` : ''}
     <b class="bigtimer-clock num${st.over ? ' over' : ''}" data-bigclock>${clock}</b>
-    ${st.phase === 'switch' ? '<p class="bigtimer-hint">Seite wechseln, gleich geht es weiter.</p>' : ''}
+    ${st.phase === 'switch' ? `<p class="bigtimer-hint">${st.next ? `Gleich: ${esc(st.next)}` : 'Seite wechseln, gleich geht es weiter.'}</p>` : ''}
     <button class="btn primary big wide" data-act="t-timer-stop" data-k="${ct.k}">${ct.rounds ? 'Stopp' : 'Stopp · Zeit loggen'}</button>
     <p class="bigtimer-hint">${'wakeLock' in navigator ? 'Bildschirm bleibt an.' : 'Bildschirm anlassen für das Signal.'} Bei Lautlos-Schalter kommt nur das violette Signal.</p></div>`;
 }
@@ -252,7 +253,7 @@ function setsView(c, a) {
   const def = getDef(it.exId);
   const n = p.items.length;
   const comp = completionOf(a);
-  const loadable = def.load && it.ladder.length > 1;
+  const loadable = !!def.load; // Gewicht ist immer frei wählbar, auch ohne passende KB im Bestand
   const last = it.lastTime;
   const fixed = def.mode === 'fixed';
   const r = it.rir ?? 2;
@@ -294,7 +295,7 @@ function setsView(c, a) {
     const step = def.mode === 'time' ? 5 : 1;
     const sides = def.perSide && def.mode === 'reps';
     const tag = s.label === 'Top-Satz' ? 'TOP' : s.label === 'Backdown' ? 'BD' : null;
-    return `<div class="set-wrap${s.done ? ' done' : ''}">${s.label && !tag ? `<small class="set-dir">${esc(s.label)}${it.holdReps > 1 ? ` · ${it.holdReps} × ${s.value} s` : ''}</small>` : ''}<div class="set-row${s.done ? ' done' : ''}${isNext ? ' next' : ''}${slash(k)}"><span class="set-n">${tag ? `<i class="set-tag">${tag}</i>` : k + 1}</span>
+    return `<div class="set-wrap${s.done ? ' done' : ''}">${def.directions && !s.label ? `<small class="set-dir">${def.directions.length} Richtungen am Stück · je ${s.value} s</small>` : ''}${s.label && !tag ? `<small class="set-dir">${esc(s.label)}${it.holdReps > 1 ? ` · ${it.holdReps} × ${s.value} s` : ''}</small>` : ''}<div class="set-row${s.done ? ' done' : ''}${isNext ? ' next' : ''}${slash(k)}"><span class="set-n">${tag ? `<i class="set-tag">${tag}</i>` : k + 1}</span>
       <div class="set-mid">${sides
         ? `<div class="sides">${stepper('t-side', `${s.left ?? s.value}`, 'links', { idx: `${k}:L` })}${stepper('t-side', `${s.right ?? s.value}`, 'rechts', { idx: `${k}:R` })}</div>`
         : stepper('t-val', `${s.value}`, def.mode === 'time' ? 's' : 'Wdh.', { idx: `${k}:${step}`, big: true })}${lastLine}</div>
@@ -306,7 +307,9 @@ function setsView(c, a) {
   const open = entry.sets.find((s) => !s.done) || entry.sets[entry.sets.length - 1];
   const loadRow = loadable ? `<div class="load-row"><span>${def.load === 'belt' ? 'Zusatzgewicht' : 'Gewicht'}
       <button class="fix-toggle${it.fixed ? ' on' : ''}" data-act="t-fix" aria-pressed="${!!it.fixed}">${it.fixed ? '■ fix' : '□ fix'}</button></span>
-    ${stepper('t-load', kg(open.load), 'kg')}</div>
+    <div class="stepper"><button class="step" data-act="t-load" data-dir="-1" aria-label="weniger">−</button>
+      <label class="step-val"><input class="load-in" type="text" inputmode="decimal" data-change="t-load-free" value="${kg(open.load)}" aria-label="Gewicht in kg, frei eingeben"><small>kg · tippen</small></label>
+      <button class="step" data-act="t-load" data-dir="1" aria-label="mehr">+</button></div></div>
     ${it.fixed ? '<p class="muted small">Gewicht fix: Die App steigert über mehr Wdh., dann +1 Satz, dann langsameres Tempo, dann die schwerere Stufe.</p>' : ''}` : '';
   const ramp = rampBlock(c, a, i, it, def, open);
   const ss = supersetBlock(a, i);
@@ -750,6 +753,15 @@ const training = {
     if (p.format === 'intervals') return intervalView(c, a);
     return flowView(c, a);
   },
+  onChange(c, name, el) {
+    // Freies Gewicht: beliebige kg (Viertel-kg genau), kommt als eigene Stufe dazu
+    if (name !== 't-load-free' || !c.data.active) return;
+    const v = Math.round(parseFloat(String(el.value).replace(',', '.')) * 4) / 4;
+    if (!Number.isFinite(v) || v < 0 || v > 400) { c.render(); return; }
+    const it = c.data.active.plan.items[c.data.active.index];
+    it.ladder = withLoad(it.ladder || [0], v);
+    training.actions['t-load'](c, { kg: v });
+  },
   onInput(c, name, value) {
     if (name === 't-swap-q') {
       // Suche filtert direkt im Modal; bei Suche zählen alle Gruppen
@@ -799,7 +811,7 @@ const training = {
       const it = a.plan.items[a.index];
       const sets = a.log[a.index].sets;
       const open = sets.find((s) => !s.done) || sets[sets.length - 1];
-      const nl = stepLoad(it.ladder, open.load, Number(d.dir));
+      const nl = d.kg != null ? d.kg : stepLoad(it.ladder, open.load, Number(d.dir));
       if (it.topSet && open.label === 'Top-Satz') {
         // Top-Satz bestimmt den Backdown: ca. 18 % weniger.
         open.load = nl;
@@ -951,8 +963,8 @@ const training = {
       const ks = def.mode === 'fixed' ? sets.map((s, j) => (!s.done && j >= k ? j : -1)).filter((j) => j >= 0) : [k];
       const rounds = def.mode === 'fixed' && ks.length > 1;
       const it0 = a.plan.items[a.index];
-      const phases = exercisePhases({ target, perSide: (def.perSide || it0.bothSides) && def.mode === 'time', rounds: rounds ? ks.length : 0, rest: 60, reps: it0.holdReps || 1 });
-      a.cardTimer = { i: a.index, k, ks, rounds, phases, startAt: Date.now(), seen: 0, target };
+      const phases = exercisePhases({ target, perSide: (def.perSide || it0.bothSides) && def.mode === 'time', rounds: rounds ? ks.length : 0, rest: 60, reps: it0.holdReps || 1, directions: def.directions });
+      a.cardTimer = { i: a.index, k, ks, rounds, phases, startAt: Date.now(), seen: 0, target: def.directions ? phases.reduce((n, p) => n + p.sec, 0) : target };
       keepAwake(true);
       signal(1);
       rest = null;

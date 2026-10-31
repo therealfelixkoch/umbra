@@ -6,7 +6,13 @@ import { audioCtx } from './sound.js';
 const DIR = 'assets/temper/b1/';
 const CHECKINS = ['ci-1', 'ci-2', 'ci-3', 'ci-4', 'ci-5', 'ci-6'];
 
-// Begleit-Clips je Episode: Abschnitt (Index im Skript), Sekunde im Abschnitt, Clip (ohne Präfix b1-)
+// ECHO-Scan: je Region ein Clip (r-stirn …) zu Beginn der Station, dann ein Clip zum Loslassen je Modus
+const SCAN_STEP = { release: 'scan-out' };
+const slug = (s) => s.toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+export const regionClip = (region) => `r-${slug(region)}`;
+export const scanStepClip = (mode) => SCAN_STEP[mode] || null;
+
+// Begleit-Clips je Episode: Abschnitt (Index im Episodenskript), Sekunde im Abschnitt, Clip (ohne Präfix b1-)
 const PLAN = {
   1: [[0, 0, 'e01-c1'], [0, 50, 'e01-c2'], [0, 100, 'e01-c3'], [0, 150, 'e01-c4'], [0, 200, 'e01-c5'], [0, 250, 'e01-c6']],
   2: [[0, 0, 'count-start']],
@@ -27,12 +33,14 @@ let busyUntil = 0;
 let playing = [];
 let voice = null;
 
-/** Clips einer Episode: Intro, Outro, Begleit-Clips und Check-ins. */
+/** Clips einer Episode: Intro, Outro, Begleit-Clips, Scan-Clips und Check-ins. */
 export function episodeClips(ep) {
   if (!ep) return { intro: null, outro: null, cues: [], all: [] };
   const e = `e${pad(ep.n)}`;
   const cues = (PLAN[ep.n] || []).map(([seg, at, clip]) => ({ seg, at, clip }));
-  const all = [`${e}-intro`, `${e}-outro`, ...cues.map((c) => c.clip), ...CHECKINS];
+  const scan = (ep.script || []).filter((s) => s.t === 'scan').flatMap((s) =>
+    [...(Array.isArray(s.regions) ? s.regions.map(regionClip) : []), scanStepClip(s.mode)]).filter(Boolean);
+  const all = [`${e}-intro`, `${e}-outro`, ...cues.map((c) => c.clip), ...scan, ...CHECKINS];
   return { intro: `${e}-intro`, outro: `${e}-outro`, cues, all: [...new Set(all)] };
 }
 

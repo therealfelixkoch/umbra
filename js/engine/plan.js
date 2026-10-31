@@ -6,7 +6,7 @@ import { PLYO, CONTRAST } from '../data/arcs.js';
 import { gapDays, lastSetsFor, ROTATION } from './history.js';
 import { initialArc, weekInfo, holidayActive, DEFAULT_HOLIDAY } from './arc.js';
 import { modifierFor, completeMission } from './cycle.js';
-import { initialState, progress, ladderFor, snap, canLoad, setScore, stepLoad } from './progression.js';
+import { initialState, progress, ladderFor, snap, canLoad, setScore, stepLoad, withLoad } from './progression.js';
 import { sessionXp } from './game.js';
 import { daysBetween } from './dates.js';
 import { latestTest, selectStretches } from './mobility.js';
@@ -133,7 +133,7 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
 
   const loadFor = (def, st) => {
     if (!def.load || !canLoad(def, equipment)) return { load: 0, ladder: [0] };
-    const ladder = ladderFor(def.load, settings);
+    const ladder = withLoad(ladderFor(def.load, settings), st?.load || 0);
     return { load: snap(ladder, st?.load ?? def.startKg ?? ladder[0]), ladder };
   };
 
@@ -348,7 +348,7 @@ export function itemFor(key, { data, profile, sets, getDef = defaultGetDef, arcN
   let load = 0;
   let ladder = [0];
   if (def.load && canLoad(def, equipment)) {
-    ladder = ladderFor(def.load, settings);
+    ladder = withLoad(ladderFor(def.load, settings), st?.load || 0);
     load = snap(ladder, st?.load ?? def.startKg ?? ladder[0]);
   }
   const target = def.mode === 'fixed' ? def.range[0] : (def.id === st.exId ? st.target : def.range[0]);

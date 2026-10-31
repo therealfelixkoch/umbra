@@ -2973,3 +2973,44 @@ describe('v34 · Runden-Blöcke und Bänder', () => {
     expect(BANDS.every((b) => /^#/.test(b.color) && /\d–\d/.test(b.kg))).toBe(true);
   });
 });
+
+import { temperForge, PART_SIZE } from '../js/engine/temper.js';
+import { withLoad } from '../js/engine/progression.js';
+import { BOOK_PATH, MARKS } from '../js/data/temper.js';
+describe('v37 · TEMPER-Schmiede, freies Gewicht, Nacken', () => {
+  it('Schmiede: Glut, Siegel und Zeichen zählen nur Erreichtes', () => {
+    const f0 = temperForge(defaultData(), '2026-10-31');
+    expect(f0.minutes).toBe(0);
+    expect(f0.marks.every((m) => !m.on)).toBe(true);
+    const d = withEpisodes(11);
+    const f = temperForge(d, '2026-09-20');
+    expect(f.episodes).toBe(11);
+    expect(f.minutes).toBe(66);
+    expect(f.seals).toBe(2);
+    expect(f.parts.length).toBe(30 / PART_SIZE);
+    const on = f.marks.filter((m) => m.on).map((m) => m.id);
+    expect(on.includes('spark') && on.includes('part2') && on.includes('echo') && on.includes('hour') && on.includes('seven')).toBe(true);
+    expect(on.includes('part3')).toBe(false);
+    expect(f.heat.length).toBe(18 * 7);
+  });
+  it('Fünf Bücher, nur Buch I offen; Zeichen eindeutig', () => {
+    expect(BOOK_PATH.map((b) => b.stage)).toEqual(['HEAT', 'HAMMER', 'QUENCH', 'TEMPER', 'EDGE']);
+    expect(BOOK_PATH[0].level).toBe('Anfänger');
+    expect(new Set(MARKS.map((m) => m.id)).size).toBe(MARKS.length);
+  });
+  it('Freies Gewicht wird zur eigenen Stufe, Steigerung geht zur nächsten echten Stufe', () => {
+    const l = withLoad([8, 12, 16], 14);
+    expect(l).toEqual([8, 12, 14, 16]);
+    expect(stepLoad(l, 14, 1)).toBe(16);
+    expect(withLoad([8, 12], 12)).toEqual([8, 12]);
+    expect(ladderFor('plate', {})[0]).toBe(0);
+  });
+  it('Nacken-Isometrie: 4 Richtungen am Stück mit Umgreifen', () => {
+    const def = getDef('neck_iso_manual');
+    const ph = exercisePhases({ target: 20, directions: def.directions });
+    expect(ph.filter((p) => p.phase === 'dir').length).toBe(4);
+    expect(ph.filter((p) => p.phase === 'switch').length).toBe(3);
+    expect(ph[1].next).toBe(def.directions[1]);
+    expect(getDef('neck_flex_side').load).toBe('plate');
+  });
+});

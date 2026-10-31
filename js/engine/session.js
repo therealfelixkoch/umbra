@@ -152,7 +152,14 @@ export const SWITCH_SEC = 5;
  */
 export const RELAX_SEC = 5;
 
-export function exercisePhases({ target, perSide = false, rounds = 0, rest = 60, reps = 1 }) {
+export const DIR_SWITCH_SEC = 3;
+
+export function exercisePhases({ target, perSide = false, rounds = 0, rest = 60, reps = 1, directions = null }) {
+  // Mehrere Richtungen am Stück (Nacken-Isometrie): Richtung · 3 s umgreifen · nächste Richtung …
+  if (directions?.length) {
+    return directions.flatMap((label, i) => [{ phase: 'dir', sec: target, label, hold: i + 1, of: directions.length },
+      ...(i < directions.length - 1 ? [{ phase: 'switch', sec: DIR_SWITCH_SEC, next: directions[i + 1] }] : [])]);
+  }
   if (rounds > 0) {
     const out = [];
     for (let r = 1; r <= rounds; r++) {

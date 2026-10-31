@@ -76,14 +76,46 @@ export const BOOKS = [
 
 export const STAGES = ['HEAT', 'HAMMER', 'QUENCH', 'TEMPER', 'EDGE'];
 
+/** Der Weg der Klinge: alle fünf Bücher. Buch II–V sind noch Platzhalter. */
+export const BOOK_PATH = [
+  { n: 1, stage: 'HEAT', name: 'ERWACHEN', level: 'Anfänger', sub: '30 Episoden · ca. 30 Tage · 5–8 min', line: 'Atem, Nebel, ECHO. Das Fundament.' },
+  { n: 2, stage: 'HAMMER', name: 'Ausdauer des Geistes', level: 'Fortgeschritten', sub: '7–8 min', line: 'Wiederholung verdichtet den Stahl.' },
+  { n: 3, stage: 'QUENCH', name: 'Ruhe unter Last', level: 'Erfahren', sub: 'nach harten Sätzen', line: 'Ruhig bleiben, während die Beine zittern.' },
+  { n: 4, stage: 'TEMPER', name: 'Zäh statt spröde', level: 'Meister', sub: 'Augen offen, im Alltag', line: 'Nachgeben können, ohne zu brechen.' },
+  { n: 5, stage: 'EDGE', name: 'Die Klinge', level: 'Vollendet', sub: '10 min · überall', line: 'Der Schliff. ECHO und du werden eins.' },
+];
+
+/**
+ * Schmiedezeichen: was du in der Kammer geschafft hast. Es zählt nur, was da ist, nie was fehlt
+ * (keine Serien, die reißen können).
+ */
+export const MARKS = [
+  { id: 'spark', name: 'Erster Funke', how: 'Die erste Episode' },
+  { id: 'part1', name: 'Der Atem', how: 'Teil 1 versiegelt (Ep. 1–5)' },
+  { id: 'co2', name: 'Erste Messung', how: 'Der erste CO2-Test' },
+  { id: 'part2', name: 'Durch den Nebel', how: 'Teil 2 versiegelt (Ep. 6–10)' },
+  { id: 'echo', name: 'ECHO erwacht', how: 'Episode 11' },
+  { id: 'hour', name: 'Eine Stunde Glut', how: '60 min in der Kammer' },
+  { id: 'part3', name: 'Der Schatten', how: 'Teil 3 versiegelt (Ep. 11–15)' },
+  { id: 'mission', name: 'Erster Einsatz', how: 'Einen Einsatz im Alltag genutzt' },
+  { id: 'seven', name: 'Sieben Feuer', how: '7 Tage mit TEMPER innerhalb von 10 Tagen' },
+  { id: 'night', name: 'Nachtwache', how: '5 Einheiten am Abend' },
+  { id: 'part4', name: 'Die Namen', how: 'Teil 4 versiegelt (Ep. 16–20)' },
+  { id: 'part5', name: 'Der Regler', how: 'Teil 5 versiegelt (Ep. 21–25)' },
+  { id: 'five', name: 'Fünf Stunden Glut', how: '300 min in der Kammer' },
+  { id: 'part6', name: 'Unter Druck', how: 'Teil 6 versiegelt (Ep. 26–30)' },
+  { id: 'heat', name: 'Stufe HEAT', how: 'Buch I abgeschlossen' },
+  { id: 'thousand', name: 'Tausend Minuten', how: '1000 min in der Kammer' },
+];
+
 /** Situations-Einsätze, frei ab einer Episode von Buch I. */
 export const MISSIONS_T = [
-  { id: 'prefight', name: 'Vor dem Kampf / Termin', sub: '3-Atemzüge-Reset und ein Satz von ECHO', from: 26,
-    script: [{ t: 'reset', reps: 1 }, intro(15, ['ECHO: „Ich hab nachgesehen. Du bist bereit. Atme.“'])] },
+  { id: 'prefight', name: 'Vor dem Kampf / Termin', sub: '3-Atemzüge-Reset und ein ruhiger Satz', from: 26,
+    script: [{ t: 'reset', reps: 1 }, intro(15, ['ECHO kommt zurück und nickt. Du bist bereit. Atme.'])] },
   { id: 'stress', name: 'Nach Stress oder Wut', sub: '3 min ECHO-Scan mit Benennen', from: 18,
     script: [{ t: 'scan', sec: 180, regions: 'map', mode: 'name' }] },
   { id: 'craving', name: 'Verlangen', sub: 'Handy, Essen, Drink · 90 s Welle', from: 9,
-    script: [{ t: 'wave', sec: 90 }, intro(30, ['ECHO: „Benenn es. Was zieht gerade? Ein Wort.“', 'ECHO: „Es war eine Welle. Sie ist gebrochen.“'])] },
+    script: [{ t: 'wave', sec: 90 }, intro(30, ['Benenn es. Was zieht gerade? Ein Wort.', 'Es war eine Welle. Sie ist gebrochen.'])] },
   { id: 'nsdr', name: 'Zu wenig geschlafen', sub: '10 min NSDR mit ECHO-Scan', from: 15,
     script: [{ t: 'nsdr', sec: 600 }] },
   { id: 'sleep', name: 'Kann nicht einschlafen', sub: 'langes Ausatmen und langsamer ECHO-Scan', from: 22,

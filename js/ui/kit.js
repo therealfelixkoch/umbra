@@ -90,6 +90,7 @@ export const nameOf = (id) => getDef(id)?.name || id;
 export const ICONS = {
   heute: '<svg viewBox="0 0 24 24"><path d="M12 3l8 5v8l-8 5-8-5V8z"/><circle cx="12" cy="12" r="3"/></svg>',
   arena: '<svg viewBox="0 0 24 24"><path d="M5 19l6-6M4 14l6 6M14 4l6 6M13 11l7-7M9 9l2 2"/></svg>',
+  temper: '<svg viewBox="0 0 24 24"><path d="M12 3l3 11h-6z"/><path d="M7 17h10M12 17v4"/></svg>',
   kodex: '<svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>',
   profil: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/></svg>',
 };
