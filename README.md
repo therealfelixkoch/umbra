@@ -72,6 +72,12 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 02.11.2026 (v39): Neues App-Icon und Logo
+
+- Neues Markenzeichen: geschmiedete Klinge mit Glut. Die Vorlage liegt in `assets/brand/umbra-1024.png` (nicht nötig für die App).
+- App-Icons neu: `icons/apple-touch-icon.png` (180), `icon-192.png`, `icon-512.png`, `icon-512-maskable.png` (Motiv mit Rand für Android), `favicon-64.png`. Das alte `icons/icon.svg` fällt weg.
+- In der App: `icons/logo.png` (transparent) als kurzes Startbild beim Öffnen, im Willkommensbildschirm über dem Schriftzug und klein am Ende vom Profil.
+
 ### Update 31.10.2026 (v38): Update-Fix gegen GitHub-Sperre
 
 - Ursache, dass v37 nicht ankam: Der Service Worker lud bei jedem App-Start alle Lore-Bilder und TEMPER-Clips gleichzeitig neu, bei jedem Update dazu alle App-Dateien. Mit den neuen Clips wurde GitHub Pages das zu viel, es sperrte die IP („429 Rate limit exceeded“), die Installation brach ab und die App blieb auf v36.

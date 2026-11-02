@@ -5,17 +5,19 @@
 // GitHub Pages sperrt sonst die IP ("Rate limit exceeded") und das Update bleibt hängen.
 // App-Dateien: komplett vorab gecacht (Versionswechsel = neuer Cache), ausgeliefert nur aus der eigenen Version.
 // Lore-Bilder und TEMPER-Clips: eigener Cache, fehlende brechen die Installation nicht ab.
-const VERSION = 'v38';
+const VERSION = 'v39';
 const LORE_CACHE = 'umbra-lore';
 const ASSETS = [
-  ['./', '453adf55be'],
-  ['./css/app.css', 'cc7fede094'],
+  ['./', 'f5499981e2'],
+  ['./css/app.css', '19080e8ea7'],
   ['./fonts/oxanium.woff2', '2a16eec157'],
-  ['./icons/apple-touch-icon.png', 'f42acbee32'],
-  ['./icons/icon-192.png', '3d8f27d61d'],
-  ['./icons/icon-512.png', '0295c4fed7'],
-  ['./icons/icon.svg', 'fbcba7aae2'],
-  ['./index.html', '453adf55be'],
+  ['./icons/apple-touch-icon.png', '5fbe2b230e'],
+  ['./icons/favicon-64.png', '7249569488'],
+  ['./icons/icon-192.png', '5198b26ef0'],
+  ['./icons/icon-512-maskable.png', '990f9a195e'],
+  ['./icons/icon-512.png', '90eae8d90e'],
+  ['./icons/logo.png', '8d975c9bcf'],
+  ['./index.html', 'f5499981e2'],
   ['./js/app.js', '02ca1ee5ab'],
   ['./js/data/arcs.js', '3152161668'],
   ['./js/data/benchmarks.js', '9c8ccc043c'],
@@ -86,9 +88,9 @@ const ASSETS = [
   ['./js/ui/kodex.js', 'd583262e95'],
   ['./js/ui/ladder.js', 'ee7c52a66f'],
   ['./js/ui/lore.js', '04a89c0aad'],
-  ['./js/ui/onboarding.js', '0be60fd526'],
+  ['./js/ui/onboarding.js', 'cfb7326305'],
   ['./js/ui/overview.js', 'f3c3166b0e'],
-  ['./js/ui/profile.js', 'cfc2cf6bb1'],
+  ['./js/ui/profile.js', '49c39c8c10'],
   ['./js/ui/review.js', '789ec1a610'],
   ['./js/ui/sound.js', 'f3064f3330'],
   ['./js/ui/storycard.js', '7062b3ef0b'],
@@ -101,8 +103,8 @@ const ASSETS = [
   ['./js/ui/voice.js', '3d841c8c66'],
   ['./js/ui/week.js', 'a3f8994aa1'],
   ['./js/ui/wrist.js', 'c536ea2932'],
-  ['./js/version.js', '44c76b853c'],
-  ['./manifest.webmanifest', '8cc9978b5d'],
+  ['./js/version.js', '404336e6a2'],
+  ['./manifest.webmanifest', '00470cde51'],
 ];
 const LORE = [
   ['./assets/lore/boss-fracture.webp', '764246f7dd'],
