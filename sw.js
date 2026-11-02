@@ -2,14 +2,15 @@
 // Jede Datei steht mit Inhalts-Hash in der Liste und liegt im Cache unter "pfad?h=<hash>".
 // Beim Update wird nur geholt, was sich geändert hat – Unverändertes wird aus dem alten Cache übernommen.
 // Geladen wird gedrosselt (wenige Anfragen gleichzeitig), bei 429/5xx mit Wartezeit erneut versucht:
+// Abgefragt wird "pfad?h=<hash>": So liefert auch das GitHub-CDN (cacht ~10 min) garantiert den neuen Stand.
 // GitHub Pages sperrt sonst die IP ("Rate limit exceeded") und das Update bleibt hängen.
 // App-Dateien: komplett vorab gecacht (Versionswechsel = neuer Cache), ausgeliefert nur aus der eigenen Version.
 // Lore-Bilder und TEMPER-Clips: eigener Cache, fehlende brechen die Installation nicht ab.
-const VERSION = 'v39';
+const VERSION = 'v40';
 const LORE_CACHE = 'umbra-lore';
 const ASSETS = [
-  ['./', 'f5499981e2'],
-  ['./css/app.css', '19080e8ea7'],
+  ['./', '46023ab62c'],
+  ['./css/app.css', '3e0fbf63ed'],
   ['./fonts/oxanium.woff2', '2a16eec157'],
   ['./icons/apple-touch-icon.png', '5fbe2b230e'],
   ['./icons/favicon-64.png', '7249569488'],
@@ -17,7 +18,7 @@ const ASSETS = [
   ['./icons/icon-512-maskable.png', '990f9a195e'],
   ['./icons/icon-512.png', '90eae8d90e'],
   ['./icons/logo.png', '8d975c9bcf'],
-  ['./index.html', 'f5499981e2'],
+  ['./index.html', '46023ab62c'],
   ['./js/app.js', '02ca1ee5ab'],
   ['./js/data/arcs.js', '3152161668'],
   ['./js/data/benchmarks.js', '9c8ccc043c'],
@@ -103,7 +104,7 @@ const ASSETS = [
   ['./js/ui/voice.js', '3d841c8c66'],
   ['./js/ui/week.js', 'a3f8994aa1'],
   ['./js/ui/wrist.js', 'c536ea2932'],
-  ['./js/version.js', '404336e6a2'],
+  ['./js/version.js', 'e9b89b3229'],
   ['./manifest.webmanifest', '00470cde51'],
 ];
 const LORE = [
@@ -175,7 +176,7 @@ async function precache() {
     const k = key(url, h);
     if (await cache.match(k)) return;
     const old = await caches.match(k);
-    await cache.put(k, old || await get(url, 'reload'));
+    await cache.put(k, old || await get(k, 'reload'));
   });
 }
 
@@ -188,7 +189,7 @@ function cacheLore() {
       const k = key(url, h);
       if (blocked || await cache.match(k)) return;
       try {
-        const res = await get(url, 'no-cache');
+        const res = await get(k, 'no-cache');
         await cache.delete(url, { ignoreSearch: true });
         await cache.put(k, res);
       } catch (err) {

@@ -1,4 +1,4 @@
-:root { --app-version: "v39"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
+:root { --app-version: "v40"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
 @font-face {
   font-family: 'Oxanium';
   src: url('../fonts/oxanium.woff2') format('woff2');
@@ -313,10 +313,6 @@ em { font-style: normal; color: var(--muted); font-size: 0.8em; }
 .brand-mark { display: block; width: 132px; height: auto; margin: 0 auto 18px; filter: drop-shadow(0 0 24px rgba(255, 150, 40, 0.25)); animation: brand-glow 4.5s ease-in-out infinite; }
 .brand-mark.sm { width: 44px; margin-bottom: 6px; opacity: 0.85; filter: none; animation: none; }
 .foot-brand { text-align: center; margin-top: 8px; }
-/* Startbild: liegt über allem, bis die App gestartet ist (html[data-booted]), dann blendet es aus */
-#splash { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: #06070b; transition: opacity 0.5s ease 0.15s, visibility 0s linear 0.65s; pointer-events: none; }
-#splash img { width: 34vw; max-width: 160px; }
-html[data-booted] #splash { opacity: 0; visibility: hidden; }
 @keyframes brand-glow { 50% { filter: drop-shadow(0 0 34px rgba(255, 150, 40, 0.42)); } }
 @media (prefers-reduced-motion: reduce) { .brand-mark { animation: none; } }
 .logo { font: 800 56px/1 var(--display); letter-spacing: 0.32em; padding-left: 0.32em; background: linear-gradient(180deg, #fff, #9aa6ff); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 22px var(--sys-glow)); }

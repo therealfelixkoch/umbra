@@ -72,6 +72,12 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 02.11.2026 (v40): Startbild-Fix
+
+- Auf dem iPhone stand das Logo riesig oben über jedem Tab. Ursache: neue `index.html`, aber noch die alte `app.css` im Cache. Ohne die Startbild-Regeln wurde das Bild nie ausgeblendet.
+- Die Regeln fürs Startbild stehen jetzt direkt in `index.html`. Zusätzlich wird es nach spätestens 4 s entfernt.
+- `sw.js` lädt Dateien als `pfad?h=<hash>`. So liefert auch das CDN von GitHub (das rund 10 min zwischenspeichert) sicher den neuen Stand und mischt keine alten Dateien in ein Update.
+
 ### Update 02.11.2026 (v39): Neues App-Icon und Logo
 
 - Neues Markenzeichen: geschmiedete Klinge mit Glut. Die Vorlage liegt in `assets/brand/umbra-1024.png` (nicht nötig für die App).
