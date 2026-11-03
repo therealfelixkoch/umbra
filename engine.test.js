@@ -3014,3 +3014,43 @@ describe('v37 · TEMPER-Schmiede, freies Gewicht, Nacken', () => {
     expect(getDef('neck_flex_side').load).toBe('plate');
   });
 });
+
+import { partsOf, fixCaveMurph, versionText } from '../js/engine/pillars.js';
+import { FEET_EXERCISES, FEET_POS } from '../js/data/feet.js';
+
+describe('v41 · Cave-Murph mit Rudergerät, Puls, FEET-Positionen', () => {
+  const n = [0, 1, 2, 3].find((k) => benchmarkOf(k).id === 'coldiron');
+  it('Rudergerät ersetzt den Seil-Block am Anfang und Ende', () => {
+    const b = benchmarkOf(n);
+    const p = partsOf(b, 'full', 'row');
+    expect(p[0]).toBe('1000 m Rudern');
+    expect(p.at(-1)).toBe('1000 m Rudern');
+    expect(partsOf(b, 'full', 'rope')[0]).toBe('5 min Seilspringen');
+    expect(versionText(b, 'full', 'row', 158)).toBe('voll · Rudergerät · Puls 158');
+  });
+  it('Baseline speichert Cardio und Puls, die Revanche übernimmt das Cardio', () => {
+    let d = freshData();
+    d.engine.arc = { n, week: 1 };
+    d = logBenchmark(d, { kind: 'baseline', variant: 'full', cardio: 'row', value: 2700, pulse: 158, day: '2026-11-03' });
+    expect(d.benchmarks[n].cardio).toBe('row');
+    expect(d.benchmarks[n].baseline.pulse).toBe(158);
+    d = logBenchmark(d, { kind: 'revenge', variant: 'full', value: 2600, day: '2027-01-20' });
+    expect(d.benchmarks[n].cardio).toBe('row');
+    expect(d.sessions.at(-1).benchmark.cardio).toBe('row');
+  });
+  it('Einmalige Korrektur: erster Cave-Murph wird Rudern mit Puls 158', () => {
+    const d = freshData();
+    d.benchmarks = { [n]: { variant: 'full', baseline: { day: '2026-11-01', value: 2900 } } };
+    d.sessions = [{ id: 'bm1', day: '2026-11-01', kind: 'mission', missionId: 'BENCH', arc: { n, week: 1 }, benchmark: { id: 'coldiron', kind: 'baseline', variant: 'full', value: 2900 } }];
+    const f = fixCaveMurph(d);
+    expect(f.benchmarks[n].cardio).toBe('row');
+    expect(f.benchmarks[n].baseline.pulse).toBe(158);
+    expect(f.sessions[0].benchmark.pulse).toBe(158);
+    expect(f.settings.murphRowFix).toBe(true);
+    const again = fixCaveMurph({ ...f, benchmarks: { [n]: { ...f.benchmarks[n], cardio: undefined } } });
+    expect(again.benchmarks[n].cardio).toBe(undefined);
+  });
+  it('Jede FEET-Übung hat eine Ausgangsposition', () => {
+    expect(FEET_EXERCISES.every((e) => FEET_POS[e.pos])).toBe(true);
+  });
+});

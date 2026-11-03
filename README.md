@@ -72,6 +72,17 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 03.11.2026 (v41): FEET-Timer, Cave-Murph mit Rudern und Puls, Level-up, Rotation
+
+- **FEET** läuft jetzt wie FLOW, mit Zwischenschritt vor jedem Satz: 10 s bei einer neuen Übung, 5 s zum Seitenwechsel oder kurz Lösen. Danach startet der Timer selbst, bei Wiederholungen tippst du „Fertig“.
+- Jede FEET-Übung zeigt ihre Ausgangsposition (sitzend, stehend, einbeinig, Hocke, Rücken an der Wand). Wechselt die Position zur nächsten Übung, ist sie im Zwischenschritt golden markiert. Sole Rolling hat eine Variante: beidbeinig auf der Blackroll stehen.
+- **Check-in „nur Mobility“** (auch ARENA-Tag, Ruhetag, „nur 5 Minuten“): Sobald FLOW bzw. HANDS gemacht ist, steht „Tagesziel erreicht“.
+- **Saisonwechsel-Intro** (Setup → „Saisonwechsel-Intro ansehen“): Mit „Bewegung reduzieren“ blieben Text und Knöpfe unsichtbar. Jetzt sind sie direkt sichtbar.
+- **Cave-Murph:** Für Anfang und Ende wählst du jetzt Seil oder Rudergerät (voll 1000 m, halb 500 m). Das gilt auch für die Revanche. Nach „Fertig“ fragt die App, ob du den Puls messen willst: 20 s zählen, mal 3 ergibt die Schläge pro Minute.
+  - Einmalige Korrektur: Die erste Cave-Murph-Baseline wird auf Rudergerät mit Puls 158 gesetzt (`fixCaveMurph`, Merker `settings.murphRowFix`).
+- **Level-up:** Bei jedem neuen Rang erscheint eine Vollbild-Sequenz mit dem Logo, egal aus welcher Quelle die XP kommen (Merker `settings.rankSeen`).
+- **Rotation auf Heute:** Jede Einheit ist antippbar und zeigt Übungen, Sätze und Gewichte nach heutigem Stand.
+
 ### Update 02.11.2026 (v40): Startbild-Fix
 
 - Auf dem iPhone stand das Logo riesig oben über jedem Tab. Ursache: neue `index.html`, aber noch die alte `app.css` im Cache. Ohne die Startbild-Regeln wurde das Bild nie ausgeblendet.

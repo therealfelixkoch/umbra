@@ -13,7 +13,7 @@ import { quoteAfterMission } from '../engine/story.js';
 import { guardianImage } from './lore.js';
 import { ladderLine } from './ladder.js';
 import { painPrompt } from './wrist.js';
-import { FEET_SIGNS } from '../data/feet.js';
+import { FEET_SIGNS, FEET_POS } from '../data/feet.js';
 import { rampable, rampSets, firstRampIndex, supersetOptions, supersetNext, SUPERSET_REST } from '../engine/warmup.js';
 import { breathAt, slowPattern } from '../engine/breath.js';
 import { book1Reached } from '../engine/temper.js';
@@ -550,6 +550,7 @@ function ivLogView(c, a) {
 
 // ——— FLOW ———
 const FLOW_SWITCH = 10; // Sekunden zum Umpositionieren zwischen zwei Übungen
+const FEET_SWITCH_SIDE = 5; // FEET: nächster Satz derselben Übung (Seite wechseln, kurz lösen)
 function flowSeq(p) {
   if (p.seq) return p.seq; // HANDS: feste Folge mit Timer- und Wiederholungsschritten
   const seq = [];
@@ -571,6 +572,11 @@ function advanceFlow(c, auto) {
     if (!a.plan.seq) {
       // FLOW: 10 s Umpositionieren, Doppelton = Übung zu Ende, 3-2-1-Klicks, Glocke = nächste Übung beginnt
       a.flow = { i, switchUntil: now + FLOW_SWITCH * 1000, endAt: now + (FLOW_SWITCH + a.plan.work) * 1000 };
+      playTone('next');
+    } else if (a.plan.feet) {
+      // FEET wie FLOW: Zwischenschritt vor jedem Satz (neue Übung 10 s, gleiche Übung 5 s), Wiederholungen danach per Tipp
+      const sw = seq[i - 1].exId === st.exId ? FEET_SWITCH_SIDE : FLOW_SWITCH;
+      a.flow = { i, switchUntil: now + sw * 1000, ...(st.sec ? { endAt: now + (sw + st.sec) * 1000 } : {}) };
       playTone('next');
     } else {
       // Wiederholungsschritt (HANDS): keine Uhr, weiter per Tipp
@@ -638,7 +644,8 @@ function handsView(c, a, seq, f) {
       ${p.weak ? `<p class="note">Die ${p.weak === 'l' ? 'linke' : 'rechte'} Seite ist laut Fuß-Check schwächer und bekommt bei einbeinigen Übungen einen Satz mehr.</p>` : ''}
       ${p.noJumps ? '<p class="note">Morgen hartes Sparring: heute ohne Sprünge, dafür schweres einbeiniges Fersenheben.</p>' : ''}
       <ol class="ex-list big">${p.items.map((it) => { const e = seq.find((x) => x.exId === it.exId); const n = seq.filter((x) => x.exId === it.exId).length;
-        return `<li><button class="link" data-act="t-info" data-id="${it.exId}">${esc(getDef(it.exId).name)}</button><span>${n > 1 ? `${n} × ` : ''}${e.sec ? `${e.sec} s` : `${e.reps}`}</span></li>`; }).join('')}</ol>
+        const pos = p.feet && getDef(it.exId).pos ? `<small class="pos-tag">${esc(FEET_POS[getDef(it.exId).pos])}</small>` : '';
+        return `<li><span><button class="link" data-act="t-info" data-id="${it.exId}">${esc(getDef(it.exId).name)}</button>${pos}</span><span>${n > 1 ? `${n} × ` : ''}${e.sec ? `${e.sec} s` : `${e.reps}`}</span></li>`; }).join('')}</ol>
       <p class="muted small">${p.feet ? 'Barfuß, Zehen bleiben lang. Einbeinig: Wand in Reichweite.' : 'Dehnungen nicht zusätzlich Richtung Kleinfinger kippen. Alles im schmerzfreien Bereich.'}</p></section>
       <footer class="t-nav"><button class="btn primary grow" data-act="t-flow-start">${p.feet ? 'FEET' : 'HANDS'} starten</button></footer>`;
   }
@@ -657,15 +664,36 @@ function handsView(c, a, seq, f) {
   const def = getDef(cur.exId);
   const next = seq[f.i + 1];
   const timed = !!cur.sec;
+  const posOf = (d) => (p.feet && d.pos ? FEET_POS[d.pos] : '');
+  const sideTag = cur.side ? `<b class="side-tag">${cur.side === 'l' ? 'Links' : 'Rechts'}</b> · ` : '';
+  // FEET: Zwischenschritt wie bei FLOW
+  if (f.switchUntil || (f.paused && f.switchLeft > 0)) {
+    const sl = f.paused ? f.switchLeft : (f.switchUntil - Date.now()) / 1000;
+    const prev = seq[f.i - 1];
+    const same = prev && prev.exId === cur.exId;
+    const moved = prev && getDef(prev.exId).pos !== def.pos;
+    return `${head(c, a, `${f.i + 1}/${seq.length}`, f.i / seq.length)}
+    <section class="t-card center flow switch">
+      <small class="muted">${same ? (cur.side && prev.side !== cur.side ? 'Seite wechseln' : 'Kurz lösen') : 'Gleich geht es weiter'}</small>
+      <h1>${esc(def.name)}</h1>
+      ${posOf(def) ? `<p class="pos-big${moved ? ' moved' : ''}">${esc(posOf(def))}</p>` : ''}
+      <b class="clock num calm" ${f.paused ? '' : `data-clock="${f.switchUntil}"`}>${fmt(sl)}</b>
+      <small class="muted">${sideTag}${cur.of > 1 ? `Satz ${cur.round} von ${cur.of}` : ''} · ${timed ? `${cur.sec} s` : `${cur.reps} Wdh.`}</small>
+      ${same ? '' : `<ul class="cues">${def.cues.slice(0, 2).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`}
+      <p class="muted small">Doppelton = Satz zu Ende · Klicks = 3, 2, 1 · Glocke = los</p>
+    </section>
+    <footer class="t-nav"><button class="btn" data-act="t-flow-pause">${f.paused ? 'Weiter' : 'Pause'}</button><button class="btn primary grow" data-act="t-flow-skip">Jetzt starten</button></footer>`;
+  }
   const left = timed ? (f.paused ? f.left : (f.endAt - Date.now()) / 1000) : 0;
   return `${head(c, a, `${f.i + 1}/${seq.length}`, f.i / seq.length)}
     <section class="t-card center flow">
-      <small class="muted">${cur.side ? `<b class="side-tag">${cur.side === 'l' ? 'Links' : 'Rechts'}</b> · ` : ''}${cur.of > 1 ? `Satz ${cur.round} von ${cur.of}` : '&nbsp;'}${cur.extra ? ' · Extra-Satz schwächere Seite' : ''}</small>
+      <small class="muted">${sideTag}${cur.of > 1 ? `Satz ${cur.round} von ${cur.of}` : '&nbsp;'}${cur.extra ? ' · Extra-Satz schwächere Seite' : ''}</small>
       <h1>${esc(def.name)}</h1>
+      ${posOf(def) ? `<p class="pos-big">${esc(posOf(def))}</p>` : ''}
       ${timed ? `<b class="clock num" ${f.paused ? '' : `data-clock="${f.endAt}"`}>${fmt(left)}</b>` : `<b class="clock num">${cur.reps}<small class="reps-unit"> Wdh.</small></b>`}
       ${cur.label ? `<p class="note">${esc(cur.label)}</p>` : ''}
       <ul class="cues">${def.cues.slice(0, 3).map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
-      ${next ? `<p class="muted">Als Nächstes: ${esc(getDef(next.exId).name)}</p>` : ''}
+      ${next ? `<p class="muted">Als Nächstes: ${esc(getDef(next.exId).name)}${posOf(getDef(next.exId)) && getDef(next.exId).pos !== def.pos ? ` · <b>${esc(posOf(getDef(next.exId)))}</b>` : ''}</p>` : ''}
     </section>
     <footer class="t-nav">${timed ? `<button class="btn" data-act="t-flow-pause">${f.paused ? 'Weiter' : 'Pause'}</button>` : ''}<button class="btn primary grow" data-act="t-flow-skip">${timed ? 'Nächste' : 'Fertig →'}</button></footer>`;
 }
@@ -1090,7 +1118,8 @@ const training = {
       const a = c.data.active;
       // Im Umpositionieren: Übung sofort starten
       if (a.flow?.switchUntil) {
-        a.flow = { i: a.flow.i, endAt: Date.now() + a.plan.work * 1000 };
+        const st = flowSeq(a.plan)[a.flow.i];
+        a.flow = a.plan.feet && !st.sec ? { i: a.flow.i } : { i: a.flow.i, endAt: Date.now() + (st.sec || a.plan.work) * 1000 };
         playTone('bell');
         save(c);
         return;
@@ -1101,9 +1130,9 @@ const training = {
       const f = c.data.active.flow;
       const now = Date.now();
       if (f.paused) {
-        c.data.active.flow = { i: f.i, endAt: now + f.left * 1000, ...(f.switchLeft > 0 ? { switchUntil: now + f.switchLeft * 1000 } : {}) };
+        c.data.active.flow = { i: f.i, ...(f.left != null ? { endAt: now + f.left * 1000 } : {}), ...(f.switchLeft > 0 ? { switchUntil: now + f.switchLeft * 1000 } : {}) };
       } else {
-        c.data.active.flow = { i: f.i, paused: true, left: (f.endAt - now) / 1000, switchLeft: f.switchUntil ? Math.max(0, (f.switchUntil - now) / 1000) : 0 };
+        c.data.active.flow = { i: f.i, paused: true, left: f.endAt ? (f.endAt - now) / 1000 : null, switchLeft: f.switchUntil ? Math.max(0, (f.switchUntil - now) / 1000) : 0 };
       }
       save(c);
     },
