@@ -25,6 +25,38 @@ export function benchmarkDue(data, today = null) {
   return null;
 }
 
+/** Ablauf einer Version, mit dem gewählten Cardio-Block (Cave-Murph: Seil oder Rudergerät). */
+export function partsOf(bench, variant, cardio) {
+  const v = bench.variants[variant];
+  if (!bench.cardio || !cardio || cardio === 'rope') return v.parts;
+  return v.parts.map((p) => (p === bench.cardio.rope[variant] ? bench.cardio[cardio][variant] : p));
+}
+
+/** Kurzform für Listen: „voll · Rudergerät · Puls 158“ */
+export function versionText(bench, variant, cardio, pulse) {
+  return [variant === 'half' ? 'halb' : 'voll', bench.cardio && cardio ? bench.cardio[cardio].label : null, pulse ? `Puls ${pulse}` : null].filter(Boolean).join(' · ');
+}
+
+/**
+ * Einmalige Korrektur (v41): Der erste Cave-Murph lief mit 1000 m Rudern statt Seil, Puls direkt danach 158.
+ * Greift nur bei einer Baseline bis 03.11.2026 ohne Cardio-Angabe und nur einmal (settings.murphRowFix).
+ */
+export function fixCaveMurph(data) {
+  if (data.settings?.murphRowFix || !data.benchmarks) return data;
+  let hit = null;
+  for (const [n, b] of Object.entries(data.benchmarks)) {
+    if (benchmarkOf(Number(n))?.id === 'coldiron' && b.baseline && !b.cardio && b.baseline.day <= '2026-11-03') hit = n;
+  }
+  if (hit == null) return data;
+  const b = data.benchmarks[hit];
+  const pulse = b.baseline.pulse ?? 158;
+  return { ...data,
+    settings: { ...data.settings, murphRowFix: true },
+    benchmarks: { ...data.benchmarks, [hit]: { ...b, cardio: 'row', baseline: { ...b.baseline, pulse } } },
+    sessions: data.sessions.map((s) => (s.benchmark?.id === 'coldiron' && s.benchmark.kind === 'baseline' && s.arc?.n === Number(hit)
+      ? { ...s, benchmark: { ...s.benchmark, cardio: 'row', pulse } } : s)) };
+}
+
 /** Schlägt der neue Wert den alten? Zeit: weniger ist besser, Anzahl: mehr ist besser. */
 export const beats = (bench, base, value) => (bench.score === 'time' ? value < base : value > base);
 
@@ -32,15 +64,15 @@ export const beats = (bench, base, value) => (bench.score === 'time' ? value < b
  * Benchmark verbuchen. Zählt als volle Mission auf dem Zirkel-Platz (ersetzt INFILTRATION einmal).
  * @param {{kind:'baseline'|'revenge', variant:'full'|'half', value:number, sub?:boolean, minutes?:number, day:string, now?:number}} r
  */
-export function logBenchmark(data, { kind, variant, value, sub = false, minutes = 30, day, now = Date.now() }) {
+export function logBenchmark(data, { kind, variant, cardio, value, pulse, sub = false, minutes = 30, day, now = Date.now() }) {
   const arc = data.engine.arc;
   const n = arc.n;
   const bench = benchmarkOf(n);
   const prev = benchState(data, n);
-  const entry = { day, value, sub: sub || undefined };
-  const state = kind === 'baseline' ? { ...prev, variant, baseline: entry } : { ...prev, revenge: entry };
+  const entry = { day, value, sub: sub || undefined, pulse: pulse || undefined };
+  const state = kind === 'baseline' ? { ...prev, variant, cardio: bench.cardio ? cardio || 'rope' : undefined, baseline: entry } : { ...prev, revenge: entry };
   const session = { id: `bm${now}`, day, kind: 'mission', missionId: 'BENCH', slot: 'D', completion: 1, minutes,
-    arc: { n, week: arc.week }, benchmark: { id: bench.id, kind, variant: state.variant, value, sub: sub || undefined }, records: [] };
+    arc: { n, week: arc.week }, benchmark: { id: bench.id, kind, variant: state.variant, cardio: state.cardio, value, pulse: pulse || undefined, sub: sub || undefined }, records: [] };
   session.xp = sessionXp(session);
   return { ...data, benchmarks: { ...(data.benchmarks || {}), [n]: state }, sessions: [...data.sessions, session],
     engine: { ...data.engine, queue: advanceQueue(data.engine.queue, 'D') } };

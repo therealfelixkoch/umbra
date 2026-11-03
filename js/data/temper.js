@@ -14,7 +14,7 @@ export const BODY = {
   head: ['Stirn', 'Augen', 'Kiefer', 'Zunge'],
   neck: ['Hals', 'Nacken', 'Schultern'],
   core: ['Hals', 'Brust', 'Bauch'],
-  arms: ['Schultern', 'Oberarme', 'Unterarme', 'Hände', 'oberer Rücken', 'unterer Rücken'],
+  arms: ['Schultern', 'Arme', 'Hände', 'Rücken'], // gleiche Orte wie beim ganzen Körper: weniger Sprecherclips
   full: ['Scheitel', 'Stirn', 'Augen', 'Kiefer', 'Nacken', 'Schultern', 'Arme', 'Hände', 'Brust', 'Bauch', 'Rücken', 'Becken', 'Oberschenkel', 'Knie', 'Unterschenkel', 'Füße'],
   stress: ['Kiefer', 'Nacken', 'Schultern', 'Brust', 'Bauch'],
   jaw: ['Schultern', 'Kiefer'],
@@ -49,7 +49,7 @@ export const BOOK1_SCRIPTS = {
   16: [{ t: 'scan', sec: 360, regions: BODY.full, mode: 'name' }],
   17: [{ t: 'scan', sec: 270, regions: BODY.stress, mode: 'name' }, { t: 'sigh', cycles: 5, sec: 45 }, count(45)],
   18: [intro(45, ['Denk an einen Moment, der dich wütend gemacht hat. Nicht hineinsteigern, nur erinnern.', 'Wo sitzt die Wut gerade im Körper?']),
-    { t: 'scan', sec: 135, regions: ['Kiefer', 'Brust', 'Fäuste', 'Bauch'], mode: 'name' }, { t: 'breath', sec: 180, out: 8 }],
+    { t: 'scan', sec: 135, regions: ['Kiefer', 'Brust', 'Hände', 'Bauch'], mode: 'name' }, { t: 'breath', sec: 180, out: 8 }],
   19: [{ t: 'scan', sec: 360, regions: BODY.full.filter((_, i) => i % 2 === 0), mode: 'warm' }],
   20: [{ t: 'scan', sec: 390, regions: BODY.full, mode: 'name' }, { t: 'map' }],
   21: [{ t: 'wimhof' }, count(120)],

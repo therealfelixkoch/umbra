@@ -1,7 +1,7 @@
 // Profil: Rang, Verlauf, Bestleistungen, Einstellungen, Daten.
 import { esc, sys, stepper, loadText, kg, helpDot } from './kit.js';
 import { hud, seasonTrack } from './today.js';
-import { pillars, formatScore, MEDAL_NAMES, GROUP_NAMES } from '../engine/pillars.js';
+import { pillars, formatScore, versionText, MEDAL_NAMES, GROUP_NAMES } from '../engine/pillars.js';
 import { BENCHMARKS } from '../data/benchmarks.js';
 import { weightSeries } from '../engine/events.js';
 import { playerStats, RANKS, rankName } from '../engine/game.js';
@@ -68,7 +68,7 @@ function pillarPanel(data, arc) {
   const b = p.benchmark;
   const ix = p.index;
   const mark = (ok) => `<b class="${ok ? 'gold-text' : 'muted'}">${ok ? '✓' : '○'}</b>`;
-  const bench = `${mark(b.passed)} <b>Benchmark · ${esc(b.bench.name)}</b> ${helpDot('benchmark')}<br><span class="small">${b.baseline ? `Baseline ${formatScore(b.bench, b.baseline.value)} (${b.variant === 'full' ? 'voll' : 'halb'})` : 'Baseline im ersten Kapitel'} · ${b.revenge ? `Revanche ${formatScore(b.bench, b.revenge.value)}` : 'Revanche in der Prüfwoche'}</span>`;
+  const bench = `${mark(b.passed)} <b>Benchmark · ${esc(b.bench.name)}</b> ${helpDot('benchmark')}<br><span class="small">${b.baseline ? `Baseline ${formatScore(b.bench, b.baseline.value)} (${esc(versionText(b.bench, b.variant, b.cardio, b.baseline.pulse))})` : 'Baseline im ersten Kapitel'} · ${b.revenge ? `Revanche ${formatScore(b.bench, b.revenge.value)}` : 'Revanche in der Prüfwoche'}</span>`;
   const groups = Object.keys(GROUP_NAMES).map((g) => {
     const a = ix.areas.filter((x) => x.group === g);
     return a.length ? `${GROUP_NAMES[g]}${ix.focus.includes(g) ? ' (Fokus)' : ''} ${a.filter((x) => x.better).length}/${a.length}` : null;
@@ -143,7 +143,7 @@ function sessionLabel(s) {
   if (s.kind === 'hands') return `HANDS${s.feel ? ` · Gefühl ${s.feel}/5` : ''}`;
   if (s.kind === 'feet') return `FEET · Stufe ${s.stage || '?'}${s.noJumps ? ' · ohne Sprünge' : ''}`;
   if (s.kind === 'feetCheck') return 'Fuß-Check';
-  if (s.missionId === 'BENCH' && s.benchmark) { const b = BENCHMARKS[s.benchmark.id]; return `${b.name} · ${s.benchmark.kind === 'baseline' ? 'Baseline' : 'Revanche'} · ${formatScore(b, s.benchmark.value)}${s.benchmark.variant === 'half' ? ' (halb)' : ''}`; }
+  if (s.missionId === 'BENCH' && s.benchmark) { const b = BENCHMARKS[s.benchmark.id]; return `${b.name} · ${s.benchmark.kind === 'baseline' ? 'Baseline' : 'Revanche'} · ${formatScore(b, s.benchmark.value)}${s.benchmark.cardio || s.benchmark.pulse || s.benchmark.variant === 'half' ? ` (${esc(versionText(b, s.benchmark.variant, s.benchmark.cardio, s.benchmark.pulse))})` : ''}`; }
   if (s.kind === 'quest') return 'Wochen-Quest erfüllt';
   if (s.kind === 'ascension') return `Erfolg: ${ASCENSIONS.find((a) => a.id === s.ascension)?.name || ''}`;
   if (s.kind === 'micro') return `Kapitel-Erfolg: ${s.name || s.micro}`;
@@ -251,7 +251,7 @@ export default {
         <button class="btn ghost wide" data-act="p-repair">App-Dateien neu laden</button>
         <p class="muted small">Hilft, wenn nach einem Update etwas komisch aussieht. Lädt nur die App neu, deine Daten bleiben. Version ${APP_VERSION}.</p>
         <button class="btn ghost wide danger" data-act="p-reset">Alle Daten löschen</button></section>
-      <p class="foot muted">UMBRA · Daten nur auf diesem Gerät.</p>`;
+      <div class="foot-brand"><img class="brand-mark sm" src="icons/logo.png" alt=""><p class="foot muted">UMBRA · Daten nur auf diesem Gerät.</p></div>`;
   },
   mount(c, root) { mountPhotos(root); },
   actions: {

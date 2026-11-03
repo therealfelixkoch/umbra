@@ -6,8 +6,8 @@ import { audioCtx } from './sound.js';
 const DIR = 'assets/temper/b1/';
 const CHECKINS = ['ci-1', 'ci-2', 'ci-3', 'ci-4', 'ci-5', 'ci-6'];
 
-// ECHO-Scan: je Region ein Clip (r-stirn …) zu Beginn der Station, dann ein Clip zum Loslassen je Modus
-const SCAN_STEP = { release: 'scan-out' };
+// ECHO-Scan: je Region ein Clip (r-stirn …) zu Beginn der Station, dann ein Clip je Modus (lösen, fragen, benennen, Wärme)
+const SCAN_STEP = { release: 'scan-out', ask: 'scan-ask', name: 'scan-name', warm: 'scan-warm' };
 const slug = (s) => s.toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 export const regionClip = (region) => `r-${slug(region)}`;
 export const scanStepClip = (mode) => SCAN_STEP[mode] || null;
@@ -24,6 +24,8 @@ const PLAN = {
   8: [[1, 0, 'e08-c1'], [1, 85, 'e08-c2'], [1, 170, 'e08-c3'], [1, 255, 'e08-c4']],
   9: [[0, 0, 'wave-start'], [0, 40, 'wave-peak'], [0, 75, 'wave-end'], [1, 0, 'count-start']],
   10: [[0, 0, 'silent'], [0, 410, 'end-tone']],
+  17: [[1, 0, 'sigh'], [2, 0, 'count-start']],
+  18: [[2, 0, 'ci-4'], [2, 90, 'ci-3']],
 };
 
 const pad = (n) => String(n).padStart(2, '0');

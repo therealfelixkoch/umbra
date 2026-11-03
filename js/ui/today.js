@@ -355,7 +355,14 @@ export default {
     const doneToday = data.sessions.filter((s) => s.day === today);
     const trained = doneToday.filter((s) => s.kind === 'mission' || s.kind === 'express').length;
     const ci = data.checkins[today];
-    if (trained > (ci.extra || 0)) {
+    // Empfehlung war nur FLOW (Check-in „nur Mobility“, ARENA-Tag, Ruhetag) bzw. nur HANDS: erledigt, sobald sie gemacht ist
+    const lightKind = { flow: 'flow', arenaday: 'flow', rest: 'flow', five: 'hands' }[rec.kind];
+    const lightDone = !trained && !ci.extra && lightKind && doneToday.find((s) => s.kind === lightKind);
+    if (lightDone) {
+      const what = lightKind === 'flow' ? 'FLOW' : 'HANDS';
+      out += sys('Tagesziel erreicht', `<p class="reason">${what} erledigt. Genau das war für heute vorgesehen.${ci.tonightMT === 'yes' ? ' Heute Abend wartet die ARENA.' : ''}</p>
+        <p class="muted">Der Rest des Tages gehört der Erholung.${rec.walk ? ' Ein Spaziergang rundet ihn ab.' : ''}</p>`, { tone: 'calm' });
+    } else if (trained > (ci.extra || 0)) {
       const logged = doneToday.filter((s) => s.kind === 'mission' || s.kind === 'express');
       out += sys('Tagesziel erreicht', `<p class="reason">Mission erfüllt.${ci.tonightMT === 'yes' ? ' Heute Abend wartet die ARENA.' : ' Der Rest des Tages gehört der Erholung.'}</p>
         <p class="muted">Stärke entsteht in der Pause. Ein FLOW am Abend hält dich geschmeidig.</p>
@@ -405,11 +412,20 @@ export default {
       out += `<section class="card"><div class="label">Heute erledigt</div>${doneToday.map((s) =>
         `<div class="done-row">✓ ${esc(s.kind === 'arena' ? `ARENA${s.bmt ? ` · BMT W${s.bmt.week}` : ''} · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'}` : s.kind === 'check' ? 'Mobility-Check' : s.kind === 'quest' ? 'Wochen-Quest erfüllt' : s.kind === 'ascension' ? `Ascension: ${ASCENSIONS.find((a) => a.id === s.ascension)?.name}` : MISSIONS[s.missionId]?.name || s.missionId)} <span class="muted">+${s.xp} XP</span></div>`).join('')}</section>`;
     }
-    out += `<p class="foot muted">Rotation: ${data.engine.queue.map((id) => MISSIONS[id].name).join(' → ')} ${helpDot('rotation')}</p>`;
+    // Rotation: jede Einheit antippbar, zeigt Übungen und Sätze nach heutigem Stand
+    out += `<div class="rot-line"><span class="muted">Rotation ${helpDot('rotation')}</span><div class="rot-chips">${data.engine.queue.map((id, i) =>
+      `<button class="chip rot-chip${i === 0 ? ' next' : ''}" data-act="rot-peek" data-id="${esc(id)}">${i === 0 ? '<small>als Nächstes</small>' : ''}${esc(MISSIONS[id].name)}</button>`).join('<i class="rot-arrow">→</i>')}</div></div>`;
     return out;
   },
 
   actions: {
+    'rot-peek': (c, d) => {
+      const ci = c.data.checkins[c.today()];
+      const where = ci?.where === 'gym' || d.id === 'FORGE' ? 'gym' : ci?.where === 'travel' ? 'travel' : 'room';
+      const plan = buildPlan({ missionId: d.id, profile: where, data: c.data, today: c.today() });
+      c.system(plan.name, `<p class="muted small">${esc(plan.focus)} · ca. ${plan.minutes} min${where === 'gym' ? ' · Home Gym' : where === 'travel' ? ' · Unterwegs' : ''}</p>
+        ${planPreview(plan)}<p class="muted small">Stand heute. Gewichte und Wiederholungen passen sich bis dahin noch an deine nächsten Einheiten an.</p>`);
+    },
     // Einmal pro Saison: gesehen merken, danach bleibt nur die Intro-Karte auf Heute
     'gate-enter': (c) => {
       const prev = c.ui.gatePreview;

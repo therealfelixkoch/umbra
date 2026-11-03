@@ -5,7 +5,12 @@
 export const BENCHMARKS = {
   coldiron: {
     id: 'coldiron', name: 'CAVE-MURPH', score: 'time', cap: 60,
-    intro: 'Auf Zeit. Klimmzüge, Push-ups und Kniebeugen frei aufteilen, z. B. 10 Runden à 5 / 10 / 15. Seil am Anfang und am Ende am Stück.',
+    intro: 'Auf Zeit. Klimmzüge, Push-ups und Kniebeugen frei aufteilen, z. B. 10 Runden à 5 / 10 / 15. Cardio am Anfang und am Ende am Stück: Seil oder Rudergerät.',
+    // Cardio-Block am Anfang und Ende: wird bei der Baseline gewählt und gilt auch für die Revanche
+    cardio: {
+      rope: { label: 'Seil', full: '5 min Seilspringen', half: '3 min Seilspringen' },
+      row: { label: 'Rudergerät', full: '1000 m Rudern', half: '500 m Rudern' },
+    },
     variants: {
       full: { label: 'Voll', parts: ['5 min Seilspringen', '50 Klimmzüge', '100 Push-ups', '150 Kniebeugen', '5 min Seilspringen'] },
       half: { label: 'Halb', parts: ['3 min Seilspringen', '25 Klimmzüge', '50 Push-ups', '75 Kniebeugen', '3 min Seilspringen'] },

@@ -31,7 +31,7 @@ export default {
     const d = draft(c);
     const dots = `<div class="ob-dots">${[0, 1, 2, 3].map((i) => `<i class="${i <= step ? 'on' : ''}"></i>`).join('')}</div>`;
     if (step === 0) {
-      return `<div class="ob-hero"><div class="logo">UMBRA</div><p class="tagline">Werde unzerbrechlich.</p></div>
+      return `<div class="ob-hero"><img class="brand-mark" src="icons/logo.png" alt=""><div class="logo">UMBRA</div><p class="tagline">Werde unzerbrechlich.</p></div>
         ${sys('System initialisiert', `<p>Willkommen, Wächter. Ich plane dein Training, merke mir jeden Satz und steigere dich automatisch. Du öffnest die App, tippst vier Antworten an und führst aus.</p>
         <p class="muted">Alle Daten bleiben auf diesem Gerät.</p>`)}
         ${dots}<button class="btn primary wide" data-act="ob-next">Einrichten</button>`;

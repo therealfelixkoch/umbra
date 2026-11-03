@@ -2,6 +2,7 @@
 import { initialEngine } from './engine/cycle.js';
 import { DEFAULT_HOLIDAY, rebaseFirstArc, seasonStartFrom } from './engine/arc.js';
 import { sessionXp } from './engine/game.js';
+import { fixCaveMurph } from './engine/pillars.js';
 import { toDay } from './engine/dates.js';
 import { effortToRpe, sessionIntensity, intensityFromRpe, trainingLoad } from './engine/session.js';
 
@@ -178,7 +179,7 @@ export function normalize(input) {
   if (!Array.isArray(raw.sessions) || !raw.settings) throw new Error('Keine gültige UMBRA-Datei.');
   if ((raw.schemaVersion || 1) > SCHEMA_VERSION) throw new Error('Diese Sicherung stammt aus einer neueren App-Version.');
   raw = migrate(raw);
-  return {
+  return fixCaveMurph({
     ...d,
     ...raw,
     schemaVersion: SCHEMA_VERSION,
@@ -195,5 +196,5 @@ export function normalize(input) {
     techChecks: raw.techChecks && typeof raw.techChecks === 'object' ? raw.techChecks : {},
     wrist: { ...d.wrist, ...(raw.wrist || {}) },
     feet: { ...d.feet, ...(raw.feet || {}) },
-  };
+  });
 }

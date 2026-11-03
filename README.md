@@ -72,6 +72,15 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 03.11.2026 (v42): TEMPER-Clips für Episode 11–20, Update-Prüfung
+
+- **Update-Prüfung:** Der Service Worker prüft jede App-Datei gegen ihren SHA-256-Hash. Stimmt eine Datei auf GitHub nicht, etwa weil sie im Hauptordner statt in `js/…` gelandet ist, wird das Update nicht installiert und die alte Version läuft komplett weiter. Bisher konnte es passieren, dass alte und neue Dateien gemischt wurden.
+- **Hochladen auf GitHub:** Ganze Ordner (`js`, `css`) ins Upload-Fenster ziehen, nicht einzelne Dateien. Einzeln hineingezogene Dateien landen im Hauptordner des Repos und werden von der App nie geladen.
+- **Clip nach jedem Ort:** Der ECHO-Scan spielt nach dem Orts-Clip jetzt auch beim Fragen, Benennen und bei Wärme einen eigenen Clip ab: `b1-scan-ask`, `b1-scan-name`, `b1-scan-warm`. Bisher gab es das nur beim Lösen (`b1-scan-out`).
+- **Begleit-Clips Episode 17 und 18:** Episode 17 hat jetzt `b1-sigh` und `b1-count-start`. Episode 18 verwendet beim langen Ausatmen die vorhandenen Clips `b1-ci-4` und `b1-ci-3`.
+- **Weniger Orte im Scan:** Episode 14 scannt jetzt Schultern, Arme, Hände und Rücken, Episode 18 die Hände statt der Fäuste. Dafür reichen die Orts-Clips, die es für den ganzen Körper ohnehin gibt.
+- **Sprechertexte:** Die Sparfassung für Episode 11–20 hat 43 Dateien mit rund 2.800 Zeichen und steht in `docs/temper-b1-elevenlabs-e11-e20.md`.
+
 ### Update 03.11.2026 (v41): FEET-Timer, Cave-Murph mit Rudern und Puls, Level-up, Rotation
 
 - **FEET** läuft jetzt wie FLOW, mit Zwischenschritt vor jedem Satz: 10 s bei einer neuen Übung, 5 s zum Seitenwechsel oder kurz Lösen. Danach startet der Timer selbst, bei Wiederholungen tippst du „Fertig“.

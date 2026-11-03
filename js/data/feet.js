@@ -15,7 +15,7 @@ export const FEET_EXERCISES = [
   { id: 'f_toe_press', rest: 'wrist', name: 'Big Toe Press', cat: F, equipment: [], mode: 'time', range: [10, 10], perSide: true, tags: [['ankle', 'kraft']], elbowLoad: 0,
     cues: ['Sitzend, Fuß flach', 'Großzeh fest nach unten drücken, Ferse bleibt am Boden', 'Wie im Fuß-Check, als Übung'], mistakes: ['Ferse hebt ab'] },
   { id: 'f_roll', rest: 'wrist', name: 'Sole Rolling (Ball)', cat: F, equipment: ['ball'], alternatives: ['f_roll_bottle'], mode: 'time', range: [60, 60], perSide: true, tags: [['ankle', 'mobil']], elbowLoad: 0,
-    cues: ['Fußsohle über einen Ball rollen', 'Locker, nicht schmerzhaft'], mistakes: ['Zu viel Druck'] },
+    cues: ['Fußsohle über einen Ball rollen', 'Locker, nicht schmerzhaft', 'Variante: beidbeinig auf der Blackroll stehen und langsam vor und zurück rollen, Wand in Reichweite. Massiert die Sohle und trainiert das Gleichgewicht, die Zeit gilt dann für beide Füße.'], mistakes: ['Zu viel Druck'] },
   { id: 'f_roll_bottle', rest: 'wrist', name: 'Sole Rolling (Bottle)', cat: F, equipment: [], mode: 'time', range: [60, 60], perSide: true, tags: [['ankle', 'mobil']], elbowLoad: 0,
     cues: ['Fußsohle über eine Flasche rollen (gekühlt geht auch)', 'Locker, nicht schmerzhaft'], mistakes: ['Zu viel Druck'] },
   { id: 'f_ankle_circles', rest: 'wrist', name: 'Ankle Circles', cat: F, equipment: [], mode: 'reps', range: [10, 10], perSide: true, tags: [['ankle', 'mobil']], elbowLoad: 0,
@@ -73,6 +73,16 @@ export const FEET_EXERCISES = [
   { id: 'f_shadow', rest: 'wrist', name: 'Barefoot Shadowboxing (Ball of Foot)', cat: F, equipment: [], mode: 'time', range: [120, 120], tags: [['strike', 'ausdauer'], ['ankle', 'elastisch']], elbowLoad: 0,
     cues: ['Leichte, federnde Footwork', 'Fokus auf die Fußballen'], mistakes: ['Auf den Fersen stehen'] },
 ];
+
+// Ausgangsposition je Übung: Der Timer zeigt sie an, damit du beim Wechsel weißt, ob du aufstehst oder dich setzt.
+export const FEET_POS = { sit: 'Sitzend', stand: 'Stehend', one: 'Stehend · einbeinig', squat: 'Hocke', wall: 'Stehend · Rücken an der Wand', roll: 'Sitzend oder stehend auf der Blackroll' };
+const POS_OF = {
+  f_toe_spread: 'sit', f_toe_yoga: 'sit', f_short_seated: 'sit', f_toe_press: 'sit', f_roll: 'roll', f_roll_bottle: 'sit', f_ankle_circles: 'sit',
+  f_short_stand: 'stand', f_heel_ball: 'stand', f_heel_towel: 'stand', f_band_add: 'sit', f_hand_add: 'sit', f_tib_wall: 'wall', f_stand_short: 'one', f_toe_squat: 'squat',
+  f_sl_heel_slow: 'one', f_slant: 'stand', f_slant_wedge: 'stand', f_stand_closed: 'one', f_stand_unstable: 'one', f_stand_cushion: 'one', f_sl_rdl: 'one', f_pipes: 'stand',
+  f_pogo: 'stand', f_rope: 'stand', f_rope_ghost: 'stand', f_hops: 'one', f_sl_heel_heavy: 'one', f_shadow: 'stand',
+};
+for (const e of FEET_EXERCISES) e.pos = POS_OF[e.id];
 
 /**
  * Stufen. Einträge: { ex, rounds, sec | reps, oneLeg?, label? } — oneLeg = einbeinig, die schwächere Seite bekommt einen Satz mehr.

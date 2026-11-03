@@ -10,6 +10,7 @@ import { victoryPanels, retreatPanels, nemesisPanels } from './engine/story.js';
 import { debriefStats } from './engine/debrief.js';
 import { comicPanels, bindPanels } from './ui/lore.js';
 import { XP_CONFIG } from './data/xp-config.js';
+import { rankFor, totalXp, rankName } from './engine/game.js';
 import { APP_VERSION } from './version.js';
 import today from './ui/today.js';
 import training from './ui/training.js';
@@ -130,7 +131,42 @@ function render() {
   animateKK();
   animateTicks();
   if (tourActive()) setTimeout(() => drawTour(ctx), 50);
+  checkRankUp(route);
 }
+
+// Neuer Rang (egal aus welcher Quelle: Mission, ARENA, Benchmark, TEMPER …): einmal die Level-up-Sequenz mit dem Logo.
+// settings.rankSeen merkt sich den zuletzt gefeierten Rang. Beim ersten Start wird er still gesetzt.
+function checkRankUp(route) {
+  if (!app.data.settings.onboarded || (route === 'training' && app.data.active)) return;
+  const r = rankFor(totalXp(app.data));
+  const seen = app.data.settings.rankSeen;
+  if (seen != null && r.index <= seen) return;
+  app.data.settings = { ...app.data.settings, rankSeen: r.index };
+  store.save(app.data);
+  if (seen != null) showLevelUp(r);
+}
+
+function showLevelUp(r) {
+  document.getElementById('levelup')?.remove();
+  const sparks = Array.from({ length: 24 }, (_, k) => {
+    const ang = (k / 24) * Math.PI * 2;
+    const d = 110 + (k % 4) * 34;
+    return `<i style="--vx:${Math.round(Math.cos(ang) * d)}px;--vy:${Math.round(Math.sin(ang) * d)}px;animation-delay:${(0.55 + (k % 5) * 0.05).toFixed(2)}s"></i>`;
+  }).join('');
+  const letters = [...rankName(r).toUpperCase()].map((ch, i) => `<span style="animation-delay:${(1.1 + i * 0.06).toFixed(2)}s">${ch === ' ' ? '&nbsp;' : esc(ch)}</span>`).join('');
+  const el = document.createElement('div');
+  el.id = 'levelup';
+  el.setAttribute('role', 'dialog');
+  el.setAttribute('aria-label', `Neuer Rang: ${rankName(r)}`);
+  el.innerHTML = `<div class="lu-flare" aria-hidden="true"></div><div class="lu-sparks" aria-hidden="true">${sparks}</div>
+    <div class="lu-core"><img class="lu-mark" src="icons/logo.png" alt="">
+      <small class="lu-kick">Rang aufgestiegen</small><h1 class="lu-name">${letters}</h1>
+      <p class="lu-sub">${r.next ? `Nächster Rang: ${esc(rankName(r.next))} ab ${r.next.xp.toLocaleString('de-DE')} XP` : 'Der höchste Rang. Unzerbrechlich.'}</p>
+      <button class="btn gold wide lu-go" type="button">Weiter</button></div>`;
+  el.querySelector('.lu-go').addEventListener('click', () => { el.classList.add('out'); setTimeout(() => el.remove(), 350); });
+  document.body.appendChild(el);
+}
+window.__umbraLevelUp = (i = 1) => showLevelUp(rankFor(XP_CONFIG.ranks[i].xp));
 
 // Kampfkraft zählt sichtbar hoch, wenn sie gestiegen ist.
 // Zahlen rollen zum neuen Wert statt zu springen ([data-tick]: Schlüssel, data-to: Zielwert)
