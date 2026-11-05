@@ -1,6 +1,7 @@
 // Heute: Check-in → Empfehlung → Start.
 import { sys, esc, chips, glyphChips, targetText, loadText, trendBadge, nameOf, helpDot } from './kit.js';
 import { decide, advice, adviceText, nextSlot } from '../engine/decide.js';
+import { todayPick, weekSchedule, DEFAULT_WEEK_PLAN, DEFAULT_MT_DAYS, DAY_NAMES, isoDow } from '../engine/schedule.js';
 import { hardStreak, arenaOn, plattCount, gapDays, lastDoneBySlot } from '../engine/history.js';
 import { shouldSuggestDeload, startDeload } from '../engine/cycle.js';
 import { weekInfo, holidayActive, DEFAULT_HOLIDAY, inDeload, seasonPlan } from '../engine/arc.js';
@@ -31,6 +32,7 @@ import { bladeTier } from '../engine/temper.js';
 import { playerStats, WEEK_GOAL, rankName } from '../engine/game.js';
 import { addDays, daysBetween, weekStart, formatDay } from '../engine/dates.js';
 import { MISSIONS } from '../data/missions.js';
+import { BLOCKS } from '../data/program.js';
 import { journalActions } from './journal.js';
 import { getDef, EQUIPMENT } from '../data/exercises.js';
 import { exportFile } from '../store.js';
@@ -107,12 +109,15 @@ function seasonExtras(c) {
   if (arc && weekInfo(arc).rules.zone2 && !data.sessions.some((s) => s.missionId === 'ZONE2' && s.day >= weekStart(today))) {
     out += `<section class="card flow-card"><div><b>ZONE 2</b><small>Diese Woche einmal 30 min locker, zusätzlich zu den Missionen</small></div><button class="btn" data-act="start" data-id="ZONE2">Start</button></section>`;
   }
+  if (arc && weekInfo(arc).rules.optional4x4 && !data.sessions.some((s) => s.missionId === 'NOR4X4' && s.day >= weekStart(today))) {
+    out += `<section class="card flow-card"><div><b>NORWEGIAN 4x4 · optional</b><small>An einem freien Tag, ca. 35 min. Pratzen-Runden zählen schon als Intervalle.</small></div><button class="btn" data-act="start" data-id="NOR4X4" data-profile="gym">Start</button></section>`;
+  }
   const ev = eventToday(data, today);
   if (ev) {
     out += `<section class="card event-card"><div class="label">Event · freiwillig</div><b>${esc(ev.event.name)}</b>
       <p class="small">${esc(ev.event.desc)} ${ev.state === 'announce' ? `Am ${formatDay(ev.day)} und am Tag danach.` : 'Heute und morgen.'}</p>
       <ul class="cues">${ev.event.parts.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
-      ${ev.state === 'live' ? '<button class="btn primary wide" data-act="event-done">Event geschafft</button>' : '<p class="muted small">Zählt nicht für Rotation und Wochenziel. Bringt ein Event-Abzeichen.</p>'}</section>`;
+      ${ev.state === 'live' ? '<button class="btn primary wide" data-act="event-done">Event geschafft</button>' : '<p class="muted small">Zählt nicht für Wochenplan und Wochenziel. Bringt ein Event-Abzeichen.</p>'}</section>`;
   }
   if (new Date(`${today}T12:00:00`).getDay() === 1 && data.settings.weightTrack !== false && !weightLoggedThisWeek(data, today)) {
     out += `<section class="card flow-card"><div><b>Körpergewicht</b><small>Optional, einmal pro Woche. ${String(data.settings.bodyweight || 80).replace('.', ',')} kg zuletzt</small></div><button class="btn" data-act="go" data-to="profil">Eintragen</button></section>`;
@@ -160,21 +165,60 @@ function recommendation(c) {
   const ws = weekStart(today);
   const fourByFourDue = !!arc && !!weekInfo(arc).rules.fourByFour
     && !data.sessions.some((s) => s.missionId === 'NOR4X4' && s.day >= ws);
+  const pick = pickFor(data, today, ci);
   const rec = decide({ checkin: ci, hardStreak: hardStreak(data.sessions, today), queue: data.engine.queue,
     overrideRest: ci.overrideRest, yesterday: yesterdayClass(data.sessions, today, ci.yesterdayMT),
     gap: gapDays(data.sessions, today, holiday), lastDone: lastDoneBySlot(data.sessions),
-    holiday: holidayActive(today, holiday), fourByFourDue });
+    holiday: holidayActive(today, holiday), fourByFourDue, pick });
   if (ci.choice) {
     const id = ci.choice;
     return { ...rec, kind: MISSIONS[id].format === 'flow' ? 'flow' : 'mission', missionId: id,
-      slot: id === 'NOR4X4' || id === 'HOTEL' ? 'D' : null, rotate: null,
+      slot: id === 'HOTEL' ? pick.missionId || pick.sched.todayPlanned || 'D' : id === 'NOR4X4' ? 'D' : null, rotate: null,
       profile: id === 'FORGE' ? 'gym' : id === 'HOTEL' ? 'travel' : rec.profile, compact: !!rec.compact && ['A', 'B', 'C', 'FORGE'].includes(id),
       reason: 'Von dir gewählt.', manual: true };
   }
   return rec;
 }
 
+// Wochenplan und Muay-Thai-Tage aus den Einstellungen
+export const weekPlanOf = (data) => data.settings.weekPlan || DEFAULT_WEEK_PLAN;
+export const mtDaysOf = (data) => data.settings.mtDays || DEFAULT_MT_DAYS;
+const MNAMES = { A: 'ASCENT', B: 'BEDROCK', C: 'IMPACT', D: 'INFILTRATION' };
+export function pickFor(data, today, checkin = null) {
+  return todayPick({ weekPlan: weekPlanOf(data), mtDays: mtDaysOf(data), sessions: data.sessions, today, checkin, names: MNAMES });
+}
+
+// Woche als Leiste: Mo–So, geplante Mission, erledigt, heute
+function weekLine(c) {
+  const today = c.today();
+  const sched = weekSchedule({ weekPlan: weekPlanOf(c.data), sessions: c.data.sessions, today });
+  const mt = mtDaysOf(c.data);
+  const ws = weekStart(today);
+  const cells = Array.from({ length: 7 }, (_, k) => {
+    const day = addDays(ws, k);
+    const dow = k + 1;
+    const p = sched.planned.find((x) => x.dow === dow);
+    const doneHere = Object.entries(sched.doneOn).filter(([, d]) => d === day).map(([id]) => id);
+    const id = doneHere[0] || p?.id || null;
+    const st = doneHere.length ? 'done' : p && sched.doneOn[p.id] ? 'moved' : day === today ? 'cur' : day < today && p ? 'missed' : '';
+    return `<button class="wk-cell ${st}${day === today ? ' today' : ''}" ${id ? `data-act="rot-peek" data-id="${id}"` : 'disabled'}>
+      <small>${DAY_NAMES[dow]}${mt.includes(dow) ? ' · MT' : ''}</small><b>${id ? esc(MNAMES[id]) : '–'}</b>${doneHere.length ? '<i>✓</i>' : ''}</button>`;
+  }).join('');
+  return `<div class="rot-line"><span class="muted">Woche ${helpDot('rotation')}</span><div class="wk-cells">${cells}</div></div>`;
+}
+
 function planPreview(plan) {
+  if (plan.format === 'sets' && plan.program) {
+    let lastBlock = null;
+    return `<ol class="ex-list blocks">${plan.items.map((it) => {
+      const def = getDef(it.exId);
+      const head = it.block && it.block !== lastBlock ? `<li class="blk-head blk-${it.block}"><span>${esc(BLOCKS[it.block].name)}</span></li>` : '';
+      lastBlock = it.block || lastBlock;
+      const sets = it.setPlan ? it.setPlan.map((x) => (x.label === 'Top-Satz' ? `Top ${it.range ? `${it.range[0]}–${it.range[1]}` : x.value}` : null)).filter(Boolean).concat(it.setPlan.filter((x) => x.label === 'Backdown').length ? [`${it.setPlan.filter((x) => x.label === 'Backdown').length} × ${it.bdRange ? `${it.bdRange[0]}–${it.bdRange[1]}` : 'BD'}`] : []).join(' + ')
+        : def.mode === 'fixed' ? `${it.sets > 1 ? `${it.sets} × ` : ''}${targetText(def)}` : `${it.sets} × ${targetText(def, it.target)}`;
+      return `${head}<li class="blk-${it.block || 'none'}"><span>${esc(def.name)}${it.anchor ? ' <em class="anchor-tag">Anker</em>' : ''}${it.optional ? ' <em>optional</em>' : ''}${it.wrist ? ' <em class="wrist-tag">Handgelenk</em>' : ''}${it.adjust ? ' <em class="warn-tag">angepasst</em>' : ''}</span><span class="muted">${sets}${loadText(def, it.load) && def.load ? ` · ${loadText(def, it.load)}` : ''} ${trendBadge(it.trend)}</span></li>`;
+    }).join('')}</ol>`;
+  }
   if (plan.format === 'sets') {
     return `<ol class="ex-list">${plan.items.map((it) => {
       const def = getDef(it.exId);
@@ -190,6 +234,15 @@ function planPreview(plan) {
     const v = plan.format === 'flow' ? '' : `${it.value} ${def.unit || (def.mode === 'time' ? 's' : '')}${def.perSide ? ' je Seite' : ''}`;
     return `<li><span>${esc(def.name)}${it.focus ? ' <em class="focus">Fokus</em>' : ''}</span><span class="muted">${v}</span></li>`;
   }).join('')}</ol>`;
+}
+
+// Jobwoche ab Kapitelwoche 4: darf der Deload sein, danach läuft das Kapitel normal weiter.
+function jobweekNote(data, rec) {
+  const arc = data.engine.arc;
+  if (rec.missionId !== 'HOTEL' || !arc || inDeload(arc)) return '';
+  const info = weekInfo(arc);
+  if (!info.chapterWeek || info.chapterWeek < 4) return '<p class="muted small">Jobwoche in Kapitelwoche 1–3: Die Woche pausiert und läuft danach dort weiter, wo du warst.</p>';
+  return `<div class="signal-note"><span>Jobwoche in Kapitelwoche ${info.chapterWeek}: Sie darf dein Deload sein. Danach geht es mit dem nächsten Kapitel weiter.</span><button class="btn small" data-act="deload-yes" data-rule="jobweek">Als Deload werten</button></div>`;
 }
 
 function modifierNote(plan) {
@@ -223,22 +276,20 @@ function dailyQuote(c) {
 // Hinweis unter „Wie viel Zeit?“: was dran ist und was die App empfiehlt. Du entscheidest.
 function timeHint(c, f) {
   const today = c.today();
-  const next = nextSlot(c.data.engine.queue, f.where || 'room');
-  const a = advice({ checkin: f, hardStreak: hardStreak(c.data.sessions, today), yesterday: yesterdayClass(c.data.sessions, today, f.yesterdayMT), next });
-  const name = MISSIONS[next]?.name || next;
-  return `<p class="muted small time-hint">${helpDot('time')} ${helpDot('hints')} Als Nächstes dran: <b>${esc(name)}</b>${f.where !== 'gym' && c.data.engine.queue[0] === 'FORGE' ? ' (FORGE wartet aufs Home Gym)' : ''}.${a.lines.length ? ` ${esc(adviceText(a))}` : ''}</p>`;
+  const pick = pickFor(c.data, today, f);
+  const next = pick.missionId;
+  const a = next ? advice({ checkin: { ...f, tonightMT: 'no' }, hardStreak: hardStreak(c.data.sessions, today), yesterday: yesterdayClass(c.data.sessions, today, f.yesterdayMT), next }) : { lines: [] };
+  return `<p class="muted small time-hint">${helpDot('time')} ${helpDot('hints')} ${esc(pick.reason)}${a.lines.length ? ` ${esc(adviceText(a))}` : ''}</p>`;
 }
 
 function checkinForm(c) {
   const today = c.today();
   const f = c.ui.ci || (c.ui.ci = { yesterdayMT: arenaOn(c.data.sessions, addDays(today, -1)) });
-  const askWhere = f.tonightMT !== 'yes' || f.morning;
+  const askWhere = true; // Muay Thai am Abend: Kraft morgens bleibt möglich
   const needPlace = askWhere && !['five', 'mobility'].includes(f.time);
   const ready = f.sleep && f.feeling && f.tonightMT && (!askWhere || f.time) && (!needPlace || f.where) && (!W(c.data).on || f.wristToday != null);
   const q = (k) => `<div class="q"><div class="q-label">${Q[k][0]}</div>${chips(k, Q[k][1], f[k])}</div>`;
-  const morning = f.tonightMT === 'yes'
-    ? `<div class="q"><div class="q-label">Zusätzlich Morgeneinheit?</div>${chips('morning', [['no', 'Nein, ARENA reicht'], ['yes', 'Ja, zusätzlich']], f.morning ? 'yes' : 'no')}</div>`
-    : '';
+  const morning = '';
   const elbow = c.data.settings.jointPause ? '' : `<div class="q"><div class="q-label">Ellbogen zwickt?</div>${chips('elbow', [['no', 'Nein'], ['yes', 'Ja']], f.elbow || 'no')}</div>`;
   const painOpen = f.painOpen || (f.pain || []).length > 0;
   const pain = `<div class="q"><div class="q-label">Zwickt sonst etwas?</div>${chips('painOpen', [['no', 'Alles okay'], ['yes', 'Ja']], painOpen ? 'yes' : 'no')}
@@ -356,7 +407,7 @@ export default {
     const trained = doneToday.filter((s) => s.kind === 'mission' || s.kind === 'express').length;
     const ci = data.checkins[today];
     // Empfehlung war nur FLOW (Check-in „nur Mobility“, ARENA-Tag, Ruhetag) bzw. nur HANDS: erledigt, sobald sie gemacht ist
-    const lightKind = { flow: 'flow', arenaday: 'flow', rest: 'flow', five: 'hands' }[rec.kind];
+    const lightKind = { flow: 'flow', arenaday: 'flow', rest: 'flow', free: 'flow', five: 'hands' }[rec.kind];
     const lightDone = !trained && !ci.extra && lightKind && doneToday.find((s) => s.kind === lightKind);
     if (lightDone) {
       const what = lightKind === 'flow' ? 'FLOW' : 'HANDS';
@@ -371,6 +422,9 @@ export default {
     } else if (rec.kind === 'arenaday') {
       out += sys('ARENA-Tag', `<p class="reason">${esc(rec.reason)}</p><p class="muted">Ein kurzer FLOW am Morgen macht die Hüfte frei für die Kicks am Abend.</p>
         <div class="row gap"><button class="btn primary grow" data-act="start" data-id="FLOW">FLOW starten</button><button class="btn" data-act="morning-yes">Doch Morgeneinheit</button></div>`, { tone: 'calm' });
+    } else if (rec.kind === 'free') {
+      out += sys('Kein Kraft-Tag', `<p class="reason">${esc(rec.reason)}</p><p class="muted">FLOW reicht heute. Erholung ist Teil des Plans.</p>
+        <div class="row gap"><button class="btn primary grow" data-act="start" data-id="FLOW">FLOW starten</button><button class="btn" data-act="swap">Trotzdem trainieren</button></div>`, { tone: 'calm' });
     } else if (rec.kind === 'five') {
       out += sys('Nur 5 Minuten', `<p class="reason">${esc(rec.reason)}</p>
         <div class="row gap"><button class="btn primary grow" data-act="start" data-id="HANDS">HANDS starten</button></div>`, { tone: 'calm' });
@@ -383,10 +437,10 @@ export default {
       c.ui.lastRec = { ...rec, plyoCap: ci.sparTomorrow === true };
       const sparQ = plan.plyo && plan.plyo.wanted >= 4 && ci.sparTomorrow == null
         ? `<div class="q"><div class="q-label">Morgen hartes Sparring geplant?</div>${chips('sparTomorrow', [['no', 'Nein'], ['yes', 'Ja']], null).replace(/data-act="pick"/g, 'data-act="spar"')}<p class="muted small">Heute steht Plyo-Stufe ${plan.plyo.wanted} an. Vor hartem Sparring bleibt es bei Stufe 3.</p></div>` : '';
-      out += sys('Mission verfügbar', `<div class="mission-title hero"><span class="mid">${rec.missionId.length === 1 ? rec.missionId : '◆'}</span><div><h2>${esc(plan.name)}</h2><small>${esc(plan.focus)} · ca. ${plan.minutes} min${rec.profile === 'gym' && plan.kind === 'mission' && rec.missionId !== 'FORGE' ? ' · Home Gym' : rec.profile === 'travel' ? ' · Unterwegs' : ''}</small></div></div>
+      out += sys('Mission verfügbar', `<div class="mission-title hero"><span class="mid">${rec.missionId.length === 1 ? rec.missionId : '◆'}</span><div><h2>${esc(plan.name)}</h2><small>${esc(plan.focus)} · ca. ${plan.minutes} min${plan.kind === 'mission' && rec.missionId !== 'HOTEL' ? (rec.profile === 'gym' ? ' · Home Gym' : rec.profile === 'room' ? ' · Fighting Cave' : '') : rec.profile === 'travel' ? ' · Unterwegs' : ''}</small></div></div>
         ${plan.kind === 'mission' ? arcLine(data, today, plan) : ''}
         <p class="reason">${esc(rec.reason)}</p>${rec.hint?.lines.length && !rec.manual ? `<p class="note">${esc(adviceText(rec.hint))}</p>` : ''}${rec.walk ? '<p class="note">Danach 20–30 Minuten spazieren.</p>' : ''}${modifierNote(plan)}
-        ${sparQ}${adjustNote(c, plan)}${plan.wrist && rec.missionId !== 'WRIST' ? `<div class="signal-note"><span>${esc(plan.wrist.reason)}</span><button class="btn small ghost" data-act="wrist-decline">Heute ohne Handgelenk-Block</button></div>` : ''}${planPreview(plan)}
+        ${sparQ}${jobweekNote(data, rec)}${adjustNote(c, plan)}${plan.wrist && rec.missionId !== 'WRIST' ? `<div class="signal-note"><span>${esc(plan.wrist.reason)}</span><button class="btn small ghost" data-act="wrist-decline">Heute ohne Handgelenk-Block</button></div>` : ''}${planPreview(plan)}
         <button class="btn primary wide pulse" data-act="start-rec">Mission starten</button>`);
     }
     if (trained <= (ci.extra || 0)) {
@@ -413,15 +467,14 @@ export default {
         `<div class="done-row">✓ ${esc(s.kind === 'arena' ? `ARENA${s.bmt ? ` · BMT W${s.bmt.week}` : ''} · ${s.rpe ? `Intensität ${s.rpe}` : s.intensity === 'hard' ? 'Sparring' : 'Technik'}` : s.kind === 'check' ? 'Mobility-Check' : s.kind === 'quest' ? 'Wochen-Quest erfüllt' : s.kind === 'ascension' ? `Ascension: ${ASCENSIONS.find((a) => a.id === s.ascension)?.name}` : MISSIONS[s.missionId]?.name || s.missionId)} <span class="muted">+${s.xp} XP</span></div>`).join('')}</section>`;
     }
     // Rotation: jede Einheit antippbar, zeigt Übungen und Sätze nach heutigem Stand
-    out += `<div class="rot-line"><span class="muted">Rotation ${helpDot('rotation')}</span><div class="rot-chips">${data.engine.queue.map((id, i) =>
-      `<button class="chip rot-chip${i === 0 ? ' next' : ''}" data-act="rot-peek" data-id="${esc(id)}">${i === 0 ? '<small>als Nächstes</small>' : ''}${esc(MISSIONS[id].name)}</button>`).join('<i class="rot-arrow">→</i>')}</div></div>`;
+    out += weekLine(c);
     return out;
   },
 
   actions: {
     'rot-peek': (c, d) => {
       const ci = c.data.checkins[c.today()];
-      const where = ci?.where === 'gym' || d.id === 'FORGE' ? 'gym' : ci?.where === 'travel' ? 'travel' : 'room';
+      const where = ci?.where === 'gym' || d.id === 'FORGE' ? 'gym' : ci?.where === 'room' ? 'room' : 'gym';
       const plan = buildPlan({ missionId: d.id, profile: where, data: c.data, today: c.today() });
       c.system(plan.name, `<p class="muted small">${esc(plan.focus)} · ca. ${plan.minutes} min${where === 'gym' ? ' · Home Gym' : where === 'travel' ? ' · Unterwegs' : ''}</p>
         ${planPreview(plan)}<p class="muted small">Stand heute. Gewichte und Wiederholungen passen sich bis dahin noch an deine nächsten Einheiten an.</p>`);
@@ -560,10 +613,10 @@ export default {
       c.system('Event geschafft', `<p class="reason">${esc(ev.event.name)}. Das System notiert es ohne Kommentar.</p><div class="xp-gain num">+${XP_CONFIG.sources.event} XP</div>`, [['close-modal', 'Weiter', 'primary']], 'gold');
     },
     swap: (c) => {
-      const q = c.data.engine.queue;
-      const ids = [...new Set([...q, 'HOTEL', 'NOR4X4', 'D_LIGHT', 'EXPRESS', 'EXPRESS_BAG', 'FLOW', 'ZONE2', 'HANDS', 'FEET'])];
+      const q = [pickFor(c.data, c.today(), c.data.checkins[c.today()]).missionId];
+      const ids = ['C', 'A', 'B', 'D', 'HOTEL', 'D_LIGHT', 'EXPRESS', 'EXPRESS_BAG', 'FLOW', 'ZONE2', 'NOR4X4', 'HANDS', 'FEET'];
       c.modal(sys('Andere Einheit', `<div class="swap-list">${ids.map((id) =>
-        `<button class="swap" data-act="choose" data-id="${id}"><b>${esc(MISSIONS[id].name)}</b><small>${esc(MISSIONS[id].focus)}${id === q[0] ? ' · als Nächstes dran' : ''}</small></button>`).join('')}</div>
+        `<button class="swap" data-act="choose" data-id="${id}"><b>${esc(MISSIONS[id].name)}</b><small>${esc(MISSIONS[id].focus)}${id === q[0] ? ' · heute dran' : ''}</small></button>`).join('')}</div>
         <button class="btn ghost wide" data-act="close-modal">Abbrechen</button>`, { cls: 'pop' }));
     },
     choose: (c, d) => {

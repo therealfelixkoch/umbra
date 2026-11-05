@@ -6,7 +6,7 @@ import { fixCaveMurph } from './engine/pillars.js';
 import { toDay } from './engine/dates.js';
 import { effortToRpe, sessionIntensity, intensityFromRpe, trainingLoad } from './engine/session.js';
 
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 export function defaultData() {
   return {
@@ -15,9 +15,11 @@ export function defaultData() {
     settings: {
       onboarded: false,
       equipment: {
-        room: ['bag', 'bar', 'dipbars', 'box', 'kb', 'hammer'],
-        gym: ['barbell', 'rack', 'dumbbells', 'cable', 'rower', 'bar'],
+        room: ['bag', 'bar', 'dipbars', 'box', 'kb', 'hammer', 'medball'],
+        gym: ['barbell', 'rack', 'dumbbells', 'cable', 'rower', 'bar', 'medball'],
       },
+      weekPlan: { 1: 'C', 2: 'B', 4: 'A', 5: 'D' }, // UMBRA 2.0: Mo Push, Di Legs, Do Pull, Fr Full Body
+      mtDays: [1, 4], // Muay Thai abends
       kbWeights: [8, 12, 16, 20, 24],
       inventory: { room: {}, gym: {} }, // Bestand pro Ort; leer = allgemeine KB-Liste
       bodyweight: 80,
@@ -159,6 +161,17 @@ MIGRATIONS[9] = (raw) => {
   const engine = { ...raw.engine, arc, bossEvents: {}, introSeen: {}, arcHistory: [], prevArc: raw.engine?.arc || null };
   return { ...raw, schemaVersion: 10, engine, sessions,
     ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v10', day: today, suggestion: `season:${arc.n}:${arc.startedDay}`, decision: 'applied' }] };
+};
+
+MIGRATIONS[10] = (raw) => {
+  // v10 → v11: UMBRA 2.0. Feste Wochentage (Standard Mo Push, Di Legs, Do Pull, Fr Full Body, Muay Thai Mo und Do),
+  // Medizinball an beiden Orten. Log, Rekorde und Progression bleiben unverändert.
+  const eq = raw.settings?.equipment || {};
+  const add = (list) => (list ? [...new Set([...list, 'medball'])] : list);
+  return { ...raw, schemaVersion: 11,
+    settings: { ...raw.settings, weekPlan: raw.settings?.weekPlan || { 1: 'C', 2: 'B', 4: 'A', 5: 'D' }, mtDays: raw.settings?.mtDays || [1, 4],
+      equipment: { ...eq, ...(eq.room ? { room: add(eq.room) } : {}), ...(eq.gym ? { gym: add(eq.gym) } : {}) } },
+    ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v11', day: toDay(), suggestion: 'umbra_2_week_plan', decision: 'applied' }] };
 };
 
 export function migrate(raw) {

@@ -59,9 +59,10 @@ export function nextSlot(queue, where) {
  * @param {boolean} [p.fourByFourDue] Arc III: 4x4 diese Woche noch offen
  */
 export function decide({ checkin, hardStreak, queue, yesterday = null, gap = null,
-  lastDone = {}, holiday = false, fourByFourDue = false }) {
+  lastDone = {}, holiday = false, fourByFourDue = false, pick = null }) {
   const { where, time } = placeAndTime(checkin);
   const profile = where === 'gym' ? 'gym' : where === 'travel' ? 'travel' : 'room';
+  if (pick) return decideWeek({ checkin, hardStreak, yesterday, pick, profile, time });
 
   // ARENA heute Abend reicht in der Regel: morgens frei, außer du willst bewusst eine Morgeneinheit.
   if (checkin.tonightMT === 'yes' && !checkin.morning) {
@@ -124,6 +125,40 @@ export function decide({ checkin, hardStreak, queue, yesterday = null, gap = nul
   if (compact) reasons.push('30 Minuten: nur die Hauptübungen, je 2 Sätze.');
 
   return { rule, kind: 'mission', missionId, slot, rotate, compact, profile, hint, reason: reasons.join(' ') };
+}
+
+/**
+ * UMBRA 2.0: feste Wochentage. `pick` kommt aus schedule.todayPick (geplant, getauscht, nachgeholt oder frei).
+ * Muay Thai am Abend ist kein Grund für nur FLOW: Push und Pull laufen normal, Legs/Full Body schiebt der Plan.
+ * Unterwegs ersetzt die Mini-Mission die Mission des Tages.
+ */
+export function decideWeek({ checkin, hardStreak, yesterday, pick, profile, time }) {
+  if (time === 'five') {
+    return { rule: 1, kind: 'five', missionId: 'HANDS', profile,
+      reason: 'Nur 5 Minuten: HANDS für Hände und Handgelenke. Das hält beweglich, ohne den Tag zu belasten.' };
+  }
+  if (time === 'mobility') {
+    return { rule: 1, kind: 'flow', missionId: 'FLOW', profile, walk: true, reason: 'Nur Mobility gewählt: FLOW und danach ein Spaziergang.' };
+  }
+  if (!pick.missionId) {
+    return { rule: 10, kind: pick.kind === 'done' ? 'free' : 'free', missionId: 'FLOW', profile, pick, reason: pick.reason };
+  }
+  const next = pick.missionId;
+  const hint = advice({ checkin: { ...checkin, tonightMT: 'no' }, hardStreak, yesterday, next });
+  if (time === 'express') {
+    return { rule: 5, kind: 'express', missionId: 'EXPRESS', profile, hint, next, pick,
+      reason: `Nur 15 Minuten: SHADOWSTEP. ${NAMES[next]} bleibt für diese Woche offen.` };
+  }
+  if (profile === 'travel') {
+    return { rule: 11, kind: 'mission', missionId: 'HOTEL', slot: next, profile, hint, pick,
+      reason: `Unterwegs: Mini-Mission mit Band statt ${NAMES[next]}. 10–15 min, zählt als erledigt.` };
+  }
+  const compact = time === 'kompakt';
+  const reasons = [pick.reason];
+  if (profile === 'room') reasons.push('Fighting Cave: Langhantel-Übungen laufen als Kettlebell-Variante.');
+  if (compact) reasons.push('30 Minuten: QUICK STRIKE mit Power, Hauptübung und Anker.');
+  return { rule: pick.kind === 'planned' ? 7 : 12, kind: 'mission', missionId: next, slot: null, rotate: null, compact, profile, hint, pick,
+    reason: reasons.join(' ') };
 }
 
 // Queue weiterdrehen: Die erledigte Mission wandert ans Ende, alle anderen behalten ihre Reihenfolge.

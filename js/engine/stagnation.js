@@ -2,6 +2,8 @@
 // Stufe 1 (eine Übung): 3 Einheiten ohne Fortschritt ODER 2 Einheiten in Folge unter dem Arc-Bestwert → Variante wechseln.
 // Stufe 2 (mehrere Muster): ≥ 3 Hauptübungen aus verschiedenen Mustern auf Stufe 1 → Deload-Woche jetzt.
 // Kein Signal in Arc-Woche 1 und in den ersten 2 Einheiten nach einer Pause.
+import { programSlots, PROGRAM_MISSIONS } from '../data/program.js';
+import { weekInfo } from './arc.js';
 import { getDef as defaultGetDef } from '../data/exercises.js';
 import { MISSIONS } from '../data/missions.js';
 
@@ -32,10 +34,20 @@ export function isStalled(values) {
 }
 
 // Hauptplätze: slotKey → Muster (Primär-Attribut) und Variantenliste
-export function mainSlots() {
+// UMBRA 2.0: Hauptübung und Anker des laufenden Kapitels (Home-Gym- und Fighting-Cave-Variante).
+export function mainSlots(arc = null) {
   const out = [];
-  for (const id of ['A', 'B', 'C', 'FORGE']) {
-    MISSIONS[id].slots.forEach((s, i) => { if (s.main) out.push({ slotKey: `${id}:${i}`, slot: s, missionId: id }); });
+  if (arc) {
+    const info = weekInfo(arc);
+    for (const id of PROGRAM_MISSIONS) {
+      const prog = programSlots(info.arc.id, info.chapterIndex, id);
+      prog?.slots.forEach((s, i) => {
+        if (s.b !== 'main' && s.role !== 'anchor') return;
+        const slotKey = `${id}:${info.arc.id}${prog.chapter}:${i}`;
+        out.push({ slotKey, slot: s, missionId: id });
+        if (s.room && s.room !== s.ex) out.push({ slotKey: `${slotKey}:room`, slot: { ...s, ex: s.room }, missionId: id });
+      });
+    }
   }
   return out;
 }
@@ -65,7 +77,7 @@ export function stagnationStatus(data, { getDef = defaultGetDef } = {}) {
   const usable = arcSessions.filter((s) => s.arc.week > 1 && s.modifier === 'none' && !skip.has(s.id));
 
   const stage1 = [];
-  for (const { slotKey, slot, missionId } of mainSlots()) {
+  for (const { slotKey, slot, missionId } of mainSlots(arc)) {
     const current = data.engine.slotVariant?.[slotKey] || slot.ex;
     const def = getDef(current);
     if (!def) continue;

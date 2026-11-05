@@ -1,4 +1,4 @@
-:root { --app-version: "v42"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
+:root { --app-version: "v43"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
 @font-face {
   font-family: 'Oxanium';
   src: url('../fonts/oxanium.woff2') format('woff2');
@@ -1384,3 +1384,40 @@ body.scrolled .screen-training .t-mini { display: block; }
 .rot-chip small { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--sys); }
 .rot-chip.next { border-color: var(--sys); }
 .rot-arrow { font-style: normal; color: var(--muted); font-size: 12px; }
+
+/* ——— UMBRA 2.0: Blöcke einer Mission (feste Farben, unabhängig vom Saison-Look) ——— */
+:root {
+  --blk-warmup: #8a93a8; --blk-power: #ffcf5a; --blk-main: #ff5a6e; --blk-cmpnd: #4fe3ff;
+  --blk-core: #5fb8a8; --blk-mobility: #a594ff; --blk-finisher: #ffb15a;
+}
+.blk-warmup { --blk: var(--blk-warmup); } .blk-power { --blk: var(--blk-power); } .blk-main { --blk: var(--blk-main); }
+.blk-cmpnd { --blk: var(--blk-cmpnd); } .blk-core { --blk: var(--blk-core); } .blk-mobility { --blk: var(--blk-mobility); }
+.blk-finisher { --blk: var(--blk-finisher); }
+.blk-now { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin: 2px 0 6px; }
+.blk-now b { color: var(--blk); font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; }
+.blk-now small { color: var(--muted); font-size: 12px; }
+.t-blocks { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+.t-blk { display: flex; gap: 2px; padding: 2px 4px; border-radius: 10px; border-bottom: 3px solid var(--blk); opacity: 0.55; }
+.t-blk.cur { opacity: 1; background: color-mix(in srgb, var(--blk) 14%, transparent); }
+.t-blk button { width: 22px; height: 24px; position: relative; }
+.t-blk button::after { content: ''; position: absolute; inset: 7px; transform: rotate(45deg); border: 1.5px solid var(--blk); }
+.t-blk button.part::after { background: color-mix(in srgb, var(--blk) 45%, transparent); }
+.t-blk button.done::after { background: var(--blk); }
+.t-blk button.cur::after { inset: 4px; border-color: #fff; box-shadow: 0 0 10px var(--blk); }
+.t-card[class*="blk-"] { border-left: 3px solid var(--blk); }
+.ex-list.blocks .blk-head { border: 0; padding: 10px 0 2px; }
+.ex-list.blocks .blk-head span { color: var(--blk); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; }
+.ex-list.blocks li:not(.blk-head) { border-left: 2px solid var(--blk, transparent); padding-left: 8px; }
+.anchor-tag { color: var(--blk-cmpnd); font-style: normal; font-size: 11px; border: 1px solid currentColor; border-radius: 6px; padding: 0 4px; }
+.wk-cells { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; width: 100%; }
+.wk-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; border-radius: 10px; border: 1px solid var(--glass-line, rgba(255,255,255,0.1)); background: transparent; color: var(--text); min-width: 0; }
+.wk-cell small { font-size: 10px; color: var(--muted); white-space: nowrap; }
+.wk-cell b { font-size: 9px; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.wk-cell i { font-style: normal; color: var(--cyan); font-size: 11px; }
+.wk-cell.today { border-color: var(--sys); box-shadow: 0 0 10px var(--sys-glow); }
+.wk-cell.done b { color: var(--cyan); }
+.wk-cell.missed b, .wk-cell.moved b { color: var(--muted); text-decoration: line-through; }
+.wk-cell:disabled { opacity: 0.5; }
+.wp-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.wp-row > b { width: 28px; }
+.wp-row .chips { flex: 1; }

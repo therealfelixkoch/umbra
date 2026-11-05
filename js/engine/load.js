@@ -8,8 +8,8 @@ export function loadClass({ kind, missionId, compact, intensity, rpe }) {
   if (kind === 'arena') return (rpe ?? (intensity === 'hard' ? 8 : 4)) >= 7 ? 'high' : 'low';
   if (kind !== 'mission') return 'low';
   if (compact) return 'low';
-  if (['B', 'FORGE', 'NOR4X4'].includes(missionId)) return 'high';
-  if (['A', 'C', 'D', 'HOTEL'].includes(missionId)) return 'normal';
+  if (['B', 'D', 'FORGE', 'NOR4X4'].includes(missionId)) return 'high'; // D: Full Body mit Kreuzheben
+  if (['A', 'C', 'HOTEL'].includes(missionId)) return 'normal';
   return 'low'; // D leicht
 }
 

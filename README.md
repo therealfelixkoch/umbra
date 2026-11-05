@@ -72,6 +72,20 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 05.11.2026 (v43): UMBRA 2.0 – feste Wochentage, Blöcke, neue Saison-Programme
+
+Konzept aus dem Interview vom 05.11.2026 (Dokument „UMBRA 2.0 – Trainingslogik“). **Vor dem Hochladen eine JSON-Sicherung exportieren:** Die Daten werden auf Schema v11 migriert.
+
+- **Woche:** Vier feste Kraft-Tage statt Rotation, jedes Muster 2× pro Woche (Standard Mo Push, Di Legs, Do Pull, Fr Full Body, Muay Thai Mo und Do). Einstellbar unter Profil → Setup → Wochenplan. Auf Heute zeigt eine Wochenleiste Mo–So mit Plan und Erledigtem.
+- **Muay Thai:** Es ist kein High-Tag mehr, und am Muay-Thai-Abend gibt es nicht mehr nur FLOW. Push und Pull laufen normal. Legs und Full Body nie an einem Muay-Thai-Tag und nie direkt nebeneinander: Die App zieht dann eine andere Mission vor und schiebt die betroffene auf den nächsten freien Tag. Verpasste Missionen bietet sie am nächsten freien Tag der Woche an. Ist kein Tag mehr frei, fällt die Mission aus, ohne Nachholen.
+- **Blöcke:** Jede Mission besteht aus Aufwärmen, Power, Hauptübung, CMPND Block, Rumpf & Zusätze, in Full Body dazu Mobility und Finisher. Jeder Block hat eine feste Farbe. Im Training zeigt oben eine farbige Leiste, in welchem Block du bist („Block 3 von 5“). Der CMPND Block (Anker + Partner) läuft von selbst als Superset.
+- **Hauptübung:** Eine Langhantel-Übung pro Mission, immer als Top-Satz mit Backdowns (ca. −15 %). Die Wiederholungen hängen vom Kapitel ab, im Winter Kapitel 1 z. B. Top 6–8 + 2 × 8–10, in Kapitel 2 Top 3–5 + 2 × 5–7. Im Fighting Cave läuft automatisch die Kettlebell-Variante mit eigener Progression.
+- **Programm:** Alle vier Saisons mit beiden Kapiteln und allen vier Missionen stehen in `js/data/program.js`. Mit jedem Kapitel wechseln Power, Variante der Hauptübung, CMPND-Partner, Rumpf, Arme, Mobility und Finisher. Anker (Dips, Tactical Pull-ups, Bulgarian Split Squat, Chin-ups) und Prehab bleiben das ganze Jahr. Neu sind 88 Übungen, unter anderem Strict Press, Pendlay Row, Pausen-Kniebeuge, Hang Power Clean, Slams, Pelican und Bayesian Curl, Skull Crusher und die Finisher.
+- **Sätze:** Langhantel und Sprünge nie ans Versagen. Körpergewicht und Isolation im letzten Satz bis RIR 0, in Woche 4–5 bis zum Versagen. Kettlebell und mittlere Übungen RIR 1–2. In Woche 1 jeweils eine Wiederholung mehr im Tank. Im Herbst Kapitel 1 ist der letzte Satz RIR 1 statt 0. Pausen standardmäßig 90 s, Top-Satz bis 2 min.
+- **Ort beim Start:** Home Gym, Fighting Cave oder unterwegs. Unterwegs startet die **Mini-Mission** (Band, 10–15 min). Sie zählt als erledigt für den Tag, aber nicht für die Saisonwoche. Ab Kapitelwoche 4 kann eine Jobwoche per Knopf als Deload zählen.
+- **Weggefallen:** Rotation A → B → C → D → FORGE (FORGE bleibt nur noch als Einheit unter „Andere Einheit“), Ellbogen-Prehab, die alten Arc-Regler (+1 Satz, −1 Satz, 4x4 statt Zirkel). INFILTRATION ist jetzt Full Body mit Kraft, der alte Zirkel bleibt als „INFILTRATION · leicht“.
+- **Extras:** Im Frühjahr Kapitel 2 gibt es eine Karte für einen optionalen 4x4 an einem freien Tag. Im Sommer Kapitel 2 ZONE 2 wie bisher. Ausrüstung neu: Medizinball (Slam Ball) an beiden Orten.
+
 ### Update 03.11.2026 (v42): TEMPER-Clips für Episode 11–20, Update-Prüfung
 
 - **Update-Prüfung:** Der Service Worker prüft jede App-Datei gegen ihren SHA-256-Hash. Stimmt eine Datei auf GitHub nicht, etwa weil sie im Hauptordner statt in `js/…` gelandet ist, wird das Update nicht installiert und die alte Version läuft komplett weiter. Bisher konnte es passieren, dass alte und neue Dateien gemischt wurden.

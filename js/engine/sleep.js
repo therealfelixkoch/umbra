@@ -1,7 +1,8 @@
 // Schlaf: eigene Zusammenhänge aus deinen Daten. Erst ab 3 Wochen Schlafdaten und je Vergleichsgruppe
 // mindestens 5 Datenpunkten. Neutral formuliert, keine Diagnose. Reine Funktionen.
 import { addDays, daysBetween } from './dates.js';
-import { performance, mainSlots } from './stagnation.js';
+import { performance } from './stagnation.js';
+import { PROGRAM_MAIN_IDS } from '../data/program.js';
 import { getDef as defaultGetDef } from '../data/exercises.js';
 
 export const MIN_POINTS = 5;
@@ -20,10 +21,9 @@ export function sleepDataReady(checkins, today) {
   return days.length > 0 && daysBetween(days[0], today) >= MIN_DAYS;
 }
 
+// Haupt- und Ankerübungen des ganzen Jahres (UMBRA 2.0)
 function anchorIds() {
-  const ids = new Set();
-  for (const { slot } of mainSlots()) for (const id of [slot.ex, ...(slot.variants || [])]) ids.add(id);
-  return ids;
+  return new Set(PROGRAM_MAIN_IDS);
 }
 
 /**

@@ -40,7 +40,8 @@ export function workingGap(fromDay, toDay, holiday) {
   return n;
 }
 
-export const countsForArc = (s) => s.kind === 'mission' && FULL_MISSIONS.includes(s.missionId);
+// Die Mini-Mission (Jobtag) hält den Tag, zählt aber nicht für die Saisonwoche.
+export const countsForArc = (s) => s.kind === 'mission' && FULL_MISSIONS.includes(s.missionId) && s.missionId !== 'HOTEL';
 
 export function weekInfo(arc) {
   const a = arcOf(arc.n);

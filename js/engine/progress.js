@@ -1,4 +1,5 @@
 // Wochenabdeckung der Glyphen, saisonale Wochen-Quest, Mikro-Erfolge pro Kapitel, Ascensions (Abzeichen bis große Errungenschaften), Attribut-Ränge.
+import { PROGRAM_MAIN_IDS } from '../data/program.js';
 import { getDef as defaultGetDef } from '../data/exercises.js';
 import { PROFILES } from '../data/glyphs.js';
 import { weekStart, addDays, daysBetween } from './dates.js';
@@ -229,7 +230,7 @@ export function ascensionStatus(data, today) {
 
 // ——— Mikro-Erfolge pro Kapitel ———
 // Pro Saison und Kapitel: durchgezogen (100 XP), 3 Bestleistungen in Hauptübungen, neue Stufe, eine Saison-Tat (je 50 XP).
-const FOCUS_MAIN = new Set(Object.values(MISSIONS).flatMap((m) => (m.slots || []).filter((x) => x.main).flatMap((x) => [x.ex, ...[].concat(x.gym || []), ...(x.variants || [])])));
+const FOCUS_MAIN = new Set([...PROGRAM_MAIN_IDS, ...Object.values(MISSIONS).flatMap((m) => (m.slots || []).filter((x) => x.main).flatMap((x) => [x.ex, ...[].concat(x.gym || []), ...(x.variants || [])]))]);
 const DEEDS = {
   WINTER: [
     { id: 'deed', name: 'VOLLE LAST', desc: '3 Missionen mit allen Sätzen', test: (ss) => ss.filter((s) => s.kind === 'mission' && (s.exercises || []).length && (s.completion ?? 0) >= 0.999).length >= 3 },

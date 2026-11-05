@@ -74,6 +74,14 @@ export function supersetOptions(items) {
   const idx = (id) => items.findIndex((it) => it.exId === id && !it.wrist && !it.explosive);
   const used = new Set();
   const out = [];
+  // CMPND Block: Anker und Partner laufen immer im Wechsel
+  const an = items.findIndex((it) => it.block === 'cmpnd' && it.role === 'anchor');
+  const pa = items.findIndex((it) => it.block === 'cmpnd' && it.role === 'partner');
+  if (an >= 0 && pa >= 0) {
+    used.add(an);
+    used.add(pa);
+    out.push({ a: Math.min(an, pa), b: Math.max(an, pa), why: 'Anker ↔ Partner', cmpnd: true });
+  }
   for (const [x, y, why] of SUPERSET_PAIRS) {
     const a = idx(x);
     const b = idx(y);

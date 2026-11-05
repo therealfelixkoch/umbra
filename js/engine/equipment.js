@@ -1,5 +1,6 @@
 // Equipment: Katalog nach Gruppen, Bestand pro Ort (Gewichte, Anzahl, Höhen, Stärken) und was ein Teil freischalten würde.
 // Orte: room = Fighting Cave, gym = Home Gym. Reine Funktionen.
+import { PROGRAM } from '../data/program.js';
 import { MISSIONS } from '../data/missions.js';
 
 export const PLACE_NAMES = { room: 'Fighting Cave', gym: 'Home Gym', travel: 'Unterwegs' };
@@ -66,13 +67,16 @@ export function unlocks(item, equipment, all) {
  * @returns {{item:string, slots:string[]}[]} absteigend nach Anzahl
  */
 export function missionGaps(place, equipment, getDef) {
-  const ids = place === 'gym' ? ['A', 'B', 'C', 'D', 'FORGE'] : ['A', 'B', 'C', 'D'];
+  const ids = ['A', 'B', 'C', 'D'];
   const have = new Set(equipment);
   const missing = new Map();
   const add = (item, name) => { if (!missing.has(item)) missing.set(item, new Set()); missing.get(item).add(name); };
   for (const id of ids) {
     const m = MISSIONS[id];
-    const wanted = m.slots
+    // Saison-Programm: alle Übungen des Jahres an diesem Ort
+    const prog = m.program ? Object.values(PROGRAM).flatMap((season) => season.flatMap((ch) => (ch[id] || [])
+      .map((s) => (place === 'gym' ? s.ex : s.room || s.ex)))) : null;
+    const wanted = prog ? [...new Set(prog)] : m.slots
       ? m.slots.filter((s) => !s.prehab && !s.arcOnly && (!s.only || s.only === place)).map((s) => (place === 'gym' && s.gym ? [].concat(s.gym) : [s.ex])).flat()
       : (m.items || []).map((it) => (place === 'gym' && it.gym ? it.gym : it.ex));
     if (m.gymEx && place === 'gym') wanted.push(m.gymEx);

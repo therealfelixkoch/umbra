@@ -6,7 +6,8 @@ import { addDays } from './dates.js';
 import { ensureSideQuest } from './progress.js';
 import { storyEvents, unlockCodex } from './story.js';
 
-const SET_MISSIONS = ['A', 'B', 'C', 'FORGE'];
+// A–D kommen aus dem Saison-Programm (Übungen je Kapitel), hier nur noch alte Missionen mit festen Plätzen.
+const SET_MISSIONS = ['FORGE'];
 
 /**
  * Beim Arc-Wechsel: Pro Platz die nächste Variante.

@@ -126,7 +126,8 @@ export function roundPhases(rounds, work, rest) {
 }
 
 // ——— Satzpausen nach Schwere der Übung ———
-export const REST_SEC = { heavy: 150, medium: 90, light: 60, explosive: 90, warmup: 30, wrist: 30 };
+// UMBRA 2.0: Standard 90 s, der Top-Satz bekommt +30 s (bis 2 min).
+export const REST_SEC = { heavy: 90, medium: 90, light: 60, explosive: 75, warmup: 30, wrist: 30 };
 export const REST_STEP = 15;
 
 /**

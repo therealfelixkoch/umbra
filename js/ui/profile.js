@@ -10,6 +10,7 @@ import { testSound } from './sound.js';
 import { titleStatus, equippedTitle } from '../engine/story.js';
 import { QUOTES, QUOTE_CATS } from '../data/story.js';
 import { startDeload } from '../engine/cycle.js';
+import { DEFAULT_WEEK_PLAN, DEFAULT_MT_DAYS, DAY_NAMES } from '../engine/schedule.js';
 import { weekInfo, holidayActive, DEFAULT_HOLIDAY, completeWeekManually, seasonPlan, inDeload } from '../engine/arc.js';
 import { ARCS, WEEK_PLAN, arcWeeks, planWeek, CYCLE_INFO, arcOf } from '../data/arcs.js';
 import { logDecision } from '../engine/rulelog.js';
@@ -130,6 +131,20 @@ function quoteSettings(s) {
     <button class="btn wide" data-act="q-add" style="margin-top:8px">Hinzufügen</button></section>`;
 }
 
+// Wochenplan: Kraft-Tage (Push, Pull, Legs, Full Body) und Muay-Thai-Tage
+const WP_CHOICES = [['', '–'], ['C', 'Push'], ['A', 'Pull'], ['B', 'Legs'], ['D', 'Full Body']];
+function weekPlanSetup(s) {
+  const plan = s.weekPlan || DEFAULT_WEEK_PLAN;
+  const mt = s.mtDays || DEFAULT_MT_DAYS;
+  const used = Object.values(plan).filter(Boolean);
+  const legsOnMt = Object.entries(plan).filter(([d, id]) => ['B', 'D'].includes(id) && mt.includes(Number(d))).map(([d]) => DAY_NAMES[d]);
+  const rows = [1, 2, 3, 4, 5, 6, 7].map((d) => `<div class="wp-row"><b>${DAY_NAMES[d]}</b><div class="chips">${WP_CHOICES.map(([id, name]) =>
+    `<button class="chip${(plan[d] || '') === id ? ' on' : ''}" data-act="p-wp" data-d="${d}" data-v="${id}">${name}</button>`).join('')}</div>
+    <button class="chip${mt.includes(d) ? ' on' : ''}" data-act="p-mt" data-d="${d}" aria-pressed="${mt.includes(d)}">MT</button></div>`).join('');
+  return `<section class="card"><div class="label">Wochenplan ${helpDot('rotation')}</div>${rows}
+    <p class="muted small">Vier Kraft-Tage, jede Mission einmal. MT = Muay Thai abends. Legs und Full Body nie an einem Muay-Thai-Tag, und ein Tag Abstand zwischen beiden.${used.length !== 4 || new Set(used).size !== 4 ? ' <b>Noch nicht vollständig:</b> jede der vier Missionen genau einmal.' : ''}${legsOnMt.length ? ` <b>Achtung:</b> ${legsOnMt.join(', ')} hat Legs oder Full Body an einem Muay-Thai-Tag.` : ''}</p></section>`;
+}
+
 const setSettings = (c, patch) => c.update((data) => ({ ...data, settings: { ...data.settings, ...patch } }));
 
 function sessionLabel(s) {
@@ -228,10 +243,11 @@ export default {
         <div class="chips">${SEASON_LOOKS.map(([id, name]) => `<button class="chip${look === id ? ' on' : ''}" data-act="p-look" data-v="${id}">${name}</button>`).join('')}</div>
         <p class="muted small">Nur Farben, Partikel und Headline. Training und Saison-Regeln bleiben bei der echten Saison. Automatisch folgt der laufenden Saison.</p>
         <button class="btn wide" data-act="p-gate">Saisonwechsel-Intro ansehen</button></section>
+      ${weekPlanSetup(s)}
       ${equipmentSetup(c)}
       <section class="card"><div class="label">Körpergewicht</div>${stepper('p-bw', kg(s.bodyweight), 'kg')}
         <div class="label">Satzpausen</div>
-        <p class="muted small">Automatisch nach Schwere der Übung: schwer 150 s, mittel 90 s, leicht 60 s, explosiv 90 s. +30 s nach Top-Satz oder RIR 0. Im Pausen-Timer mit ±15 s anpassen, die App merkt es sich pro Übung.${Object.keys(s.restAdjust || {}).length ? ` <button class="link" data-act="p-rest-reset">Gemerkte Anpassungen zurücksetzen</button>` : ''}</p>
+        <p class="muted small">Automatisch nach Art der Übung: Standard 90 s, leicht 60 s, explosiv 75 s. Der Top-Satz bekommt +30 s (bis 2 min). Im Pausen-Timer mit ±15 s anpassen, die App merkt es sich pro Übung.${Object.keys(s.restAdjust || {}).length ? ` <button class="link" data-act="p-rest-reset">Gemerkte Anpassungen zurücksetzen</button>` : ''}</p>
         <div class="label">Ellbogen-Zähler: voll ab</div>
         ${stepper('p-elbow', `${s.elbowThreshold || 3}`, 'Meldungen in 7 Tagen')}
         <div class="label">Feiertagsmodus</div>
@@ -290,6 +306,18 @@ export default {
       const r = completeWeekManually(before, c.today());
       c.update((data) => logDecision({ ...data, engine: { ...data.engine, arc: r.arc } },
         { rule: 'arc:manual_week', day: c.today(), input: { n: before.n, week: before.week }, suggestion: r.event.type, decision: 'accepted' }));
+    },
+    'p-wp': (c, d) => {
+      const plan = { ...(c.data.settings.weekPlan || DEFAULT_WEEK_PLAN) };
+      // Jede Mission nur an einem Tag: am alten Tag entfernen
+      if (d.v) for (const k of Object.keys(plan)) if (plan[k] === d.v) delete plan[k];
+      if (d.v) plan[d.d] = d.v; else delete plan[d.d];
+      setSettings(c, { weekPlan: plan });
+    },
+    'p-mt': (c, d) => {
+      const mt = c.data.settings.mtDays || DEFAULT_MT_DAYS;
+      const day = Number(d.d);
+      setSettings(c, { mtDays: mt.includes(day) ? mt.filter((x) => x !== day) : [...mt, day].sort() });
     },
     'p-holiday': (c, d) => {
       const h = c.data.settings.holiday ?? DEFAULT_HOLIDAY;

@@ -1,5 +1,6 @@
 // Die drei Säulen eines Saison-Wächters: Benchmark-Workout, Fortschritts-Index, Durchziehen.
 // Ergebnis abgestuft: 1 Säule = Bronze, 2 = Silber, 3 = Gold, keine = Rückzug. Reine Funktionen.
+import { PROGRAM_MAIN_IDS } from '../data/program.js';
 import { BENCHMARKS } from '../data/benchmarks.js';
 import { BOSS_BY_ARC } from '../data/lore.js';
 import { MISSIONS } from '../data/missions.js';
@@ -91,8 +92,8 @@ const LATE = (w) => w >= 9 && w <= EXAM_WEEK;
 const FOCUS = { WINTER: ['kraft'], SPRING: ['kondition', 'muaythai'], SUMMER: ['kondition'], AUTUMN: ['mobility'] };
 export const GROUP_NAMES = { kraft: 'Kraft', kondition: 'Kondition', mobility: 'Mobility', muaythai: 'Muay Thai' };
 
-const MAIN_IDS = new Set(Object.values(MISSIONS).flatMap((m) => (m.slots || []).filter((s) => s.main)
-  .flatMap((s) => [s.ex, ...[].concat(s.gym || []), ...(s.variants || [])])));
+const MAIN_IDS = new Set([...PROGRAM_MAIN_IDS, ...Object.values(MISSIONS).flatMap((m) => (m.slots || []).filter((s) => s.main)
+  .flatMap((s) => [s.ex, ...[].concat(s.gym || []), ...(s.variants || [])]))]);
 const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 const max = (xs) => (xs.length ? Math.max(...xs) : null);
 

@@ -7,60 +7,13 @@
 // prehab: Ellbogen-Prehab (unter 3 Minuten, nicht im Kompakt-Modus).
 
 export const MISSIONS = {
-  A: {
-    id: 'A', name: 'ASCENT', focus: 'Ziehen · Nacken · Tragen', minutes: 40, format: 'sets',
-    slots: [
-      { ex: 'jump_rope', sets: 1, gym: 'rower_warmup' },
-      { ex: 'pullup_tactical', sets: 4, main: true, variants: ['pullup_tactical', 'pullup_neutral'] },
-      { ex: 'bw_row', sets: 3, gym: 'barbell_row', variants: ['bw_row', 'bw_row_table'] },
-      { ex: 'lat_pulldown', sets: 2, only: 'gym' },
-      { ex: 'kb_row_ballistic', sets: 3, only: 'room', main: true },
-      { ex: 'suitcase_carry', sets: 3, main: true, variants: ['suitcase_carry', 'farmers_walk'] },
-      { ex: 'neck_ext_harness', sets: 2 },
-      { ex: 'neck_flex_side', sets: 2 },
-      { ex: 'ab_rollout', sets: 3 },
-      { ex: 'hammer_curl_kb', sets: 2, optional: true, gym: 'db_hammer_curl' }, // Arm-Finisher Bizeps (neutraler Griff, ellbogenfreundlich)
-      { ex: 'forearm_rotation', sets: 1, prehab: true },
-      { ex: 'wrist_ext_eccentric', sets: 1, prehab: true },
-      { ex: 'dead_hang', sets: 1, prehab: true },
-      { ex: 'kb_windmill', sets: 2, arcOnly: 'IV' },
-    ],
-  },
-  B: {
-    id: 'B', name: 'BEDROCK', focus: 'Beine · Hüfte', minutes: 45, format: 'sets',
-    slots: [
-      { ex: 'warmup_general', sets: 1, gym: 'rower_warmup' },
-      { ex: 'broad_jump', sets: 4, plyo: true },
-      { ex: 'bulgarian_split_squat', sets: 3, gym: ['back_squat', 'deadlift'], gymSets: 4, main: true },
-      { ex: 'kickstand_deadlift', sets: 3, main: true, variants: ['kickstand_deadlift', 'gladiator_deadlift'] },
-      { ex: 'cossack_squat', sets: 2 },
-      { ex: 'nordic_curl', sets: 3, main: true },
-      { ex: 'calf_raise_sl', sets: 2 },
-      { ex: 'tibialis_raise', sets: 2 },
-      { ex: 'copenhagen_plank', sets: 2, arcOnly: 'IV' },
-      { ex: 'long_lunge_hold', sets: 2, arcOnly: 'IV' },
-    ],
-  },
-  C: {
-    id: 'C', name: 'IMPACT', focus: 'Drücken · Rumpf', minutes: 40, format: 'sets',
-    slots: [
-      { ex: 'bag_rounds', sets: 3, gym: 'rower_warmup', gymSets: 1 },
-      { ex: 'dip', sets: 4, main: true },
-      { ex: 'pike_pushup_box', sets: 3, main: true },
-      { ex: 'kb_halo', sets: 2 },
-      { ex: 'pushup_max', sets: 1, variants: ['pushup_max', 'pseudo_planche_pushup'] },
-      { ex: 'band_pull_apart', sets: 2 },
-      { ex: 'hanging_leg_raise', sets: 3, main: true },
-      { ex: 'lizard_crawl', sets: 2 },
-      { ex: 'kb_overhead_triceps', sets: 2, optional: true, gym: 'cable_pushdown' }, // Arm-Finisher Trizeps
-      { ex: 'forearm_rotation', sets: 1, prehab: true },
-      { ex: 'wrist_ext_eccentric', sets: 1, prehab: true },
-      { ex: 'dead_hang', sets: 1, prehab: true },
-      { ex: 'seated_shoulder_ext', sets: 2, arcOnly: 'IV' },
-    ],
-  },
+  // UMBRA 2.0: A–D kommen aus dem Saison-Programm (js/data/program.js), in Blöcken. Feste Wochentage statt Rotation.
+  A: { id: 'A', name: 'ASCENT', focus: 'Pull · Ziehen, Rumpf, Nacken', minutes: 50, format: 'sets', program: true },
+  B: { id: 'B', name: 'BEDROCK', focus: 'Legs · Beine und Hüfte', minutes: 50, format: 'sets', program: true },
+  C: { id: 'C', name: 'IMPACT', focus: 'Push · Drücken, Rotation, Schulter', minutes: 50, format: 'sets', program: true },
+  // Full Body als Krafteinheit mit Finisher. Die Zirkel-Übungen bleiben für INFILTRATION · leicht.
   D: {
-    id: 'D', name: 'INFILTRATION', focus: 'Zirkel · Ganzkörper', minutes: 30, format: 'circuit',
+    id: 'D', name: 'INFILTRATION', focus: 'Full Body · Kraft, Mobility, Finisher', minutes: 60, format: 'sets', program: true,
     rounds: [3, 4], restBetween: 120,
     items: [
       { ex: 'kb_swing', value: 20 },
@@ -89,18 +42,16 @@ export const MISSIONS = {
       { ex: 'rower_4x4', sets: 1, arcOnly: 'III' },
     ],
   },
-  // Unterwegs: Zirkel ohne Geräte nach dem Muster von INFILTRATION. Belegt wie FORGE den nächsten Rotationsplatz.
+  // Jobtag / unterwegs: Mini-Mission mit Band, 10–15 min. Ersetzt die Mission des Tages und zählt als erledigt.
+  // Zählt nicht für die Saisonwoche (eine Jobwoche wird wiederholt oder ab Kapitelwoche 4 zum Deload).
   HOTEL: {
-    id: 'HOTEL', name: 'HOTEL', focus: 'Zirkel ohne Geräte · 20–30 min', minutes: 25, format: 'circuit',
-    rounds: [3, 4], restBetween: 90,
+    id: 'HOTEL', name: 'MINI-MISSION', focus: 'Band · 10–15 min · zählt als erledigt', minutes: 12, format: 'circuit',
+    rounds: [3, 4], restBetween: 60,
     items: [
-      { ex: 'broad_jump', value: 5 },
-      { ex: 'bear_crawl', value: 3 },
+      { ex: 'band_row', value: 15 },
+      { ex: 'pushup', value: 12 },
       { ex: 'split_squat', value: 10 },
-      { ex: 'pushup_deficit', value: 12 },
-      { ex: 'squat_walk', value: 30 },
-      { ex: 'towel_row', value: 10 },
-      { ex: 'shadow_kicks', value: 60 },
+      { ex: 'band_pull_apart', value: 20 },
       { ex: 'hollow_body', value: 30 },
     ],
   },

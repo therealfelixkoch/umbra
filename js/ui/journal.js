@@ -125,7 +125,7 @@ export const journalActions = {
     if (!s) return;
     c.ui.jDel = d.id;
     c.system('Einheit löschen?', `<p>${esc(formatDay(s.day))} · ${s.xp ? `+${s.xp} XP` : 'ohne XP'}. Die Einheit verschwindet aus dem Log, XP, Tages- und Wochenziel rechnen sich neu.
-      ${['mission', 'express'].includes(s.kind) ? ' War es die letzte Trainingseinheit, gehen auch Rotation und Gewichte auf den Stand davor zurück.' : ''}</p>`,
+      ${['mission', 'express'].includes(s.kind) ? ' War es die letzte Trainingseinheit, gehen auch Wochenplan und Gewichte auf den Stand davor zurück.' : ''}</p>`,
     [['j-del-yes', 'Löschen', 'primary'], ['close-modal', 'Abbrechen']], 'warn');
   },
   'j-del-yes': (c) => {

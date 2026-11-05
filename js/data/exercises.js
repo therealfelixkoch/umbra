@@ -2,6 +2,7 @@
 import { applyLadders } from './ladders.js';
 import { WRIST_EXERCISES } from './wrist.js';
 import { FEET_EXERCISES } from './feet.js';
+import { PROGRAM_EXERCISES } from './exercises-program.js';
 // Felder: id, name, cat, equipment, mode ('reps'|'time'|'amrap'|'fixed'), range [lo, hi],
 // load ('kb'|'belt'|'barbell'|'dumbbell'|'cable'|null), startKg, bodyweight, perSide, unit,
 // easier/harder (Progressionsstufen), alternatives, tags [[attribut, ausprägung], …],
@@ -52,6 +53,7 @@ export const EQUIPMENT = {
   balance_board: 'Balance Board',
   slant: 'Schrägbrett',
   pipes: 'Balance Pipes',
+  medball: 'Medizinball (Slam Ball)',
 };
 
 const E = [
@@ -62,7 +64,7 @@ const E = [
     cues: ['Locker laufen, Nasenatmung möglich', 'Kurze Schritte, leise Landung', 'Auf dem Laufband: 1 % Steigung'],
     mistakes: ['Zu schnell starten'] },
   { id: 'jump_rope', rest: 'warmup', name: 'Jump Rope', cat: 'aufwaermen', equipment: ['rope'], mode: 'fixed',
-    range: [5, 10], unit: 'min', alternatives: ['shadow_boxing'],
+    range: [3, 5], unit: 'min', alternatives: ['shadow_boxing'],
     tags: [['jump', 'elastisch'], ['ankle', 'ausdauer'], ['cardio', 'ausdauer']],
     cues: ['Locker auf den Fußballen bleiben', 'Seil aus den Handgelenken drehen, nicht aus den Schultern', 'Rhythmus wechseln: Grundschritt, Laufschritt, Seitwechsel'],
     mistakes: ['Zu hoch springen', 'Auf den Fersen landen'],
@@ -74,7 +76,7 @@ const E = [
     mistakes: ['Arme hängen lassen', 'Nur auf der Stelle stehen'],
     mt: 'Technik-Wiederholung ohne Belastung der Gelenke.' },
   { id: 'rower_warmup', rest: 'warmup', name: 'Easy Rowing (Warm-Up)', cat: 'aufwaermen', equipment: ['rower'], mode: 'fixed',
-    range: [5, 8], unit: 'min', alternatives: ['bike_warmup', 'jump_rope', 'warmup_general'],
+    range: [3, 5], unit: 'min', alternatives: ['bike_warmup', 'jump_rope', 'warmup_general'],
     tags: [['h_pull', 'ausdauer'], ['hip_ext', 'ausdauer'], ['cardio', 'ausdauer']],
     cues: ['Beine – Rumpf – Arme beim Zug', 'Arme – Rumpf – Beine beim Zurückgleiten', 'Ruhiger Puls, du sollst noch reden können'],
     mistakes: ['Nur mit den Armen ziehen', 'Rundrücken am Umkehrpunkt'] },
@@ -835,6 +837,6 @@ const E = [
     mistakes: ['Knie anziehen statt höher springen'] },
 ];
 
-export const EXERCISES = Object.fromEntries([...E, ...WRIST_EXERCISES, ...FEET_EXERCISES].map((e) => [e.id, e]));
+export const EXERCISES = Object.fromEntries([...E, ...PROGRAM_EXERCISES, ...WRIST_EXERCISES, ...FEET_EXERCISES].map((e) => [e.id, e]));
 applyLadders(EXERCISES);
 export const getDef = (id) => EXERCISES[id];

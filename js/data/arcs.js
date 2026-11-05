@@ -1,5 +1,5 @@
 // Saisons (Makro-Arcs): 4 pro Jahr, je 13 Trainingswochen = 2 Kapitel à 6 Wochen (5 Aufbau + 1 Deload) + 1 Prüfwoche.
-// Das ganze Jahr läuft SuperMover mit denselben Missionen, die Saison dreht nur an Reglern (rules) pro Kapitel.
+// UMBRA 2.0: Übungen je Saison und Kapitel in js/data/program.js. rules hier nur noch für Extras (ZONE 2, optionaler 4x4).
 // Stand 27.10.2026, Konzept: docs/umbra-saisons-konzept.md. Intern heißt eine Saison weiter „arc“ (n = laufende Nummer).
 // rules: extraMainSet (+1 Satz Hauptübungen) · topSet (Top-Satz + Backdown) · contrast (Kontrastpaare) ·
 //        fourByFour (1× pro Woche 4x4 statt Zirkel) · lessAccessory (Nebenübungen −1 Satz) · minusSet (alle −1 Satz) ·
@@ -13,43 +13,43 @@ export const MIN_MISSIONS_PER_WEEK = 2;
 export const ARCS = [
   { id: 'WINTER', name: 'WINTER ARC', guardian: 'coldiron', months: [11, 12, 1], weeks: 13,
     focus: 'Kraft und etwas Muskel',
-    desc: 'Mehr Kraftvolumen, dann schwerer heben. Alles andere läuft mit.',
-    why: 'Im Winter ist Zeit, Kraft aufzubauen: etwas mehr Volumen und etwas mehr Muskel, ohne klassischen Bulk. Kraft ist die Basis für Power und Durchhalten im Frühjahr. Sprünge, Zirkel, Mobility und Muay Thai laufen weiter, nur der Schwerpunkt liegt auf den Hauptübungen.',
+    desc: 'Erst Fundament mit mehr Wiederholungen, dann schwer heben.',
+    why: 'Im Winter baust du Kraft und etwas Muskel auf. Kapitel 1 legt mit Top-Satz 6–8 das Fundament, Kapitel 2 macht daraus mit Top-Satz 3–5 Kraft. Power, Rumpf, Mobility und Muay Thai laufen in jeder Mission mit.',
     chapters: [
-      { name: 'Volumen', rules: { extraMainSet: true }, plyo: [1, 1, 2, 2, 2, 1],
-        changes: ['Hauptübungen +1 Satz (z. B. Klimmzüge 5 statt 4)', 'Wiederholungsbereiche wie im Plan (6–10)', 'Plyo-Stufe 1–2: sauber landen, Pogos'] },
-      { name: 'Kraft', rules: { topSet: true }, plyo: [2, 3, 3, 3, 3, 2],
-        changes: ['Hauptübungen: 1 Top-Satz 3–5 Wdh. (1 Wdh. im Tank), dann Backdown ca. −18 % für 6–10 Wdh.', 'Der Fortschritt läuft über den Top-Satz', 'Plyo-Stufe 3: reaktive Sprünge'] },
+      { name: 'Fundament', rules: {}, plyo: [1, 1, 2, 2, 2, 1],
+        changes: ['Hauptübung: Top-Satz 6–8 Wdh. (1 im Tank), 2 Backdowns 8–10 mit ca. −15 %', 'CMPND Block: 3 Sätze, letzter Satz bis RIR 0', 'Power: Landungen und leichte Plyo-Push-ups', 'Finisher: Zirkel'] },
+      { name: 'Kraft', rules: {}, plyo: [2, 3, 3, 3, 3, 2],
+        changes: ['Hauptübung: Top-Satz 3–5 Wdh., 2 Backdowns 5–7', 'Neue Varianten: Push Press, Pendlay Row, Kniebeuge, Kreuzheben', 'CMPND Block: Anker 3, Partner 2 Sätze', 'Finisher: EMOM'] },
     ] },
   { id: 'SPRING', name: 'FRÜHJAHR', guardian: 'stormlung', months: [2, 3, 4], weeks: 13,
     focus: 'Power und Kondition: Fight-Shape',
-    desc: 'Kraft wird schnell, der Motor hält mehrere harte Runden.',
-    why: 'Die Kraft aus dem Winter wird in Schnelligkeit umgesetzt, und die Kondition für mehrere harte Runden wächst. Ein Top-Satz pro Hauptübung hält die Kraft. Am Ende steht die Fight-Shape: leaner, schneller, belastbarer.',
+    desc: 'Aus Kraft wird Schnelligkeit, der Motor hält harte Runden.',
+    why: 'Die Kraft aus dem Winter wird schnell: Nach dem Top-Satz kommt ein Sprung oder Slam im gleichen Muster. Kapitel 2 baut mit kurzen harten Intervallen den Motor.',
     chapters: [
-      { name: 'Power', rules: { contrast: true, topSet: true }, plyo: [3, 4, 4, 4, 4, 2],
-        changes: ['Kontrastpaare: nach jeder schweren Hauptübung ein explosiver Partner (Kreuzheben → Vertical Jump, Dips → Plyo-Push-ups, Klimmzüge → explosive Klimmzüge)', 'Top-Satz + Backdown als Kraft-Erhalt', 'Plyo-Stufe 4: Broad und Box Jumps'] },
-      { name: 'Motor', rules: { contrast: true, topSet: true, fourByFour: true }, plyo: [3, 4, 4, 4, 4, 2],
-        changes: ['1× pro Woche Norwegian 4x4 statt Zirkel', 'Kontrastpaare und Top-Satz bleiben', 'Plyo-Stufe 4 (ab dem 2. Jahr in Woche 4–5 Stufe 5)'] },
+      { name: 'Kontrast', rules: { contrast: true }, plyo: [3, 4, 4, 4, 4, 2],
+        changes: ['Hauptübung: Top-Satz 3–5 → 3 explosive Wiederholungen → 1 Backdown', 'Power: seitliche und reaktive Sprünge', 'Finisher: 10 × 30/30'] },
+      { name: 'Motor', rules: { optional4x4: true }, plyo: [3, 4, 4, 4, 4, 2],
+        changes: ['Hauptübung: explosive Varianten (Landmine Press, Hang Power Clean), 2 Backdowns 4–6', 'Finisher: 2 × 4 min hart', 'Optional: voller 4x4 an einem freien Tag'] },
     ] },
   { id: 'SUMMER', name: 'SOMMER', guardian: 'scorch', months: [5, 6, 7], weeks: 13,
     focus: 'Athletik und Ausdauer, Kraft auf Erhalt',
-    desc: 'Schnell, ausdauernd, beweglich. Weniger Kraftvolumen.',
-    why: 'Im Sommer bist du am leichtesten und am aktivsten. Die Kraft wird mit etwas weniger Volumen gehalten, dafür rücken Athletik, Sprünge und Ausdauer nach vorn. Das hält leaner, ohne Kraft zu verlieren.',
+    desc: 'Einbeinig, seitlich, schnell. Kraft mit weniger Sätzen halten.',
+    why: 'Im Sommer hältst du die Kraft mit einem Top-Satz und einem Backdown und wirst athletisch: einbeinig, seitlich, schnelle Richtungswechsel. Dazu kommt Ausdauer, gern draußen.',
     chapters: [
-      { name: 'Athletik', rules: { lessAccessory: true }, plyo: [3, 3, 4, 4, 4, 2],
-        changes: ['Nebenübungen −1 Satz, Hauptübungen wie im Plan', 'Plyo-Stufe 3–4: reaktiv und intensiv', 'Zirkel wie gehabt'] },
-      { name: 'Motor', rules: { lessAccessory: true, fourByFour: true, zone2: true }, plyo: [3, 3, 3, 3, 3, 2],
-        changes: ['1× pro Woche Norwegian 4x4 statt Zirkel', '1× pro Woche ZONE 2: 30 min locker (zusätzlich)', 'Nebenübungen −1 Satz', 'Plyo-Stufe 3'] },
+      { name: 'Athletik', rules: {}, plyo: [3, 3, 4, 4, 4, 2],
+        changes: ['Hauptübung: Top-Satz 4–6 + 1 Backdown', 'Nebenübungen 2 Sätze', 'Power: einbeinige und seitliche Sprünge', 'Finisher: Sprints'] },
+      { name: 'Motor', rules: { zone2: true }, plyo: [3, 3, 3, 3, 3, 2],
+        changes: ['Hauptübung: Top-Satz 3–5 + 1 Backdown', 'Finisher: 2 × 4 min hart', '1× pro Woche ZONE 2: 30–45 min locker draußen'] },
     ] },
   { id: 'AUTUMN', name: 'HERBST', guardian: 'wither', months: [8, 9, 10], weeks: 13,
-    focus: 'Mobility, Gelenke, Reset',
-    desc: 'Entlasten, beweglicher werden, Sehnen für den Winter vorbereiten.',
-    why: 'Nach drei Saisons Aufbau holen Gelenke, Sehnen und Nervensystem auf. Weniger Volumen, mehr Beweglichkeit unter Last, dann ein Fundament-Kapitel mit höheren Wiederholungen. So startest du gesund und vorbereitet in den nächsten Winter.',
+    focus: 'Gelenke, Mobility, Reset',
+    desc: 'Entlasten, beweglicher werden, Basis für den Winter.',
+    why: 'Nach drei Saisons holen Gelenke und Sehnen auf: weniger Sätze, langsames Tempo, mehr belastete Mobility. Kapitel 2 legt mit höheren Wiederholungen die Basis für den nächsten Winter.',
     chapters: [
-      { name: 'Reset', rules: { minusSet: true, loadedMobility: true }, plyo: [1, 1, 2, 2, 2, 1],
-        changes: ['Alle Übungen −1 Satz', 'Belastete Mobility kommt dazu: Copenhagen Plank, Long Lunge Hold, KB Windmill, Seated Shoulder Extension', 'Plyo-Stufe 1–2'] },
-      { name: 'Basis', rules: { loadedMobility: true }, plyo: [1, 2, 2, 2, 2, 1],
-        changes: ['Normale Satzzahl, Wiederholungen eher oben', 'Belastete Mobility bleibt', 'Mobility-Check in der Prüfwoche'] },
+      { name: 'Reset', rules: {}, plyo: [1, 1, 2, 2, 2, 1],
+        changes: ['Hauptübung: Top-Satz 10–12 mit 2 Wdh. im Tank, 3 s ablassen, 1 Backdown', 'Letzter Satz RIR 1 statt 0', 'Belastete Mobility in jeder Mission', 'Finisher: Zirkel locker'] },
+      { name: 'Basis', rules: {}, plyo: [1, 2, 2, 2, 2, 1],
+        changes: ['Hauptübung: Top-Satz 8–10 + 2 Backdowns 10–12', 'Normale Satzzahl', 'Prüfwoche: Jahresvergleich mit den Ankern'] },
     ] },
 ];
 
@@ -68,9 +68,9 @@ export const seasonIndexForMonth = (m) => ARCS.findIndex((a) => a.months.include
 // Was in jeder Saison gleich bleibt und wie Übungen wechseln (für die Erklärung im Profil)
 export const CYCLE_INFO = {
   name: 'Das Jahr',
-  summary: 'Vier Saisons pro Jahr, je 13 Trainingswochen: zwei Kapitel à 6 Wochen und eine Prüfwoche. Das ganze Jahr wird nach SuperMover trainiert, mit denselben Missionen. Jede Saison stellt einen Schwerpunkt nach vorn, der Rest läuft auf Erhaltung. Im Winter etwas mehr Kraft und Muskel, im Frühjahr Fight-Shape, im Sommer Athletik, im Herbst Reset.',
-  stays: ['Rotation A → B → C → D → FORGE und die Missionen selbst', 'Double Progression: erst Wiederholungen, dann Gewicht', 'Aufwärmen, Mobility-Block, FLOW, Muay Thai', 'Wochenrhythmus im Kapitel: Einstieg, Aufbau, Zuspitzung, Deload'],
-  exercises: 'Die Übungen wechseln nicht komplett. Die Missionen bleiben gleich gebaut, damit Fortschritt messbar ist. Beim Saisonwechsel tauschen nur Nebenplätze mit Variante (z. B. Rudern an den Barren ↔ am Tisch). Hauptübungen wechseln, wenn die Progression eine schwerere Stufe vorgemerkt hat. Der Sprungplatz folgt der Plyo-Stufe. Was sich vor allem ändert, ist die Art zu trainieren: Sätze, Satzstruktur, Sprünge, Kondition.',
+  summary: 'Vier Saisons pro Jahr, je 13 Wochen: zwei Kapitel à 6 Wochen und eine Prüfwoche. Vier feste Kraft-Tage pro Woche: Push, Pull, Legs, Full Body. Jedes Muster kommt zweimal pro Woche dran. Jede Saison stellt einen Schwerpunkt nach vorn: Winter Kraft, Frühjahr Fight-Shape, Sommer Athletik, Herbst Reset.',
+  stays: ['Jede Mission in Blöcken: Aufwärmen, Power, Hauptübung, CMPND Block, Rumpf & Zusätze', 'Die vier Anker: Dips, Tactical Pull-ups, Bulgarian Split Squat, Chin-ups', 'Hauptübung als Top-Satz mit Backdowns, steigern nach Double Progression', 'Nacken, Nordic Curls, Waden und Tibialis', 'FLOW täglich, Muay Thai, Wochenrhythmus im Kapitel'],
+  exercises: 'Mit jedem Kapitel (alle 6 Wochen) wechseln Power, die Variante der Hauptübung, der CMPND-Partner, Rumpf, Arme, Mobility und Finisher. Der Anker im CMPND Block und die Prehab-Zusätze bleiben das ganze Jahr. So bleibt das Training frisch, und jede Prüfwoche misst an denselben vier Ankern.',
 };
 
 // RIR-Ziel je Kapitelwoche (1–6) und Prüfwoche

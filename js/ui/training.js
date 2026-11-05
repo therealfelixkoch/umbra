@@ -26,6 +26,7 @@ import { playTone } from './temper-audio.js';
 import { setStory } from './storycard.js';
 import { BANDS } from '../engine/equipment.js';
 import { MISSIONS as MISSIONS_ALL } from '../data/missions.js';
+import { BLOCKS } from '../data/program.js';
 import { RIR_CHOICES, restFor, REST_STEP, exercisePhases, exerciseTimerAt, timerState, intervalPhases, phaseAt, workDone, PHASE_LABEL, activeMinutes } from '../engine/session.js';
 
 const fmt = (sec) => {
@@ -263,7 +264,7 @@ function setsView(c, a) {
   const ct = a.cardTimer?.i === i ? a.cardTimer : null;
   if (ct?.phases) return bigTimerView(a, ct, def);
   const wristPct = { 1: '20–30 %', 2: '30–50 %', 3: 'ca. 50–70 %', 4: 'ca. 70 %' }[c.data.wrist?.stage || 2];
-  const rir = it.wrist ? `<p class="rir">${def.dirs ? `Isometrie mit ${wristPct} Kraft, ohne sichtbare Bewegung. ` : ''}Schmerz auf der Kleinfingerseite höchstens 2 (Ampel grün).</p>`
+  const rir = p.program && !it.wrist ? programRir(it, def, r, setCount) : it.wrist ? `<p class="rir">${def.dirs ? `Isometrie mit ${wristPct} Kraft, ohne sichtbare Bewegung. ` : ''}Schmerz auf der Kleinfingerseite höchstens 2 (Ampel grün).</p>`
     : fixed ? '' : it.explosive
     ? `<p class="rir">Kontrast: jede Wiederholung maximal explosiv, volle Pause. Stopp, sobald die Explosivität nachlässt. ${helpDot('contrast')}</p>`
     : it.topSet ? `<p class="rir">Top-Satz: 3–5 Wdh., 1 Wdh. im Tank. Backdown: 6–10 Wdh. mit ca. 18 % weniger Last. ${helpDot('topset')}</p>`
@@ -320,12 +321,12 @@ function setsView(c, a) {
   const lastFull = last ? `<div class="last-sets">${last.sets.map((x, k) => `<span><i>${k + 1}</i>${esc(lastSetText(def, x))}</span>`).join('')}</div>` : '<b>–</b>';
   const isLast = i === n - 1;
   return `${head(c, a, `${i + 1}/${n}`, comp)}
-    <nav class="t-dots">${p.items.map((x, k) => {
+    ${p.program ? blockBar(a, i) : `<nav class="t-dots">${p.items.map((x, k) => {
       const done = a.log[k].sets.filter((s) => s.done).length;
       const st = done === a.log[k].sets.length ? 'done' : done ? 'part' : '';
       return `<button class="${st}${k === i ? ' cur' : ''}" data-act="t-goto" data-k="${k}" aria-label="Übung ${k + 1}"></button>`;
-    }).join('')}</nav>
-    <section class="t-card">
+    }).join('')}</nav>`}
+    <section class="t-card${it.block ? ` blk-${it.block}` : ''}">
       <div class="t-name"><h1>${esc(def.name)}${it.optional ? ' <em>optional</em>' : ''}</h1><div class="row gap"><button class="info" data-act="t-swap" aria-label="Übung tauschen">⇄</button><button class="info" data-act="t-info" data-id="${def.id}" aria-label="Info">i</button></div></div>
       ${ladderLine(it, def, !entry.sets.some((s) => s.done) && !!it.slotKey && a.plan.profile !== 'travel')}
       ${it.swappedFrom ? `<p class="muted small">Getauscht statt ${esc(getDef(it.swappedFrom)?.name || it.swappedFrom)} · ${it.swapScope === 'arc' ? 'für den Rest des Arcs' : 'nur heute'}</p>` : ''}
@@ -334,8 +335,9 @@ function setsView(c, a) {
       <div class="t-compare">
         <div><small>Letztes Mal${last ? ` · ${esc(formatShort(last.day))}` : ''}</small>${lastFull}</div>
         <span class="arrow">→</span>
-        <div><small>Heute</small><b>${entry.sets.length} × ${targetText(def, it.target)}</b><em>${def.load ? esc(loadText(def, it.load)) : ''}</em></div>
+        <div><small>Heute</small><b>${it.topSet && it.bdRange ? `Top ${targetText(def, it.target)}${entry.sets.length > 1 ? ` + ${entry.sets.length - 1} × ${it.bdRange[0]}` : ''}` : `${entry.sets.length} × ${targetText(def, it.target)}`}</b><em>${def.load ? esc(loadText(def, it.load)) : ''}</em></div>
       </div>${trendBadge(it.trend)}${ghostBar(def, entry, last)}`}
+      ${it.note ? `<p class="note">${esc(it.note)}</p>` : ''}
       ${it.adjust ? `<p class="note">${esc(it.adjust)}</p>` : ''}
       ${it.tempo ? '<p class="note">Tempo: 3 s ablassen, 1 s Pause in der Dehnung, dann kraftvoll hoch.</p>' : ''}
       ${it.levelLabel ? `<p class="note">Stufe der Übung: <b>${esc(it.levelLabel)}</b>. Drei grüne Einheiten in Folge, dann geht es eine Stufe weiter.</p>` : ''}
@@ -358,6 +360,41 @@ function setsView(c, a) {
       ${isLast ? '<button class="btn gold grow" data-act="t-finish">Mission abgeschlossen</button>'
         : '<button class="btn primary grow" data-act="t-next">Nächste Übung →</button>'}
     </footer>`;
+}
+
+// UMBRA 2.0: Leiste aus farbigen Blöcken, je Übung ein Punkt. Darüber der aktuelle Block.
+function blockBar(a, i) {
+  const items = a.plan.items;
+  const groups = [];
+  items.forEach((x, k) => {
+    const b = x.block || 'core';
+    if (!groups.length || groups[groups.length - 1].b !== b) groups.push({ b, ks: [] });
+    groups[groups.length - 1].ks.push(k);
+  });
+  const cur = groups.findIndex((g) => g.ks.includes(i));
+  const dot = (k) => {
+    const done = a.log[k].sets.filter((s) => s.done).length;
+    const st = done === a.log[k].sets.length ? 'done' : done ? 'part' : '';
+    return `<button class="${st}${k === i ? ' cur' : ''}" data-act="t-goto" data-k="${k}" aria-label="Übung ${k + 1}"></button>`;
+  };
+  return `<div class="blk-now blk-${groups[cur].b}"><b>${esc(BLOCKS[groups[cur].b].name)}</b><small>Block ${cur + 1} von ${groups.length}</small></div>
+    <nav class="t-blocks">${groups.map((g, gi) => `<span class="t-blk blk-${g.b}${gi === cur ? ' cur' : ''}" title="${esc(BLOCKS[g.b].name)}">${g.ks.map(dot).join('')}</span>`).join('')}</nav>`;
+}
+
+// Satz-Hinweis nach Übungsart (UMBRA 2.0)
+function programRir(it, def, r, setCount) {
+  if (def.mode === 'fixed' || it.effort === 'none') return '';
+  if (it.contrast) return `<p class="rir">Kontrast: direkt nach dem Top-Satz, ca. 60 s Pause, 3 Wiederholungen maximal explosiv. Danach der Backdown. ${helpDot('contrast')}</p>`;
+  if (it.explosive) return `<p class="rir">Power: jede Wiederholung maximal schnell, volle Pause. Stopp, sobald es langsamer wird. ${helpDot('contrast')}</p>`;
+  if (it.topSet) {
+    const [lo, hi] = it.range || [3, 5];
+    const bd = it.setPlan.filter((x) => x.label === 'Backdown').length;
+    return `<p class="rir">Top-Satz: ${lo}–${hi} Wdh. mit ${r} Wdh. im Tank. ${bd ? `${bd === 1 ? 'Backdown' : `${bd} Backdowns`}: ${it.bdRange[0]}–${it.bdRange[1]} Wdh. mit ca. 15 % weniger. ` : ''}Nie ans Versagen. ${helpDot('topset')}</p>`;
+  }
+  if (def.mode === 'time') return '<p class="rir">Sauber bis zur Zielzeit halten. Der Timer endet von selbst.</p>';
+  if (it.failLast && setCount > 1) return `<p class="rir">Satz 1–${setCount - 1}: ${r} Wdh. im Tank. Letzter Satz bis Versagen. ${helpDot('rir')}</p>`;
+  if (it.lastZero && setCount > 1) return `<p class="rir">Satz 1–${setCount - 1}: ${r} Wdh. im Tank. Letzter Satz bis RIR 0. ${helpDot('rir')}</p>`;
+  return `<p class="rir">Alle Sätze mit ${r} Wdh. im Tank${it.noFailure ? ', kein Versagen' : ''}. ${helpDot('rir')}</p>`;
 }
 
 // Band-Übungen: Farbe wählen (aus dem Bestand des Ortes, sonst alle Farben), wird pro Übung gemerkt
@@ -408,7 +445,7 @@ function supersetBlock(a, i) {
   if (!o) return '';
   const other = getDef(a.plan.items[o.a === i ? o.b : o.a].exId).name;
   if (activePair(a, i)) {
-    return `<div class="superset on"><div><span class="ss-tag">SUPERSET</span> mit ${esc(other)}<small>${esc(o.why)} · ${SUPERSET_REST} s Wechsel, Pause nach dem Paar</small></div>
+    return `<div class="superset on"><div><span class="ss-tag">${o.cmpnd ? 'CMPND' : 'SUPERSET'}</span> mit ${esc(other)}<small>${esc(o.why)} · ${SUPERSET_REST} s Wechsel, Pause nach dem Paar</small></div>
       <button class="btn small ghost" data-act="t-superset" data-v="off">Beenden</button></div>`;
   }
   return `<div class="superset"><div>Zeit sparen: als Superset mit <b>${esc(other)}</b>?<small>${esc(o.why)} · Sätze wechseln ab</small></div>
@@ -1159,13 +1196,13 @@ const training = {
       const comp = completionOf(a);
       // Nichts erledigt (nur angeschaut): nicht verbuchen, sondern verwerfen
       if (comp === 0 && ['sets', 'circuit', 'intervals', 'amrap'].includes(a.plan.format)) {
-        c.system('Noch nichts erledigt', '<p>Es ist noch kein Satz und keine Runde erledigt. Die Einheit wird nicht verbucht, Rotation und Tagesziel bleiben unverändert.</p>',
+        c.system('Noch nichts erledigt', '<p>Es ist noch kein Satz und keine Runde erledigt. Die Einheit wird nicht verbucht, Wochenplan und Tagesziel bleiben unverändert.</p>',
           [['t-discard', 'Verwerfen', 'primary'], ['t-cancel-finish', 'Weitermachen']]);
         return;
       }
       if (['sets', 'circuit', 'intervals'].includes(a.plan.format) && comp < 0.999 && !c.ui.confirmPartial) {
         c.ui.confirmPartial = true;
-        c.system('Mission beenden?', `<p>${a.plan.format === 'sets' ? `${Math.round(comp * 100)} %` : `${a.roundsDone} von ${a.plan.rounds} Runden`} erledigt. Das zählt anteilig, und die Rotation geht weiter. Verbuchte Einheiten kannst du im Profil unter Verlauf wieder löschen.</p>`,
+        c.system('Mission beenden?', `<p>${a.plan.format === 'sets' ? `${Math.round(comp * 100)} %` : `${a.roundsDone} von ${a.plan.rounds} Runden`} erledigt. Das zählt anteilig, und die Mission gilt diese Woche als erledigt. Verbuchte Einheiten kannst du im Profil unter Verlauf wieder löschen.</p>`,
           [['t-finish', 'Beenden', 'primary'], ['t-cancel-finish', 'Weitermachen']]);
         return;
       }

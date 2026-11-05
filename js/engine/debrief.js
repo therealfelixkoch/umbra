@@ -85,7 +85,7 @@ export function debriefStats(data, n, today, getDef = defaultGetDef) {
   const bw = data.settings.bodyweight || 80;
   const strength = [];
   const seen = new Set();
-  for (const { slot } of mainSlots()) {
+  for (const { slot } of [...mainSlots({ n, week: 1 }), ...mainSlots({ n, week: 7 })]) {
     const ids = new Set([slot.ex, ...(slot.variants || [])]);
     for (const id of ids) {
       if (seen.has(id)) continue;

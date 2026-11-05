@@ -5,7 +5,7 @@ import { esc } from './kit.js';
 export const TOUR = [
   { route: 'heute', sel: '.strip', title: 'Status', text: 'Rang, Kampfkraft und dein Saison-Wächter. Die Leiste zeigt die 13 Wochen der Saison, B · I · K die drei Säulen. Tippen öffnet das Profil.' },
   { route: 'heute', sel: '.daily-quote', title: 'Tageszitat', text: 'Jeden Tag ein anderes. Quellen kannst du im Setup abschalten.' },
-  { route: 'heute', sel: '.sys', title: 'Check-in und Mission', text: 'Ein paar Taps am Morgen, dann plant die App: die nächste Mission der Rotation, mit Hinweisen statt Tausch. Du wählst Zeit und Ort. Darunter liegen Karten für Benchmark, Events, HANDS, FEET und TEMPER.' },
+  { route: 'heute', sel: '.sys', title: 'Check-in und Mission', text: 'Ein paar Taps am Morgen, dann plant die App: die Mission des Tages laut Wochenplan, mit Hinweisen statt Tausch. Du wählst Zeit und Ort. Darunter liegen Karten für Benchmark, Events, HANDS, FEET und TEMPER.' },
   { route: 'heute', sel: '.tabbar', title: 'Unten', text: 'ARENA für Muay Thai, Kodex für Übungen und das Handbuch, Profil für Saison, Erfolge, Gelenke, Equipment und Verlauf.' },
   { route: 'profil', sel: '.pillar-panel', fallback: '.sys', title: 'Saison und Säulen', text: 'Hier steht, warum die Saison so gebaut ist, was Kapitel 1 und 2 ändern und wie weit die drei Säulen sind. In der Prüfwoche fällt der Wächter: Bronze, Silber oder Gold.' },
   { route: 'profil', sel: '.micro-list', fallback: '.asc-grid', title: 'Erfolge', text: 'Kapitel-Erfolge pro Kapitel, dazu Abzeichen, Errungenschaften und die seltenen großen Errungenschaften.' },

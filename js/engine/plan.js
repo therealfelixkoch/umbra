@@ -3,6 +3,7 @@ import { MISSIONS, MISSION_KIND, FULL_MISSIONS, TRAVEL_SWAP } from '../data/miss
 import { getDef as defaultGetDef, EXERCISES } from '../data/exercises.js';
 import { elbowStatus, activeRegions, adjustment } from './signals.js';
 import { PLYO, CONTRAST } from '../data/arcs.js';
+import { programSlots, BACKDOWN_PCT } from '../data/program.js';
 import { gapDays, lastSetsFor, ROTATION } from './history.js';
 import { initialArc, weekInfo, holidayActive, DEFAULT_HOLIDAY } from './arc.js';
 import { modifierFor, completeMission } from './cycle.js';
@@ -17,6 +18,7 @@ import { W as wristOf, blockForMission, blockEntries, wristAdjust, strengthVaria
 import { HANDS_SEQUENCE } from '../data/wrist.js';
 import { FT, feetSequence, sparTomorrow as feetSpar } from './feet.js';
 import { weightsOf } from './equipment.js';
+import { supersetOptions } from './warmup.js';
 
 // Equipment und Einstellungen für ein Profil. Im Home Gym ersetzen Kurzhanteln die Kettlebells.
 export function profileContext(settings, profile) {
@@ -144,6 +146,15 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
   const wBlock = wblock && isCompact && wblock.kind === 'strength' ? { kind: 'activation', reason: 'QUICK STRIKE: nur Handgelenk-Aktivierung.' } : wblock;
   const wItems = wBlock ? wristItems({ data, profile, equipment, today, getDef, kind: wBlock.kind }) : [];
   const wInfo = wBlock ? { kind: wBlock.kind, reason: wBlock.reason, variant: wBlock.kind === 'strength' ? strengthVariant(wrist) : null } : null;
+
+  if (mission.program) {
+    const items = programItems({ missionId, profile, data, today, arc, info, isCompact, modifier, equipment, getDef, wrist, full });
+    if (wInfo?.kind === 'strength') items.push(...wItems);
+    else if (wInfo) items.splice(items.length ? 1 : 0, 0, ...wItems);
+    const prog = programSlots(info.arc.id, info.chapterIndex, missionId);
+    return { ...base, format: 'sets', items, plyo: null, wrist: wInfo, program: true,
+      chapterName: prog?.setup.name, blocks: [...new Set(items.map((it) => it.block).filter(Boolean))] };
+  }
 
   if (mission.format === 'sets') {
     const items = [];
@@ -307,6 +318,127 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
     personalized: !!scores };
 }
 
+// Welche RIR-Logik gilt für eine Übung? Langhantel/Sprung nie ans Versagen, Körpergewicht und Isolation
+// im letzten Satz bis RIR 0, Kettlebell und mittlere Übungen RIR 1–2.
+export function effortType(def, slot) {
+  if (!def || def.mode === 'fixed' || def.cat === 'mobility' || slot.b === 'mobility' || slot.b === 'finisher' || slot.b === 'warmup') return 'none';
+  if (slot.b === 'power' || def.rest === 'explosive') return 'power';
+  if (slot.b === 'main') return 'main';
+  if (slot.arms || def.bodyweight || ['rumpf', 'nacken'].includes(def.cat)) return 'toZero';
+  return 'mid';
+}
+
+/**
+ * Einträge einer UMBRA-2.0-Mission: Aufwärmen, Power, Hauptübung (Top-Satz + Backdowns), CMPND Block (Anker + Partner),
+ * Rumpf & Zusätze, Mobility, Finisher. Übungen nach Saison, Kapitel und Ort (Home Gym / Fighting Cave / unterwegs).
+ */
+export function programItems({ missionId, profile, data, today, arc, info, isCompact, modifier, equipment, getDef = defaultGetDef, wrist, full = true }) {
+  const prog = programSlots(info.arc.id, info.chapterIndex, missionId);
+  if (!prog) return [];
+  const { setup } = prog;
+  const wk = info.chapterWeek; // 1–6, Prüfwoche: null
+  const first = wk === 1;
+  const peak = wk === 4 || wk === 5;
+  const deload = modifier.type === 'deload';
+  const declined = data.engine.signalsDeclined === today;
+  const sig = declined ? { elbowFull: false, regions: [] }
+    : { elbowFull: elbowStatus(data, today).full, regions: activeRegions(data.signals, today) };
+  const pick = (id) => (profile === 'travel' ? travelExercise(id, equipment, getDef) : resolveExercise(id, equipment, getDef));
+  const items = [];
+
+  // Aufwärmen: Home Gym Rudern, Fighting Cave Seil. Danach der freie Mobility-Block.
+  const warm = pick(profile === 'gym' ? 'rower_warmup' : 'jump_rope') || pick('warmup_general');
+  if (warm) items.push({ ...itemFor(warm, { data, profile, sets: 1, getDef }), block: 'warmup', rir: null, trend: null, minutesHint: '3–5 min' });
+  if (full && !isCompact) {
+    items.push({ key: 'mobility_block', exId: 'mobility_block', sets: 1, target: 3, load: 0, ladder: [0], block: 'warmup',
+      optional: true, prep: true, rir: null, trend: null, lastTime: null });
+  }
+
+  prog.slots.forEach((s, i) => {
+    if (isCompact && !(s.b === 'power' || s.b === 'main' || s.role === 'anchor')) return;
+    const slotKey = `${missionId}:${info.arc.id}${prog.chapter}:${i}`;
+    const arcSwap = data.engine.arcSwaps?.[slotKey];
+    const wanted = (arcSwap && arcSwap.arc === arc.n && arcSwap.id) || data.engine.slotVariant?.[slotKey]
+      || (profile === 'gym' ? s.ex : s.room || s.ex);
+    const key = pick(wanted);
+    if (!key) return;
+    const def0 = getDef(key);
+    const type = effortType(def0, s);
+    const loadable = !!def0.load && canLoad(def0, equipment);
+    const topSet = s.b === 'main' && loadable;
+    const bd = isCompact ? 1 : (s.bd ?? setup.bd);
+    const range = topSet ? (s.top || setup.top) : s.range || undefined;
+    const sets = isCompact && s.role === 'anchor' ? 2 : s.b === 'main' && !topSet ? 1 + bd : s.sets;
+    let item = itemFor(key, { data, profile, sets: topSet ? 1 + bd : sets, getDef, arcN: arc.n, range });
+    item = { ...item, block: s.b, role: s.role, note: [s.note, s.b === 'main' && setup.tempo ? '3 s ablassen' : null].filter(Boolean).join(' · ') || undefined,
+      optional: !!s.optional, main: s.b === 'main' || s.role === 'anchor', anchor: s.role === 'anchor', arms: !!s.arms, slotKey,
+      explosive: type === 'power' || undefined, effort: type };
+    // Körpersignale (Ellbogen, Regionen): Übung tauschen oder weniger Last
+    const adj = (sig.elbowFull || sig.regions.length) ? adjustment(getDef(item.exId), { ...sig, equipment, all: EXERCISES, getDef }) : null;
+    if (adj) {
+      if (adj.id !== item.exId) {
+        const swapped = itemFor(adj.id, { data, profile, sets: item.sets, getDef, arcN: arc.n });
+        item = { ...swapped, block: item.block, role: item.role, optional: item.optional, main: item.main, anchor: item.anchor, effort: item.effort, explosive: item.explosive, slotKey, originalKey: key };
+      } else if (adj.lessLoad && item.load > 0) {
+        item = { ...item, load: stepLoad(item.ladder, item.load, -1), noFailure: true };
+      }
+      item.adjust = adj.reason;
+      item.caution = !!adj.caution;
+    }
+    const wa = !declined && wristAdjust(wrist, item.exId);
+    if (wa?.swap && resolveExercise(wa.swap, equipment, getDef) === wa.swap) {
+      const swapped = itemFor(wa.swap, { data, profile, sets: item.sets, getDef, arcN: arc.n });
+      item = { ...swapped, block: item.block, role: item.role, optional: item.optional, main: item.main, anchor: item.anchor, effort: item.effort, slotKey, originalKey: key, adjust: wa.note };
+    } else if (wa) item.wristNote = wa.note;
+
+    // Hauptübung: Top-Satz + Backdowns (ca. −15 %). Deload: kein Top-Satz, nur Backdowns zur Hälfte.
+    if (topSet && item.exId === key) {
+      const bdRange = s.bdRange || setup.bdRange;
+      const bdLoad = snap(item.ladder, item.load * BACKDOWN_PCT);
+      const backdowns = Array.from({ length: bd }, () => ({ value: bdRange[0], load: bdLoad, label: 'Backdown' }));
+      item.topSet = true;
+      item.bdRange = bdRange;
+      item.setPlan = deload ? backdowns.slice(0, Math.max(1, Math.ceil(bd / 2)))
+        : [{ value: item.target, load: item.load, label: 'Top-Satz' }, ...backdowns];
+      item.sets = item.setPlan.length;
+      if (deload) item.topSet = false;
+    }
+    item = applyModifier(item, deload && item.setPlan ? { ...modifier, setFactor: 1 } : modifier, getDef(item.exId));
+    if (item.setPlan && modifier.type === 'comeback') {
+      item.setPlan = item.setPlan.slice(0, Math.max(1, item.sets)).map((x, j) => (j === 0 && x.label === 'Top-Satz'
+        ? { ...x, value: item.target, load: item.load } : { ...x, load: snap(item.ladder, item.load * BACKDOWN_PCT) }));
+      item.sets = item.setPlan.length;
+    }
+
+    // RIR je Übungsart und Kapitelwoche (Woche 1 eine Wdh. mehr im Tank, Woche 4–5 Zuspitzung)
+    if (type === 'main') {
+      item.rir = deload ? 3 : peak ? Math.min(setup.topRir, 1) : setup.topRir + (first ? 1 : 0);
+      item.noFailure = true;
+    } else if (type === 'power') {
+      item.rir = null;
+      item.noFailure = true;
+    } else if (type === 'toZero') {
+      item.rir = deload ? 3 : first ? 2 : 1;
+      item.lastZero = !deload && !setup.noZero && !first;
+      item.failLast = !deload && !setup.noZero && peak && !item.noFailure;
+    } else if (type === 'mid') {
+      item.rir = deload ? 3 : first ? 3 : peak ? 1 : 2;
+    } else item.rir = null;
+    if (deload) item.noFailure = true;
+    items.push(item);
+
+    // Kontrast (Frühjahr Kapitel 1): nach dem Top-Satz 3 explosive Wiederholungen im gleichen Muster
+    if (s.b === 'main' && setup.contrast && s.contrast && !s.noContrast && !isCompact && !deload) {
+      const partner = pick(s.contrast);
+      if (partner) {
+        items.push({ key: partner, exId: partner, sets: 1, target: 3, load: 0, ladder: [0], optional: false, block: 'main',
+          explosive: true, contrast: true, noFailure: true, rir: null, trend: null, lastTime: lastSetsFor(data.sessions, partner), effort: 'power' });
+      }
+    }
+  });
+  return items;
+}
+
 export const WRIST_NAMES = { strength: 'HANDGELENK · Kraftblock', activation: 'HANDGELENK · Aktivierung', minimal: 'HANDGELENK · Minimal-Dosis', maintenance: 'HANDGELENK · Erhaltung' };
 const WRIST_FOCUS = { strength: 'Übungen der aktuellen Stufe', activation: 'Isometrie in 6 Richtungen, Pronator quadratus, ECU', minimal: 'Isometrie in 6 Richtungen und Gelenkgefühl', maintenance: 'Isometrie, Hammer-Drehung, Bottom-up Hold' };
 const WRIST_MIN = { strength: 12, activation: 4, minimal: 5, maintenance: 10 };
@@ -342,6 +474,7 @@ export function itemFor(key, { data, profile, sets, getDef = defaultGetDef, arcN
   // Neuer Arc (oder anderer Wiederholungsbereich): Ziel startet am unteren Ende, die Last bleibt.
   const r = range || (getDef(st.exId) || baseDef).range;
   if (arcN != null && st.arc != null && st.arc !== arcN) st = { ...st, target: r[0], lastChange: null };
+  if (range && st.range && (st.range[0] !== range[0] || st.range[1] !== range[1])) st = { ...st, target: range[0], lastChange: null };
   if (range && st.target > range[1]) st = { ...st, target: range[1] };
   let def = getDef(st.exId) || baseDef;
   if (!(def.equipment || []).every((e) => equipment.includes(e))) def = baseDef;
@@ -420,6 +553,11 @@ export function swapGroups(exId, { data, profile, today, getDef = defaultGetDef,
 // Laufendes Training aus einem Plan. Sätze sind mit dem Ziel vorausgefüllt.
 export function createActive(plan, today, now = Date.now()) {
   const active = { plan, day: today, startedAt: now, index: 0, roundsDone: 0, marks: [now] };
+  // UMBRA 2.0: der CMPND Block läuft von selbst als Superset (Anker ↔ Partner)
+  if (plan.program) {
+    const o = supersetOptions(plan.items).find((x) => x.cmpnd);
+    if (o) active.supersets = [`${o.a}:${o.b}`];
+  }
   if (plan.format === 'sets') {
     active.log = plan.items.map((it) => ({
       key: it.key, exId: it.exId,
@@ -482,7 +620,10 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
       if (def.mode !== 'fixed' && (!prev || best > prev.score)) {
         const top = done.reduce((a, s) => (setScore(def, s, bodyweight) >= setScore(def, a, bodyweight) ? s : a));
         records[entry.exId] = { score: best, value: top.value, load: top.load, day };
-        if (prev) newRecords.push({ exId: entry.exId, value: top.value, load: top.load });
+        // Rekord nur gegen den Stand vor dieser Einheit (unterwegs kann dieselbe Ersatzübung zweimal vorkommen)
+        if (data.records[entry.exId] && best > data.records[entry.exId].score && !newRecords.some((x) => x.exId === entry.exId)) {
+          newRecords.push({ exId: entry.exId, value: top.value, load: top.load });
+        }
       }
       // Progression nur bei normalen Einheiten, nie für explosive Kontrast-Partner
       const item = p.items[i];
@@ -498,7 +639,8 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
       if (!counted.length) return;
       const ranged = item.range ? { ...def, range: item.range } : def;
       const nx = { ...progress(ranged, cur, counted.map((s) => ({ value: s.value, load: s.load, rir: s.rir })),
-        { settings, equipment, getDef, rir: item.rir ?? null, fixed: !!data.settings.fixedLoad?.[sk] }), arc: p.arc?.n };
+        { settings, equipment, getDef, rir: item.rir ?? null, fixed: !!data.settings.fixedLoad?.[sk] }), arc: p.arc?.n,
+        ...(item.range ? { range: item.range } : {}) };
       // Stufen-Vorschlag gehört zu einem Platz der Rotation (unterwegs nicht)
       if (nx.suggest && (!item.slotKey || p.profile === 'travel')) delete nx.suggest;
       else if (nx.suggest) nx.suggest = { ...nx.suggest, slotKey: item.slotKey };
@@ -506,7 +648,7 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
     });
   }
 
-  if ((p.missionId === 'D' || p.missionId === 'HOTEL') && p.modifier?.type === 'none') {
+  if (p.format === 'circuit' && (p.missionId === 'D' || p.missionId === 'HOTEL') && p.modifier?.type === 'none') {
     const ck = stateKey(p.profile, `circuit:${p.missionId}`);
     const c = exState[ck] || { target: 3, streak: 0 };
     const streak = active.roundsDone >= c.target ? c.streak + 1 : 0;
