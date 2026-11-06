@@ -309,23 +309,23 @@ describe('Plan', () => {
     expect(resolveExercise('jump_rope', ['rope'])).toBe('jump_rope');
     expect(resolveExercise('ab_rollout', [])).toBe('hollow_body');
   });
-  it('Mission A im eigenen Raum ohne Zusatz-Equipment', () => {
+  it('Mission A im Fighting Cave: Blöcke, KB statt Langhantel, Ersatz für fehlende Geräte', () => {
     const plan = buildPlan({ missionId: 'A', profile: 'room', data: defaultData(), today: T });
     const ids = plan.items.map((i) => i.exId);
-    expect(ids).toContain('shadow_boxing');
-    expect(ids).toContain('neck_iso_manual');
-    expect(ids).toContain('hollow_body');
-    expect(ids.includes('lat_pulldown')).toBe(false);
+    expect(ids).toContain('shadow_boxing'); // kein Seil im Raum
+    expect(ids).toContain('kb_row_ballistic'); // Winter Kapitel 2: Pendlay Row → KB im Cave
+    expect(ids).toContain('neck_iso_manual'); // kein Nackengeschirr
+    expect(ids.some((id) => (getDef(id).equipment || []).includes('barbell'))).toBe(false);
+    expect(plan.blocks).toEqual(['warmup', 'power', 'main', 'cmpnd', 'core']);
   });
-  it('Home Gym: B wechselt Kniebeuge/Kreuzheben, 4 Sätze', () => {
-    const d = defaultData();
-    const p1 = buildPlan({ missionId: 'B', profile: 'gym', data: d, today: T });
-    const main1 = p1.items.find((i) => ['back_squat', 'deadlift'].includes(i.exId));
-    expect(main1.exId).toBe('back_squat');
-    expect(main1.sets).toBe(4);
-    d.sessions = [mission('2026-10-10', 'B', { profile: 'gym' })];
-    const p2 = buildPlan({ missionId: 'B', profile: 'gym', data: d, today: T });
-    expect(p2.items.some((i) => i.exId === 'deadlift')).toBe(true);
+  it('Home Gym: Langhantel-Hauptübung als Top-Satz + Backdowns', () => {
+    const p = buildPlan({ missionId: 'B', profile: 'gym', data: defaultData(), today: T });
+    const main = p.items.find((i) => i.block === 'main');
+    expect(main.exId).toBe('back_squat'); // Winter Kapitel 2 (Prüfwoche nutzt Kapitel 2)
+    expect(main.setPlan.map((x) => x.label)).toEqual(['Top-Satz', 'Backdown', 'Backdown']);
+    expect(main.setPlan[1].load < main.setPlan[0].load).toBe(true);
+    expect(main.range).toEqual([3, 5]);
+    expect(main.noFailure).toBe(true);
   });
   it('Wiedereinstieg 8–14 Tage: ein Satz weniger, −10 % Wdh.', () => {
     const d = defaultData();
@@ -334,7 +334,7 @@ describe('Plan', () => {
     const plan = buildPlan({ missionId: 'C', profile: 'room', data: d, today: T });
     const dip = plan.items.find((i) => i.exId === 'dip');
     expect(plan.modifier.type).toBe('comeback');
-    expect(dip.sets).toBe(3);
+    expect(dip.sets).toBe(2); // Anker 3 Sätze, ein Satz weniger
     expect(dip.target).toBe(9);
   });
   it('Fluss hat 8 Stretches und variiert täglich', () => {
@@ -375,9 +375,9 @@ describe('Verbuchen', () => {
     d = run(d, 'C', (a) => { a.log.forEach((e) => e.sets.forEach((s) => { s.done = true; })); }).data;
     const r = run(d, 'C', (a) => {
       a.log.forEach((e) => e.sets.forEach((s) => { s.done = true; }));
-      a.log.find((e) => e.exId === 'pushup_max').sets[0].value = 40;
+      a.log.find((e) => e.exId === 'dip').sets[0].value = 40;
     });
-    expect(r.session.records.some((x) => x.exId === 'pushup_max')).toBe(true);
+    expect(r.session.records.some((x) => x.exId === 'dip')).toBe(true);
   });
   it('Arena-Log', () => {
     const { session } = logArena(defaultData(), { day: T, intensity: 'hard', minutes: 60 });
@@ -724,27 +724,26 @@ describe('Varianten nur beim Arc-Wechsel', () => {
     expect(r.pendingVariant).toBe(undefined);
     expect(applyLadderChoice({ ...r, suggest: { ...r.suggest, slotKey: 'C:2' } }, 'arc').state.pendingVariant).toBe('pike_pushup_high');
   });
-  it('Arc-Wechsel setzt vorgemerkte Stufe bei Hauptübungen', () => {
-    const { engine, exState } = applyArcChange(initialEngine(MON), { pike_pushup_box: { exId: 'pike_pushup_box', pendingVariant: 'hspu_negative' } });
-    expect(engine.slotVariant['C:2']).toBe('hspu_negative');
-    expect(exState.pike_pushup_box.pendingVariant).toBe(undefined);
+  it('Arc-Wechsel setzt vorgemerkte Stufe bei Hauptübungen (FORGE)', () => {
+    const { engine, exState } = applyArcChange(initialEngine(MON), { deadlift: { exId: 'deadlift', pendingVariant: 'snatch_grip_deadlift' } });
+    expect(engine.slotVariant['FORGE:1']).toBe('snatch_grip_deadlift');
+    expect(exState.deadlift.pendingVariant).toBe(undefined);
   });
   it('Hauptübung ohne Vormerkung bleibt', () => {
     const { engine } = applyArcChange(initialEngine(MON), {});
     expect(engine.slotVariant['A:1']).toBe(undefined); // Klimmzüge
     expect(engine.slotVariant['C:1']).toBe(undefined); // Dips
   });
-  it('Nebenplatz mit Variantenliste rotiert', () => {
+  it('A–D wechseln über das Saison-Programm, nicht über Variantenlisten', () => {
     const { engine } = applyArcChange(initialEngine(MON), {});
-    expect(engine.slotVariant['A:2']).toBe('bw_row_table');
-    expect(engine.slotVariant['C:4']).toBe('pseudo_planche_pushup');
+    expect(Object.keys(engine.slotVariant).some((k) => /^[ABCD]:/.test(k))).toBe(false);
   });
-  it('Plan nutzt die Variante des Platzes', () => {
+  it('Plan nutzt die Variante des Platzes (Saison und Kapitel im Schlüssel)', () => {
     const d = defaultData();
-    d.engine.slotVariant = { 'C:4': 'pseudo_planche_pushup' };
+    d.engine.slotVariant = { 'C:WINTER1:3': 'pseudo_planche_pushup' }; // Winter Kapitel 2, CMPND-Partner
     const plan = buildPlan({ missionId: 'C', profile: 'room', data: d, today: T });
     expect(plan.items.some((i) => i.exId === 'pseudo_planche_pushup')).toBe(true);
-    expect(plan.items.some((i) => i.exId === 'pushup_max')).toBe(false);
+    expect(plan.items.some((i) => i.exId === 'archer_pushup')).toBe(false);
   });
   it('neuer Arc: Ziel startet unten, Last bleibt', () => {
     const d = defaultData();
@@ -767,7 +766,7 @@ describe('Belastungsklassen', () => {
     expect(loadClass({ kind: 'mission', missionId: 'NOR4X4' })).toBe('high');
     expect(loadClass({ kind: 'arena', rpe: 8 })).toBe('high');
     expect(loadClass({ kind: 'mission', missionId: 'A' })).toBe('normal');
-    expect(loadClass({ kind: 'mission', missionId: 'D' })).toBe('normal');
+    expect(loadClass({ kind: 'mission', missionId: 'D' })).toBe('high'); // Full Body mit Kreuzheben
     expect(loadClass({ kind: 'arena', rpe: 4 })).toBe('low');
     expect(loadClass({ kind: 'mission', missionId: 'B', compact: true })).toBe('low');
     expect(loadClass({ kind: 'mission', missionId: 'D_LIGHT' })).toBe('low');
@@ -863,11 +862,13 @@ describe('Feiertagsmodus', () => {
 });
 
 describe('Kompakt, Plyo, Kontrast, Top-Satz, Arc IV', () => {
-  it('Kompakt: nur Hauptübungen, je 2 Sätze, Name QUICK STRIKE', () => {
+  it('Kompakt: Power, Hauptübung (Top + 1 Backdown) und Anker mit 2 Sätzen, Name QUICK STRIKE', () => {
     const plan = buildPlan({ missionId: 'B', profile: 'room', data: defaultData(), today: T, compact: true });
     expect(plan.name.startsWith('QUICK STRIKE')).toBe(true);
-    expect(plan.items.length >= 3 && plan.items.length <= 4).toBe(true);
-    expect(plan.items.every((i) => i.sets === 2 && i.main)).toBe(true);
+    expect(plan.blocks).toEqual(['warmup', 'power', 'main', 'cmpnd']);
+    expect(plan.items.find((i) => i.block === 'main').sets).toBe(2);
+    expect(plan.items.find((i) => i.anchor).sets).toBe(2);
+    expect(plan.items.some((i) => i.exId === 'mobility_block')).toBe(false);
   });
   it('Kompakt zählt für die Rotation', () => {
     const d = defaultData();
@@ -876,9 +877,13 @@ describe('Kompakt, Plyo, Kontrast, Top-Satz, Arc IV', () => {
     expect(r.data.engine.queue[4]).toBe('A');
     expect(r.session.compact).toBe(true);
   });
-  it('Plyo-Info nur bei Missionen mit Sprungplatz', () => {
-    expect(buildPlan({ missionId: 'A', profile: 'room', data: defaultData(), today: T }).plyo).toBe(null);
-    expect(buildPlan({ missionId: 'B', profile: 'room', data: defaultData(), today: T }).plyo.stage).toBe(1);
+  it('Power-Block statt Plyo-Stufe: der Sprung kommt aus dem Programm', () => {
+    const plan = buildPlan({ missionId: 'B', profile: 'room', data: defaultData(), today: T });
+    expect(plan.plyo).toBe(null);
+    const power = plan.items.find((i) => i.block === 'power');
+    expect(power.exId).toBe('broad_jump'); // Winter Kapitel 2
+    expect(power.explosive).toBe(true);
+    expect(power.rir).toBe(null);
   });
   it('Plyo-Stufe aus dem Arc, vor Sparring höchstens 3', () => {
     const arcII = { n: 1, week: 2 }; // Frühjahr Kapitel 1 (Power): Plyo 4
@@ -890,40 +895,41 @@ describe('Kompakt, Plyo, Kontrast, Top-Satz, Arc IV', () => {
     const arcI = { n: 0, week: 1 };
     expect(plyoFor(weekInfo(arcI), arcI, false).exId).toBe('landing_drill');
   });
-  it('Winter Kapitel 2: Top-Satz + Backdown, keine Kontrastpaare', () => {
+  it('Winter Kapitel 2: Top-Satz + 2 Backdowns in der Hauptübung, kein Kontrast, Anker ohne Top-Satz', () => {
     const d = defaultData();
     d.engine.arc = { ...initialArc(MON), n: 0, week: 8 };
     d.settings.equipment.room = [...d.settings.equipment.room, 'belt'];
     const plan = buildPlan({ missionId: 'C', profile: 'room', data: d, today: T });
-    const dip = plan.items.find((i) => i.exId === 'dip');
-    expect(dip.topSet).toBe(true);
-    expect(plan.items.some((i) => i.explosive)).toBe(false);
+    const main = plan.items.find((i) => i.block === 'main');
+    expect(main.exId).toBe('kb_push_press_sa');
+    expect(main.setPlan.map((x) => x.label)).toEqual(['Top-Satz', 'Backdown', 'Backdown']);
+    expect(plan.items.some((i) => i.contrast)).toBe(false);
+    expect(!!plan.items.find((i) => i.exId === 'dip').topSet).toBe(false);
   });
-  it('Frühjahr: Kontrastpartner und Top-Satz als Kraft-Erhalt', () => {
+  it('Frühjahr Kapitel 1: Top-Satz → Kontrast → 1 Backdown', () => {
     const d = defaultData();
     d.engine.arc = { ...initialArc(MON), n: 1, week: 2 };
-    d.settings.equipment.room = [...d.settings.equipment.room, 'belt'];
-    const plan = buildPlan({ missionId: 'C', profile: 'room', data: d, today: T });
-    const dip = plan.items.find((i) => i.exId === 'dip');
-    expect(dip.topSet).toBe(true);
-    expect(dip.setPlan.map((x) => x.label)).toEqual(['Top-Satz', 'Backdown']);
-    const idx = plan.items.indexOf(dip);
-    expect(plan.items[idx + 1].exId).toBe('plyo_pushup');
-    expect(plan.items[idx + 1].explosive).toBe(true);
+    const plan = buildPlan({ missionId: 'C', profile: 'gym', data: d, today: T });
+    const main = plan.items.find((i) => i.block === 'main' && !i.contrast);
+    expect(main.exId).toBe('push_press');
+    expect(main.setPlan.map((x) => x.label)).toEqual(['Top-Satz', 'Backdown']);
+    const idx = plan.items.indexOf(main);
+    expect(plan.items[idx + 1].exId).toBe('ball_slam');
+    expect(plan.items[idx + 1].contrast).toBe(true);
+    expect(plan.items[idx + 1].sets).toBe(1);
   });
-  it('Top-Satz: Progression nur über den Top-Satz', () => {
+  it('Top-Satz: Progression nur über den Top-Satz, Backdowns rechnen mit', () => {
     const d = defaultData();
     d.engine.arc = { ...initialArc(MON), n: 1, week: 2 };
-    d.settings.equipment.room = [...d.settings.equipment.room, 'belt'];
-    d.exState.dip = { exId: 'dip', load: 8, target: 5, miss: 0, arc: 1 };
+    d.exState.kb_push_press_sa = { exId: 'kb_push_press_sa', load: 20, target: 5, miss: 0, arc: 1, range: [3, 5] };
     const plan = buildPlan({ missionId: 'C', profile: 'room', data: d, today: T });
     const a = createActive(plan, T, 0);
-    const i = plan.items.findIndex((x) => x.exId === 'dip');
+    const i = plan.items.findIndex((x) => x.exId === 'kb_push_press_sa');
     a.log[i].sets[0] = { ...a.log[i].sets[0], value: 5, done: true };
     a.log[i].sets[1] = { ...a.log[i].sets[1], value: 3, done: true };
     const r = finishSession(d, a, { now: 1 });
-    expect(r.data.exState.dip.load).toBe(12);
-    expect(r.data.exState.dip.target).toBe(3);
+    expect(r.data.exState.kb_push_press_sa.load).toBe(24);
+    expect(r.data.exState.kb_push_press_sa.target).toBe(3);
   });
   it('FORGE nutzt Kontrastpaare immer', () => {
     const plan = buildPlan({ missionId: 'FORGE', profile: 'gym', data: defaultData(), today: T, slot: 'A' });
@@ -934,12 +940,18 @@ describe('Kompakt, Plyo, Kontrast, Top-Satz, Arc IV', () => {
     expect(plan.items[pp + 1].explosive).toBe(undefined);
     expect(plan.plyo).toBe(null);
   });
-  it('Arc IV: ein Satz weniger, belastete Mobility kommt dazu', () => {
+  it('Herbst Kapitel 1: Top-Satz 10–12 mit RIR 2, 3 s ablassen, belastete Mobility, letzter Satz RIR 1', () => {
     const d = defaultData();
     d.engine.arc = { ...initialArc(MON), n: 3, week: 2 };
     const plan = buildPlan({ missionId: 'B', profile: 'room', data: d, today: T });
-    expect(plan.items.find((i) => i.exId === 'nordic_curl').sets).toBe(2);
-    expect(plan.items.some((i) => i.exId === 'copenhagen_plank')).toBe(true);
+    const main = plan.items.find((i) => i.block === 'main');
+    expect(main.range).toEqual([10, 12]);
+    expect(main.rir).toBe(2);
+    expect(main.note.includes('3 s ablassen')).toBe(true);
+    expect(plan.items.some((i) => i.exId === 'copenhagen_plank' && i.block === 'mobility')).toBe(true);
+    const dip = buildPlan({ missionId: 'C', profile: 'room', data: d, today: T }).items.find((i) => i.anchor);
+    expect(dip.exId).toBe('dip');
+    expect(dip.lastZero).toBe(false); // Herbst Kapitel 1: letzter Satz RIR 1 statt 0
   });
   it('RIR-Ziel aus der Arc-Woche im Plan', () => {
     const d = defaultData();
@@ -968,35 +980,35 @@ describe('Stagnation', () => {
   const session = (week, exId, value, extra = {}) => ({ id: `${exId}${week}${value}${Math.random()}`, day: T, kind: 'mission', missionId: 'C',
     modifier: 'none', arc: { n: 0, week }, exercises: [{ exId, key: exId, sets: [{ value, load: 0, done: true }] }], ...extra });
   const withArc = (week) => { const d = defaultData(); d.engine.arc = { ...initialArc(MON), week }; return d; };
-  it('Stufe 1 schlägt eine Variante vor', () => {
+  it('Stufe 1 schlägt eine Variante vor (Anker und Hauptübungen des Kapitels)', () => {
     const d = withArc(3);
-    d.sessions = [10, 12, 12, 11, 12].map((v) => session(2, 'nordic_curl', v));
+    d.sessions = [10, 12, 12, 11, 12].map((v) => session(2, 'dip', v));
     const st = stagnationStatus(d);
     expect(st.stage1.length).toBe(1);
-    expect(st.stage1[0].slotKey).toBe('B:5');
+    expect(st.stage1[0].slotKey).toBe('C:WINTER0:2');
     expect(st.stage2).toBe(false);
   });
   it('kein Signal in Arc-Woche 1', () => {
     const d = withArc(1);
-    d.sessions = [10, 12, 12, 11, 12].map((v) => session(1, 'nordic_curl', v));
+    d.sessions = [10, 12, 12, 11, 12].map((v) => session(1, 'dip', v));
     expect(stagnationStatus(d).stage1.length).toBe(0);
   });
   it('die ersten 2 Einheiten nach einer Pause zählen nicht', () => {
     const d = withArc(3);
-    d.sessions = [session(2, 'nordic_curl', 12), session(2, 'nordic_curl', 10, { afterPause: true }), session(2, 'nordic_curl', 10), session(2, 'nordic_curl', 13)];
+    d.sessions = [session(2, 'dip', 12), session(2, 'dip', 10, { afterPause: true }), session(2, 'dip', 10), session(2, 'dip', 13)];
     expect(stagnationStatus(d).stage1.length).toBe(0);
   });
   it('Stufe 2 bei 3 Mustern', () => {
     const d = withArc(3);
-    d.sessions = ['nordic_curl', 'pike_pushup_box', 'hanging_leg_raise'].flatMap((id) => [10, 12, 12, 11, 12].map((v) => session(2, id, v)));
+    d.sessions = ['dip', 'pullup_tactical', 'bulgarian_split_squat'].flatMap((id) => [10, 12, 12, 11, 12].map((v) => session(2, id, v)));
     const st = stagnationStatus(d);
     expect(st.stage1.length).toBe(3);
     expect(st.stage2).toBe(true);
   });
   it('abgelehnter Vorschlag ruht bis zur nächsten Einheit', () => {
     const d = withArc(3);
-    d.sessions = [10, 12, 12, 11, 12].map((v) => session(2, 'nordic_curl', v));
-    d.engine.stagnationDismissed = { 'B:5': 5 };
+    d.sessions = [10, 12, 12, 11, 12].map((v) => session(2, 'dip', v));
+    d.engine.stagnationDismissed = { 'C:WINTER0:2': 5 };
     expect(stagnationStatus(d).stage1.length).toBe(0);
   });
 });
@@ -1040,7 +1052,7 @@ describe('Migration v1 → v2', () => {
     expect(m.engine.queue).toEqual(['C', 'D', 'FORGE', 'A', 'B']);
     expect(m.engine.fullSinceDeload).toBe(undefined);
     expect(m.settings.holiday.enabled).toBe(true);
-    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7', 'migration:v8', 'migration:v9', 'migration:v10']);
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7', 'migration:v8', 'migration:v9', 'migration:v10', 'migration:v11']);
     expect(m.mobility.length).toBe(1);
   });
   it('nach der Migration startet Arc I am Tag der ersten Mission (v3)', () => {
@@ -1156,12 +1168,11 @@ describe('Ellbogen', () => {
     const plan2 = buildPlan({ missionId: 'A', profile: 'room', data: d, today: T });
     expect(plan2.items.some((i) => i.exId === 'kb_row_ballistic')).toBe(true);
   });
-  it('Prehab fest in A und C, nicht im Kompakt-Modus', () => {
-    const a = buildPlan({ missionId: 'A', profile: 'room', data: defaultData(), today: T });
-    expect(a.items.filter((i) => i.prehab).map((i) => i.exId)).toEqual(['forearm_rotation', 'wrist_ext_eccentric', 'dead_hang']);
-    expect(buildPlan({ missionId: 'C', profile: 'room', data: defaultData(), today: T }).items.some((i) => i.prehab)).toBe(true);
-    expect(buildPlan({ missionId: 'B', profile: 'room', data: defaultData(), today: T }).items.some((i) => i.prehab)).toBe(false);
-    expect(buildPlan({ missionId: 'A', profile: 'room', data: defaultData(), today: T, compact: true }).items.some((i) => i.prehab)).toBe(false);
+  it('UMBRA 2.0: kein Ellbogen-Prehab mehr in den Missionen', () => {
+    for (const id of ['A', 'B', 'C', 'D']) {
+      const ids = buildPlan({ missionId: id, profile: 'room', data: defaultData(), today: T }).items.map((i) => i.exId);
+      expect(['forearm_rotation', 'wrist_ext_eccentric'].some((x) => ids.includes(x))).toBe(false);
+    }
   });
   it('Physio-Hinweis nach 3 Wochen mit vollem Zähler, nur einmal', () => {
     let d = defaultData();
@@ -1323,7 +1334,7 @@ describe('Nemesis und Boss-Ausgang', () => {
     d.engine.arc = { ...initialArc(MON), week: 3 };
     const sess = (id, v) => ({ id: `${id}${v}${Math.random()}`, day: T, kind: 'mission', missionId: 'C', modifier: 'none', arc: { n: 0, week: 2 },
       exercises: [{ exId: id, key: id, sets: [{ value: v, load: 0, done: true }] }] });
-    d.sessions = ['nordic_curl', 'pike_pushup_box', 'hanging_leg_raise'].flatMap((id) => [10, 12, 12, 11, 12].map((v) => sess(id, v)));
+    d.sessions = ['dip', 'pullup_tactical', 'bulgarian_split_squat'].flatMap((id) => [10, 12, 12, 11, 12].map((v) => sess(id, v)));
     return d;
   };
   it('Nemesis erscheint bei Stagnation Stufe 2, nur einmal', () => {
@@ -1588,13 +1599,13 @@ describe('v3 · RIR', () => {
     expect(r.load).toBe(16);
     expect(r.lastChange).toBe('load_up');
   });
-  it('finishSession nutzt das geloggte RIR', () => {
+  it('finishSession nutzt das geloggte RIR (KB-Übung mit Ziel RIR 2, RIR 0 geloggt → nicht steigern)', () => {
     const data = { ...defaultData(), settings: { ...defaultData().settings, onboarded: true } };
-    const plan = buildPlan({ missionId: 'C', profile: 'room', data, today: T });
+    const plan = buildPlan({ missionId: 'B', profile: 'room', data, today: T });
+    expect(plan.items.find((i) => i.exId === 'lateral_lunge_kb').rir).toBe(2);
     const a = doneAll(createActive(plan, T), 0);
     const r = finishSession(data, a, { now: Date.now() });
-    const dip = r.data.exState.dip;
-    expect(dip.lastChange).toBe('held_rir');
+    expect(r.data.exState.lateral_lunge_kb.lastChange).toBe('held_rir');
   });
 });
 
@@ -1797,7 +1808,7 @@ describe('v3 · Migration v2 → v3', () => {
     expect(m.exState.pullup.target).toBe(6);
     expect(m.engine.queue).toEqual(['B', 'C', 'D', 'FORGE', 'A']);
     expect(m.engine.arc.week).toBe(1);
-    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7', 'migration:v8', 'migration:v9', 'migration:v10']);
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7', 'migration:v8', 'migration:v9', 'migration:v10', 'migration:v11']);
     expect(m.techChecks).toEqual({});
   });
   it('Migration ist wiederholbar', () => {
@@ -1928,11 +1939,11 @@ describe('v4 · Pausenklassen', () => {
     expect(missing).toEqual([]);
   });
   it('Sekunden je Klasse, +30 bei Top-Satz oder RIR 0, gemerkte Anpassung', () => {
-    expect(restFor(getDef('deadlift'))).toBe(150);
+    expect(restFor(getDef('deadlift'))).toBe(90); // UMBRA 2.0: Standard 90 s
     expect(restFor(getDef('bw_row'))).toBe(90);
     expect(restFor(getDef('hanging_leg_raise'))).toBe(60);
-    expect(restFor(getDef('broad_jump'))).toBe(90);
-    expect(restFor(getDef('deadlift'), { topSet: true })).toBe(180);
+    expect(restFor(getDef('broad_jump'))).toBe(75);
+    expect(restFor(getDef('deadlift'), { topSet: true })).toBe(120); // Top-Satz bis 2 min
     expect(restFor(getDef('bw_row'), { rir: 0 })).toBe(120);
     expect(restFor(getDef('bw_row'), { adjust: -30 })).toBe(60);
     expect(restFor(getDef('hanging_leg_raise'), { adjust: -90 })).toBe(15);
@@ -2011,13 +2022,13 @@ describe('v4 · Progressionsleitern', () => {
   });
   it('finishSession hängt den Platz an den Vorschlag, unterwegs nicht', () => {
     const data = { ...defaultData(), settings: { ...defaultData().settings, onboarded: true },
-      exState: { bw_row: { exId: 'bw_row', load: 0, target: 15, topStreak: 1 } } };
+      exState: { bw_row_elevated: { exId: 'bw_row_elevated', load: 0, target: 12, topStreak: 1, range: [8, 12] } } };
     const plan = buildPlan({ missionId: 'A', profile: 'room', data, today: T });
-    const i = plan.items.findIndex((x) => x.exId === 'bw_row');
+    const i = plan.items.findIndex((x) => x.exId === 'bw_row_elevated');
     const a = createActive(plan, T);
-    a.log[i].sets.forEach((s) => { s.done = true; s.value = 15; s.rir = 2; });
+    a.log[i].sets.forEach((s) => { s.done = true; s.value = 12; s.rir = 2; });
     const r = finishSession(data, a);
-    expect(r.data.exState.bw_row.suggest.slotKey).toBe(plan.items[i].slotKey);
+    expect(r.data.exState.bw_row_elevated.suggest.slotKey).toBe(plan.items[i].slotKey);
   });
 });
 
@@ -2321,7 +2332,7 @@ describe('Handgelenk · Einbau und Dosis', () => {
     const d = wristOn({ on: false, levels: { w_curl: 2 } });
     expect(blockForMission(d, 'A', T)).toBe(null);
     const plan = buildPlan({ missionId: 'A', profile: 'room', data: d, today: T });
-    expect(plan.items.some((i) => i.prehab)).toBe(true);
+    expect(plan.items.some((i) => i.wrist)).toBe(false);
     expect(wristOf(d).levels.w_curl).toBe(2);
   });
   it('Eigene Session verbucht 10 XP im Tagesdeckel, Kraftblock in Mission keine Extra-XP', () => {
@@ -2555,7 +2566,7 @@ describe('Gelenk-Pause', () => {
       expect(['forearm_rotation', 'wrist_ext_eccentric', 'dead_hang'].some((x) => ids.includes(x))).toBe(false);
     }
     const normal = buildPlan({ missionId: 'A', profile: 'room', data: defaultData(), today: T }).items.map((i) => i.exId);
-    expect(normal.includes('dead_hang')).toBe(true);
+    expect(normal.includes('forearm_rotation')).toBe(false); // UMBRA 2.0: Ellbogen-Prehab ist raus
   });
   it('Handgelenk-Modul gilt als aus, Daten bleiben', () => {
     const d = paused();
@@ -2630,27 +2641,29 @@ describe('Saisons: 2 Kapitel + Prüfwoche', () => {
     expect(arcInDeload({ n: 0, week: 13 })).toBe(false);
     expect(jumpToDeload({ n: 0, week: 8 }).week).toBe(12);
   });
-  it('Regler: Winter Kapitel 1 +1 Satz, Kapitel 2 Top-Satz', () => {
+  it('Winter: Kapitel 1 Strict Press Top 6–8 + 2 × 8–10, Kapitel 2 Push Press Top 3–5', () => {
     const d = defaultData();
-    d.settings.equipment.room = [...d.settings.equipment.room, 'belt'];
     d.engine.arc = { ...initialArc(MON), n: 0, week: 2 };
-    const k1 = buildPlan({ missionId: 'C', profile: 'room', data: d, today: T }).items.find((i) => i.exId === 'dip');
-    expect(k1.sets).toBe(5);
+    const k1 = buildPlan({ missionId: 'C', profile: 'gym', data: d, today: T }).items.find((i) => i.block === 'main');
+    expect(k1.exId).toBe('strict_press');
+    expect(k1.range).toEqual([6, 8]);
+    expect(k1.bdRange).toEqual([8, 10]);
     d.engine.arc.week = 8;
-    const k2 = buildPlan({ missionId: 'C', profile: 'room', data: d, today: T }).items.find((i) => i.exId === 'dip');
-    expect(k2.topSet).toBe(true);
+    const k2 = buildPlan({ missionId: 'C', profile: 'gym', data: d, today: T }).items.find((i) => i.block === 'main');
+    expect(k2.exId).toBe('push_press');
+    expect(k2.range).toEqual([3, 5]);
   });
-  it('Frühjahr: Kontrastpaare, Kapitel 2 mit 4x4', () => {
-    const info = weekInfo({ n: 1, week: 8 });
-    expect(info.rules.contrast).toBe(true);
-    expect(info.rules.fourByFour).toBe(true);
+  it('Frühjahr: Kontrast in Kapitel 1, optionaler 4x4 in Kapitel 2', () => {
+    expect(weekInfo({ n: 1, week: 2 }).rules.contrast).toBe(true);
+    expect(weekInfo({ n: 1, week: 8 }).rules.optional4x4).toBe(true);
   });
-  it('Herbst: −1 Satz und belastete Mobility', () => {
+  it('Sommer Kapitel 2: ZONE 2 und nur 1 Backdown', () => {
     const d = defaultData();
-    d.engine.arc = { ...initialArc(MON), n: 3, week: 2 };
-    const plan = buildPlan({ missionId: 'A', profile: 'room', data: d, today: T });
-    expect(plan.items.find((i) => i.exId === 'pullup_tactical').sets).toBe(3);
-    expect(plan.items.some((i) => i.exId === 'kb_windmill')).toBe(true);
+    d.engine.arc = { ...initialArc(MON), n: 2, week: 8 };
+    expect(weekInfo(d.engine.arc).rules.zone2).toBe(true);
+    const main = buildPlan({ missionId: 'C', profile: 'gym', data: { ...d, settings: { ...d.settings, equipment: { ...d.settings.equipment, gym: [...d.settings.equipment.gym, 'bench'] } } }, today: T }).items.find((i) => i.block === 'main');
+    expect(main.exId).toBe('close_grip_bench');
+    expect(main.setPlan.length).toBe(2);
   });
   it('Saison läuft nach Woche 13 in die nächste', () => {
     const r = syncArc({ n: 0, week: 13, through: addDays(MON, -7), startedWeek: MON, startedDay: MON },
@@ -2679,17 +2692,21 @@ describe('Saisons: 2 Kapitel + Prüfwoche', () => {
 });
 
 describe('Arm-Finisher', () => {
-  it('Bizeps in ASCENT, Trizeps in IMPACT, beide optional', () => {
-    const a = buildPlan({ missionId: 'A', profile: 'room', data: defaultData(), today: T }).items.find((i) => i.exId === 'hammer_curl_kb');
-    const c = buildPlan({ missionId: 'C', profile: 'room', data: defaultData(), today: T }).items.find((i) => i.exId === 'kb_overhead_triceps');
-    expect(a.optional).toBe(true);
-    expect(c.optional).toBe(true);
+  it('Bizeps in ASCENT, Trizeps in IMPACT (fest), Arme in Full Body optional', () => {
+    const a = buildPlan({ missionId: 'A', profile: 'room', data: defaultData(), today: T }).items.find((i) => i.arms);
+    const c = buildPlan({ missionId: 'C', profile: 'room', data: defaultData(), today: T }).items.find((i) => i.arms);
+    expect(a.exId).toBe('hammer_curl_kb'); // Pelican Curl braucht Ringe
+    expect(c.exId).toBe('kb_floor_skull_crusher');
+    expect(a.optional || c.optional).toBe(false);
+    const d = buildPlan({ missionId: 'D', profile: 'room', data: defaultData(), today: T }).items.filter((i) => i.arms);
+    expect(d.length).toBe(2);
+    expect(d.every((i) => i.optional)).toBe(true);
   });
-  it('Home Gym: Kurzhantel-Hammer-Curls und Kabel-Pushdown', () => {
+  it('Home Gym: Pelican Curl an Ringen, SZ Skull Crusher', () => {
     const d = defaultData();
-    d.settings.equipment.gym = ['barbell', 'rack', 'dumbbells', 'cable', 'rower', 'bar', 'dipbars', 'bench'];
-    expect(buildPlan({ missionId: 'A', profile: 'gym', data: d, today: T }).items.some((i) => i.exId === 'db_hammer_curl')).toBe(true);
-    expect(buildPlan({ missionId: 'C', profile: 'gym', data: d, today: T }).items.some((i) => i.exId === 'cable_pushdown')).toBe(true);
+    d.settings.equipment.gym = ['barbell', 'rack', 'dumbbells', 'cable', 'rower', 'bar', 'dipbars', 'bench', 'rings'];
+    expect(buildPlan({ missionId: 'A', profile: 'gym', data: d, today: T }).items.some((i) => i.exId === 'pelican_curl')).toBe(true);
+    expect(buildPlan({ missionId: 'C', profile: 'gym', data: d, today: T }).items.some((i) => i.exId === 'sz_skull_crusher')).toBe(true);
   });
 });
 
@@ -2775,9 +2792,9 @@ describe('Säule 2 · Fortschritts-Index', () => {
     const d = defaultData();
     d.engine.arc = { n: 0, week: 13, startedDay: MON };
     d.sessions = [
-      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 6), ex('suitcase_carry', 40, 12)] }, 2),
+      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 6), ex('barbell_row', 8, 60)] }, 2),
       at({ day: MON, kind: 'mission', missionId: 'C', exercises: [ex('dip', 7)] }, 2),
-      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 8), ex('suitcase_carry', 50, 12)] }, 10),
+      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 8), ex('barbell_row', 10, 60)] }, 10),
       at({ day: MON, kind: 'mission', missionId: 'C', exercises: [ex('dip', 10)] }, 10),
     ];
     const ix = progressIndex(d, 0, getDef);
@@ -2789,8 +2806,8 @@ describe('Säule 2 · Fortschritts-Index', () => {
     const d = defaultData();
     d.engine.arc = { n: 0, week: 13, startedDay: MON };
     d.sessions = [
-      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 6), ex('suitcase_carry', 60, 12), ex('dip', 8)] }, 2),
-      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 8), ex('suitcase_carry', 30, 12), ex('dip', 10)] }, 10),
+      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 6), ex('barbell_row', 10, 60), ex('dip', 8)] }, 2),
+      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 8), ex('barbell_row', 4, 60), ex('dip', 10)] }, 10),
     ];
     const ix = progressIndex(d, 0, getDef);
     expect(ix.worse.length).toBe(1);
@@ -3012,5 +3029,174 @@ describe('v37 · TEMPER-Schmiede, freies Gewicht, Nacken', () => {
     expect(ph.filter((p) => p.phase === 'switch').length).toBe(3);
     expect(ph[1].next).toBe(def.directions[1]);
     expect(getDef('neck_flex_side').load).toBe('plate');
+  });
+});
+
+import { partsOf, fixCaveMurph, versionText } from '../js/engine/pillars.js';
+import { FEET_EXERCISES, FEET_POS } from '../js/data/feet.js';
+
+describe('v41 · Cave-Murph mit Rudergerät, Puls, FEET-Positionen', () => {
+  const n = [0, 1, 2, 3].find((k) => benchmarkOf(k).id === 'coldiron');
+  it('Rudergerät ersetzt den Seil-Block am Anfang und Ende', () => {
+    const b = benchmarkOf(n);
+    const p = partsOf(b, 'full', 'row');
+    expect(p[0]).toBe('1000 m Rudern');
+    expect(p.at(-1)).toBe('1000 m Rudern');
+    expect(partsOf(b, 'full', 'rope')[0]).toBe('5 min Seilspringen');
+    expect(versionText(b, 'full', 'row', 158)).toBe('voll · Rudergerät · Puls 158');
+  });
+  it('Baseline speichert Cardio und Puls, die Revanche übernimmt das Cardio', () => {
+    let d = freshData();
+    d.engine.arc = { n, week: 1 };
+    d = logBenchmark(d, { kind: 'baseline', variant: 'full', cardio: 'row', value: 2700, pulse: 158, day: '2026-11-03' });
+    expect(d.benchmarks[n].cardio).toBe('row');
+    expect(d.benchmarks[n].baseline.pulse).toBe(158);
+    d = logBenchmark(d, { kind: 'revenge', variant: 'full', value: 2600, day: '2027-01-20' });
+    expect(d.benchmarks[n].cardio).toBe('row');
+    expect(d.sessions.at(-1).benchmark.cardio).toBe('row');
+  });
+  it('Einmalige Korrektur: erster Cave-Murph wird Rudern mit Puls 158', () => {
+    const d = freshData();
+    d.benchmarks = { [n]: { variant: 'full', baseline: { day: '2026-11-01', value: 2900 } } };
+    d.sessions = [{ id: 'bm1', day: '2026-11-01', kind: 'mission', missionId: 'BENCH', arc: { n, week: 1 }, benchmark: { id: 'coldiron', kind: 'baseline', variant: 'full', value: 2900 } }];
+    const f = fixCaveMurph(d);
+    expect(f.benchmarks[n].cardio).toBe('row');
+    expect(f.benchmarks[n].baseline.pulse).toBe(158);
+    expect(f.sessions[0].benchmark.pulse).toBe(158);
+    expect(f.settings.murphRowFix).toBe(true);
+    const again = fixCaveMurph({ ...f, benchmarks: { [n]: { ...f.benchmarks[n], cardio: undefined } } });
+    expect(again.benchmarks[n].cardio).toBe(undefined);
+  });
+  it('Jede FEET-Übung hat eine Ausgangsposition', () => {
+    expect(FEET_EXERCISES.every((e) => FEET_POS[e.pos])).toBe(true);
+  });
+});
+
+// ——— UMBRA 2.0 (05.11.2026): feste Wochentage, Blöcke, Top-Satz, CMPND Block ———
+import { todayPick, weekSchedule, allowedOn } from '../js/engine/schedule.js';
+import { countsForArc } from '../js/engine/arc.js';
+import { PROGRAM, CHAPTER_SETUP, ANCHORS } from '../js/data/program.js';
+
+describe('UMBRA 2.0 · Wochenplan', () => {
+  const PLAN = { 1: 'C', 2: 'B', 4: 'A', 5: 'D' };
+  const W = '2026-11-09'; // Montag
+  const pickAt = (today, sessions = [], checkin = null) => todayPick({ weekPlan: PLAN, mtDays: [1, 4], sessions, today, checkin });
+  it('heute geplante Mission', () => {
+    const p = pickAt(W);
+    expect(p.missionId).toBe('C');
+    expect(p.kind).toBe('planned');
+  });
+  it('Push am Muay-Thai-Abend bleibt: Muay Thai ist kein High-Tag', () => {
+    expect(pickAt(W, [], { tonightMT: 'yes' }).missionId).toBe('C');
+  });
+  it('Legs an einem Muay-Thai-Abend: rutscht auf den nächsten freien Tag, heute eine andere Mission', () => {
+    const p = pickAt(addDays(W, 1), [mission(W, 'C')], { tonightMT: 'yes' });
+    expect(p.kind).toBe('swap');
+    expect(p.missionId).toBe('A');
+    expect(p.moved.id).toBe('B');
+    expect(p.moved.to).toBe(addDays(W, 2));
+  });
+  it('verpasste Mission wird am nächsten freien Tag angeboten', () => {
+    const p = pickAt(addDays(W, 2), [mission(addDays(W, 1), 'B')]);
+    expect(p.kind).toBe('catchup');
+    expect(p.missionId).toBe('C');
+  });
+  it('Legs nicht direkt neben Full Body, Push und Pull immer', () => {
+    expect(allowedOn('B', { mt: false, legsAround: ['D'] }).ok).toBe(false);
+    expect(allowedOn('D', { mt: true, legsAround: [] }).ok).toBe(false);
+    expect(allowedOn('A', { mt: true, legsAround: ['D'] }).ok).toBe(true);
+  });
+  it('freier Tag ohne offene Mission', () => {
+    const p = pickAt(addDays(W, 2), [mission(W, 'C'), mission(addDays(W, 1), 'B')]);
+    expect(p.kind).toBe('free');
+    expect(p.missionId).toBe(null);
+  });
+  it('Mini-Mission zählt für den Platz des Tages, nicht für die Saisonwoche', () => {
+    const s = { day: W, kind: 'mission', missionId: 'HOTEL', slot: 'C' };
+    expect(weekSchedule({ weekPlan: PLAN, sessions: [s], today: W }).doneOn.C).toBe(W);
+    expect(countsForArc(s)).toBe(false);
+    expect(countsForArc(mission(W, 'C'))).toBe(true);
+  });
+  it('decide: unterwegs → Mini-Mission für die Mission des Tages', () => {
+    const r = decide({ checkin: ci({ where: 'travel', time: 'full' }), hardStreak: 0, queue: Q, pick: pickAt(W) });
+    expect(r.missionId).toBe('HOTEL');
+    expect(r.slot).toBe('C');
+  });
+  it('decide: Muay Thai heute Abend → trotzdem die Mission, kein reiner FLOW-Tag', () => {
+    const r = decide({ checkin: ci({ tonightMT: 'yes', time: 'full' }), hardStreak: 0, queue: Q, pick: pickAt(W, [], { tonightMT: 'yes' }) });
+    expect(r.kind).toBe('mission');
+    expect(r.missionId).toBe('C');
+  });
+  it('decide: freier Tag → FLOW mit Begründung', () => {
+    const r = decide({ checkin: ci({ time: 'full' }), hardStreak: 0, queue: Q, pick: pickAt(addDays(W, 2), [mission(W, 'C'), mission(addDays(W, 1), 'B')]) });
+    expect(r.kind).toBe('free');
+    expect(r.missionId).toBe('FLOW');
+  });
+});
+
+describe('UMBRA 2.0 · Blöcke und Sätze', () => {
+  it('jede Saison und jedes Kapitel: vier Missionen mit genau einer Hauptübung und dem Jahres-Anker', () => {
+    for (const [id, chs] of Object.entries(PROGRAM)) {
+      expect(chs.length).toBe(2);
+      expect(CHAPTER_SETUP[id].length).toBe(2);
+      for (const ch of chs) {
+        for (const m of ['A', 'B', 'C', 'D']) {
+          expect(ch[m].filter((x) => x.b === 'main').length).toBe(1);
+          expect(ch[m].find((x) => x.role === 'anchor').ex).toBe(ANCHORS[m]);
+        }
+      }
+    }
+  });
+  it('alle Programm-Übungen und Cave-Varianten gibt es im Kodex', () => {
+    const missing = Object.values(PROGRAM).flatMap((chs) => chs.flatMap((ch) => Object.values(ch).flatMap((slots) =>
+      slots.flatMap((x) => [x.ex, x.room, x.contrast].filter(Boolean))))).filter((id) => !getDef(id));
+    expect(missing).toEqual([]);
+  });
+  it('RIR je Übungsart und Kapitelwoche', () => {
+    const d = defaultData();
+    d.settings.equipment.gym = [...d.settings.equipment.gym, 'dipbars', 'band', 'box'];
+    d.engine.arc = { ...initialArc(MON), n: 0, week: 2 };
+    const p = buildPlan({ missionId: 'C', profile: 'gym', data: d, today: T });
+    const main = p.items.find((i) => i.block === 'main');
+    expect(main.rir).toBe(1);
+    expect(main.noFailure).toBe(true);
+    const dip = p.items.find((i) => i.anchor);
+    expect(dip.rir).toBe(1);
+    expect(dip.lastZero).toBe(true);
+    d.engine.arc.week = 1;
+    expect(buildPlan({ missionId: 'C', profile: 'gym', data: d, today: T }).items.find((i) => i.block === 'main').rir).toBe(2);
+    d.engine.arc.week = 4;
+    expect(buildPlan({ missionId: 'C', profile: 'gym', data: d, today: T }).items.find((i) => i.anchor).failLast).toBe(true);
+  });
+  it('Deload: kein Top-Satz, Backdowns zur Hälfte, RIR 3', () => {
+    const d = defaultData();
+    d.engine.arc = { ...initialArc(MON), n: 0, week: 6 };
+    const main = buildPlan({ missionId: 'C', profile: 'gym', data: d, today: T }).items.find((i) => i.block === 'main');
+    expect(main.setPlan.map((x) => x.label)).toEqual(['Backdown']);
+    expect(main.rir).toBe(3);
+    expect(!!main.topSet).toBe(false);
+  });
+  it('CMPND Block läuft von selbst als Superset', () => {
+    const p = buildPlan({ missionId: 'A', profile: 'room', data: defaultData(), today: T });
+    const a = createActive(p, T, 0);
+    const an = p.items.findIndex((i) => i.anchor);
+    const pa = p.items.findIndex((i) => i.role === 'partner');
+    expect(a.supersets).toEqual([`${Math.min(an, pa)}:${Math.max(an, pa)}`]);
+  });
+  it('Full Body: Mobility und Finisher, ohne Sack im Home Gym die leise Variante', () => {
+    const room = buildPlan({ missionId: 'D', profile: 'room', data: defaultData(), today: T });
+    expect(room.blocks).toEqual(['warmup', 'power', 'main', 'cmpnd', 'mobility', 'finisher', 'core']);
+    expect(room.items.find((i) => i.block === 'finisher').exId).toBe('fin_emom_kb');
+    const gym = buildPlan({ missionId: 'D', profile: 'gym', data: defaultData(), today: T });
+    expect(gym.items.find((i) => i.block === 'finisher').exId).toBe('fin_emom_shadow');
+    expect(gym.items.find((i) => i.block === 'main').exId).toBe('deadlift');
+  });
+  it('Migration v10 → v11: Wochenplan, Muay-Thai-Tage, Medizinball', () => {
+    const m = normalize({ schemaVersion: 10, settings: { equipment: { room: ['bar'], gym: ['barbell'] } }, engine: {}, sessions: [] });
+    expect(m.settings.weekPlan.C).toBe(undefined);
+    expect(m.settings.weekPlan[1]).toBe('C');
+    expect(m.settings.mtDays).toEqual([1, 4]);
+    expect(m.settings.equipment.room).toContain('medball');
+    expect(m.schemaVersion).toBe(SCHEMA_VERSION);
   });
 });

@@ -1,0 +1,14 @@
+# Referenzmaterial (urheberrechtlich geschützt) – nie committen
+reference/
+.DS_Store
+.claude/
+
+# Unkomprimierte Lore-Bilder aus Firefly (nicht hochladen)
+lore-originale/
+
+# Eigene Daten-Exporte (privat, nie hochladen)
+backups/
+
+# Interne Dokumente und Markenbild, gehören nicht in die App
+docs/
+assets/brand/
