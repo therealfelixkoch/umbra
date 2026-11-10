@@ -172,13 +172,12 @@ window.__umbraLevelUp = (i = 1) => showLevelUp(rankFor(XP_CONFIG.ranks[i].xp));
 // Zahlen rollen zum neuen Wert statt zu springen ([data-tick]: Schlüssel, data-to: Zielwert)
 const ticks = {};
 function animateTicks() {
-  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   root.querySelectorAll('[data-tick]').forEach((el) => {
     const key = el.dataset.tick;
     const to = Number(el.dataset.to);
     const from = ticks[key];
     ticks[key] = to;
-    if (from == null || from === to || reduce) return;
+    if (from == null || from === to) return;
     const t0 = performance.now();
     const step = (t) => {
       const p = Math.min(1, (t - t0) / 900);
@@ -197,7 +196,7 @@ function animateKK() {
   const to = Number(el.dataset.kk);
   const from = app.lastKK;
   app.lastKK = to;
-  if (from == null || to <= from || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (from == null || to <= from) return;
   const t0 = performance.now();
   el.classList.add('kk-up');
   const step = (t) => {

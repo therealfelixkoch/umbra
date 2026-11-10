@@ -155,7 +155,13 @@ export const RELAX_SEC = 5;
 
 export const DIR_SWITCH_SEC = 3;
 
-export function exercisePhases({ target, perSide = false, rounds = 0, rest = 60, reps = 1, directions = null }) {
+export function exercisePhases({ prep = 0, ...o }) {
+  // Vorlauf (z. B. 5 s an die Stange für den Front Lever), danach die eigentlichen Phasen
+  const main = holdPhases(o);
+  return prep > 0 ? [{ phase: 'prep', sec: prep }, ...main] : main;
+}
+
+function holdPhases({ target, perSide = false, rounds = 0, rest = 60, reps = 1, directions = null }) {
   // Mehrere Richtungen am Stück (Nacken-Isometrie): Richtung · 3 s umgreifen · nächste Richtung …
   if (directions?.length) {
     return directions.flatMap((label, i) => [{ phase: 'dir', sec: target, label, hold: i + 1, of: directions.length },

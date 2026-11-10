@@ -94,8 +94,16 @@ export function adjustment(def, { elbowFull, regions, equipment, all, getDef = d
   // Ellbogen zuerst: nur Übungen mit hoher Ellbogenlast
   if (elbowFull && elbowLoad(def) >= 2 && def.elbowAlt) {
     if (def.elbowAlt === 'lessLoad') return { id: def.id, lessLoad: true, reason: 'Ellbogen: weniger Zusatzgewicht' };
-    const alt = getDef(def.elbowAlt);
-    if (alt && available(alt)) return { id: alt.id, reason: `Ellbogen: ${alt.name} statt ${def.name}` };
+    // Ersatz oder dessen Alternativen (Ring Rows → Rudern am Barren, wenn keine Ringe da sind)
+    const seen = new Set();
+    const firstAvailable = (id) => {
+      const d = getDef(id);
+      if (!d || seen.has(id)) return null;
+      seen.add(id);
+      return available(d) ? d : (d.alternatives || []).map(firstAvailable).find(Boolean) || null;
+    };
+    const alt = firstAvailable(def.elbowAlt);
+    if (alt) return { id: alt.id, reason: `Ellbogen: ${alt.name} statt ${def.name}` };
   }
   const hit = regions.filter((r) => stressedRegions(def).includes(r));
   if (!hit.length) return null;

@@ -1,4 +1,4 @@
-:root { --app-version: "v43"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
+:root { --app-version: "v44"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
 @font-face {
   font-family: 'Oxanium';
   src: url('../fonts/oxanium.woff2') format('woff2');
@@ -314,7 +314,6 @@ em { font-style: normal; color: var(--muted); font-size: 0.8em; }
 .brand-mark.sm { width: 44px; margin-bottom: 6px; opacity: 0.85; filter: none; animation: none; }
 .foot-brand { text-align: center; margin-top: 8px; }
 @keyframes brand-glow { 50% { filter: drop-shadow(0 0 34px rgba(255, 150, 40, 0.42)); } }
-@media (prefers-reduced-motion: reduce) { .brand-mark { animation: none; } }
 .logo { font: 800 56px/1 var(--display); letter-spacing: 0.32em; padding-left: 0.32em; background: linear-gradient(180deg, #fff, #9aa6ff); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 22px var(--sys-glow)); }
 .tagline { font: 500 14px/1 var(--display); letter-spacing: 0.3em; text-transform: uppercase; color: var(--muted); margin-top: 14px; }
 .ob-dots { display: flex; gap: 8px; justify-content: center; margin: 4px 0; }
@@ -365,9 +364,6 @@ em { font-style: normal; color: var(--muted); font-size: 0.8em; }
 @keyframes pop { 0% { transform: scale(0.6); opacity: 0; } 60% { transform: scale(1.12); } 100% { transform: scale(1); } }
 @keyframes aura { 0% { box-shadow: 0 0 0 0 rgba(255, 207, 90, 0.7); } 100% { box-shadow: 0 0 0 40px rgba(255, 207, 90, 0); } }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
-}
 @media (max-width: 370px) {
   .step { width: 38px; }
   .step-val { min-width: 40px; }
@@ -460,10 +456,6 @@ em.focus { font-size: 0.75em; letter-spacing: 0.08em; text-transform: uppercase;
 @keyframes auraPulse { 0%, 100% { opacity: 0.4; transform: scale(0.92); } 50% { opacity: 0.9; transform: scale(1.12); } }
 @-webkit-keyframes auraRing { 0% { opacity: 0.8; -webkit-transform: scale(0.95); } 100% { opacity: 0; -webkit-transform: scale(1.5); } }
 @keyframes auraRing { 0% { opacity: 0.8; transform: scale(0.95); } 100% { opacity: 0; transform: scale(1.5); } }
-@media (prefers-reduced-motion: reduce) {
-  .rank-wrap.aura::before { opacity: 0.7; }
-  .rank-wrap.aura::after { opacity: 0.5; }
-}
 .kk-up { color: var(--gold); text-shadow: 0 0 18px var(--gold-glow); transition: color 0.6s, text-shadow 0.6s; }
 .lore { font: 500 14px/1.4 var(--display); letter-spacing: 0.06em; color: var(--sys); margin: 8px 0 2px; }
 
@@ -527,14 +519,17 @@ em.focus { font-size: 0.75em; letter-spacing: 0.08em; text-transform: uppercase;
 .holiday-dates input { background: var(--bg2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px; font: inherit; }
 
 /* ——— Lore-Bilder ——— */
-/* Bilder liegen auf #0B0A10 und laufen weich in die Oberfläche aus (Maske, auch in Safari). */
+/* Bilder haben einen dunklen Hintergrund. Damit kein schwarzer Rand zu sehen ist:
+   1. Maske, die an allen vier Kanten ganz durchsichtig ist (closest-side), auch in Safari.
+   2. „lighten“: Dunkles im Bild nimmt die Farbe der Fläche dahinter an (Karte, Modal, Seite). */
 .lore { position: relative; margin: 0; width: 100%; }
 .lore-frame { position: relative; width: 100%; aspect-ratio: var(--ratio); overflow: hidden; }
 .lore-frame > .lore-ph, .lore-frame > img {
   position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
-  -webkit-mask-image: radial-gradient(ellipse 72% 68% at 50% 46%, #000 52%, rgba(0, 0, 0, 0.6) 72%, transparent 100%);
-  mask-image: radial-gradient(ellipse 72% 68% at 50% 46%, #000 52%, rgba(0, 0, 0, 0.6) 72%, transparent 100%);
+  -webkit-mask-image: radial-gradient(closest-side at 50% 48%, #000 62%, rgba(0, 0, 0, 0.55) 84%, transparent 100%);
+  mask-image: radial-gradient(closest-side at 50% 48%, #000 62%, rgba(0, 0, 0, 0.55) 84%, transparent 100%);
 }
+.lore-frame > img { mix-blend-mode: lighten; }
 .lore-ph svg { width: 100%; height: 100%; display: block; }
 .lore-frame > img { opacity: 0; transition: opacity 0.5s ease, filter 0.6s ease, transform 0.8s ease; }
 .lore.loaded .lore-frame > img { opacity: 1; }
@@ -592,10 +587,6 @@ em.focus { font-size: 0.75em; letter-spacing: 0.08em; text-transform: uppercase;
 .lore-cell small.ok { color: var(--calm); }
 .lore-cell small.big { color: var(--warn); }
 
-@media (prefers-reduced-motion: reduce) {
-  .lore-aura { opacity: 0.55; }
-  .lore-ash { display: none; }
-}
 .archive-link { display: flex; flex-direction: column; text-align: left; gap: 2px; }
 .archive-link small { color: var(--muted); }
 
@@ -717,10 +708,6 @@ body.signal-strong::after { animation: signalStrong 2.4s ease-out; }
 }
 body.signal-pulse .clock, body.signal-pulse .rest-inner b, body.signal-pulse .bigtimer-clock, body.signal-pulse [data-timer] { animation: clockBlink 0.4s steps(2, jump-none) 4; }
 @keyframes clockBlink { 50% { color: var(--gold); opacity: 0.25; } }
-@media (prefers-reduced-motion: reduce) {
-  body.signal-strong::after { background: rgba(139, 125, 255, 0.35) !important; }
-  body.signal-pulse::after { background: rgba(139, 125, 255, 0.22) !important; box-shadow: inset 0 0 100px 24px rgba(139, 125, 255, 0.7) !important; }
-}
 
 /* ——— v3: Satz-Logging ——— */
 .set-wrap { display: flex; flex-direction: column; gap: 6px; }
@@ -875,7 +862,6 @@ body.signal-pulse .clock, body.signal-pulse .rest-inner b, body.signal-pulse .bi
 .cold-bars small { font-size: 9px; color: var(--muted); }
 .effort-chips.mood button { flex: 1; height: 54px; font-size: 20px; }
 .pull-list { display: flex; flex-direction: column; gap: 8px; }
-@media (prefers-reduced-motion: reduce) { .wave-box svg, .wave-lift, .echo-dot { animation: none; } .wave-lift { transform: translateY(40%); } }
 .rest-reset { margin: 4px auto 8px; display: block; }
 .blade-row { align-items: center; margin-bottom: 6px; }
 .strip-blade { position: absolute; right: -9px; bottom: -7px; display: flex; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface); }
@@ -1135,10 +1121,6 @@ body[data-atmo="on"] #atmo { opacity: 1; }
 .heat i.l2 { background: color-mix(in srgb, var(--sys) 50%, transparent); }
 .heat i.l3 { background: var(--sys); box-shadow: 0 0 4px var(--sys-glow); }
 
-@media (prefers-reduced-motion: reduce) {
-  #atmo .atmo-p, #atmo .atmo-fog, .strip-rank > svg, .victory-burst { animation: none !important; display: none; }
-  .set-row.slash::after { display: none; }
-}
 
 /* ——— Pausen-Leiste (eingeklappt) ——— */
 .rest-inner { position: relative; }
@@ -1191,18 +1173,8 @@ body[data-atmo="on"] #atmo { opacity: 1; }
 .btn.primary.pulse { animation: ctaPulse 2.6s ease-in-out infinite; min-height: 58px; font-size: 17px; }
 .label { letter-spacing: 0.16em; }
 .big-num, .clock, .bigtimer-clock { text-shadow: 0 0 22px var(--sys-glow); }
-@media (prefers-reduced-motion: reduce) {
-  .screen.enter > *, .btn.primary.pulse { animation: none !important; }
-}
 
-/* ——— Lore-Bilder auf Glas ———
-   Die Bilder liegen auf fast schwarzem Grund. "screen" macht diesen Grund durchsichtig,
-   Licht und Figur bleiben: kein Rand, egal welche Saisonfarbe oder Glasfläche dahinter liegt. */
-.lore-frame > img { mix-blend-mode: screen; }
-.lore-frame > .lore-ph, .lore-frame > img {
-  -webkit-mask-image: radial-gradient(ellipse 70% 66% at 50% 46%, #000 46%, rgba(0, 0, 0, 0.55) 70%, transparent 96%);
-  mask-image: radial-gradient(ellipse 70% 66% at 50% 46%, #000 46%, rgba(0, 0, 0, 0.55) 70%, transparent 96%);
-}
+/* Lore-Bilder auf Glas: Maske und „lighten“ stehen oben bei den Lore-Bildern (V44: kein Rand mehr an den Kanten). */
 .lore.is-retreat .lore-frame::after { background: linear-gradient(to top, rgba(5, 6, 10, 0.85) 0%, rgba(5, 6, 10, 0.4) 35%, transparent 70%); }
 
 /* ——— Winter Arc: Eisglas ———
@@ -1269,12 +1241,6 @@ body.scrolled .screen-training .t-head > div > small { display: none; }
 body.scrolled .screen-training .t-head b:not(.t-elapsed) { font-size: 14px; }
 body.scrolled .screen-training .t-mini { display: block; }
 
-@media (prefers-reduced-motion: reduce) {
-  .sh-name, .sh-live::before, .sg-snow b { animation: none !important; }
-  /* Die globale Regel schaltet alle Animationen ab, die Texte starten aber unsichtbar: hier direkt sichtbar setzen */
-  .sg-kick, .sg-name i, .sg-sub, .sg-guard, .sg-actions { opacity: 1; transform: none; filter: none; }
-  .sg-line { animation: none; width: 80%; }
-}
 
 /* ——— TEMPER: Sprecher-Intro ——— */
 .temper-intro { text-align: center; }
@@ -1283,7 +1249,6 @@ body.scrolled .screen-training .t-mini { display: block; }
 .intro-voice i:nth-child(2) { animation-delay: 0.2s; } .intro-voice i:nth-child(3) { animation-delay: 0.4s; }
 .intro-voice i:nth-child(4) { animation-delay: 0.6s; } .intro-voice i:nth-child(5) { animation-delay: 0.8s; }
 @keyframes introVoice { 0%, 100% { transform: scaleY(0.2); opacity: 0.5; } 50% { transform: scaleY(1); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .intro-voice i { animation: none; transform: scaleY(0.5); } }
 
 /* ——— v37 · TEMPER als eigene Sektion: Schmiede ——— */
 .forge-hero { display: flex; align-items: center; gap: 14px; padding: 6px 0 4px; }
@@ -1336,13 +1301,9 @@ body.scrolled .screen-training .t-mini { display: block; }
 .mark.on .mark-glyph { color: var(--gold); text-shadow: 0 0 8px rgba(255, 207, 90, 0.6); }
 .mark.new { animation: markNew 1.4s ease-out 0.3s 2; }
 @keyframes markNew { 0% { box-shadow: 0 0 0 0 rgba(255, 207, 90, 0.7); } 100% { box-shadow: 0 0 0 14px rgba(255, 207, 90, 0); } }
-@media (prefers-reduced-motion: reduce) { .forge-title, .fp-node.cur, .mark.new { animation: none !important; } }
 .tabbar .tab span { font-size: 10px; }
 
 /* Schnee auch bei „Bewegung reduzieren“ (ausdrücklich gewünscht): ruhig und langsam */
-@media (prefers-reduced-motion: reduce) {
-  #atmo .atmo-p.snow { display: block; animation: var(--anim) !important; }
-}
 
 /* Freies Gewicht: der kg-Wert ist ein Eingabefeld */
 .step-val .load-in { width: 66px; padding: 0; border: 0; border-bottom: 1px dashed color-mix(in srgb, var(--sys) 55%, transparent); border-radius: 0;

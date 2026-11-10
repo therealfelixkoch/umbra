@@ -26,7 +26,7 @@ import { playTone } from './temper-audio.js';
 import { setStory } from './storycard.js';
 import { BANDS } from '../engine/equipment.js';
 import { MISSIONS as MISSIONS_ALL } from '../data/missions.js';
-import { BLOCKS } from '../data/program.js';
+import { BLOCKS, BACKDOWN_PCT } from '../data/program.js';
 import { RIR_CHOICES, restFor, REST_STEP, exercisePhases, exerciseTimerAt, timerState, intervalPhases, phaseAt, workDone, PHASE_LABEL, activeMinutes } from '../engine/session.js';
 
 const fmt = (sec) => {
@@ -95,7 +95,9 @@ function startTicker(c) {
 function tick(c) {
   if (rest) drawRest();
   const a = c.data.active;
-  if (!a || location.hash.replace('#', '') !== 'training') return;
+  if (!a) return;
+  // Signale laufen auch, wenn du in einen anderen Tab der App wechselst. Nur die Anzeige braucht den Trainings-Tab.
+  const onTraining = location.hash.replace('#', '') === 'training';
   const now = Date.now();
   const el = document.querySelector('[data-elapsed]');
   if (el && a.startedAt) el.textContent = elapsedOf(a, now);
@@ -144,6 +146,8 @@ function tick(c) {
   const ct = a.cardTimer;
   if (ct?.phases) {
     const st = exerciseTimerAt(ct.phases, ct.startAt, now);
+    // Vorlauf: 3-2-1 vor dem Start
+    if (st.phase === 'prep' && st.left <= 3 && ct.cd !== Math.ceil(st.left)) { ct.cd = Math.ceil(st.left); beep(1, 660); }
     if (st.index !== ct.seen) {
       cardPhaseChange(c, a, ct, st);
       return;
@@ -167,6 +171,7 @@ function tick(c) {
     save(c);
     return;
   }
+  if (!onTraining) return;
   document.querySelectorAll('[data-clock]').forEach((el) => {
     const end = Number(el.dataset.clock);
     el.textContent = fmt((end - now) / 1000);
@@ -193,7 +198,7 @@ const save = (c) => {
 // Zeitübungen und Runden-Übungen (Sack, Seil in Minuten) bekommen einen Timer in der Karte.
 const timed = (def) => (def.mode === 'time' && def.cat !== 'mobility') || (def.mode === 'fixed' && def.unit === 'min');
 const timerTarget = (def, s) => (def.mode === 'fixed' ? def.range[0] * 60 : s.value);
-const PHASE_NAME = { work: 'Los', side1: 'Seite 1', switch: 'Seitenwechsel', side2: 'Seite 2', rest: 'Pause', relax: 'Locker lassen', dir: 'Richtung' };
+const PHASE_NAME = { prep: 'Bereit machen', work: 'Los', side1: 'Seite 1', switch: 'Seitenwechsel', side2: 'Seite 2', rest: 'Pause', relax: 'Locker lassen', dir: 'Richtung' };
 
 // Phasenwechsel im Übungs-Timer: Signal, bei Runden die fertige Runde abhaken
 function cardPhaseChange(c, a, ct, st) {
@@ -228,7 +233,8 @@ function bigTimerView(a, ct, def) {
     ${a.log[ct.i].sets[ct.k]?.label && !['Top-Satz', 'Backdown'].includes(a.log[ct.i].sets[ct.k].label) ? `<p class="bigtimer-hint">${esc(a.log[ct.i].sets[ct.k].label)}</p>` : ''}
     <b class="bigtimer-clock num${st.over ? ' over' : ''}" data-bigclock>${clock}</b>
     ${st.phase === 'switch' ? `<p class="bigtimer-hint">${st.next ? `Gleich: ${esc(st.next)}` : 'Seite wechseln, gleich geht es weiter.'}</p>` : ''}
-    <button class="btn primary big wide" data-act="t-timer-stop" data-k="${ct.k}">${ct.rounds ? 'Stopp' : 'Stopp · Zeit loggen'}</button>
+    ${st.phase === 'prep' ? `<p class="bigtimer-hint">In Position gehen. Danach laufen ${fmt(ct.target)}.</p>` : ''}
+    <button class="btn primary big wide" data-act="t-timer-stop" data-k="${ct.k}">${st.phase === 'prep' ? 'Abbrechen' : ct.rounds ? 'Stopp' : 'Stopp · Zeit loggen'}</button>
     <p class="bigtimer-hint">${'wakeLock' in navigator ? 'Bildschirm bleibt an.' : 'Bildschirm anlassen für das Signal.'} Bei Lautlos-Schalter kommt nur das violette Signal.</p></div>`;
 }
 const IV4 = { warmup: 180, rounds: 4, work: 240, rest: 180, cooldown: 180 };
@@ -270,7 +276,7 @@ function setsView(c, a) {
     : it.topSet ? `<p class="rir">Top-Satz: 3–5 Wdh., 1 Wdh. im Tank. Backdown: 6–10 Wdh. mit ca. 18 % weniger Last. ${helpDot('topset')}</p>`
       : def.mode === 'amrap' ? `<p class="rir">${it.noFailure ? `Ein Satz, ${r} Wdh. im Tank.` : 'Ein Satz bis kurz vor Versagen, saubere Technik.'}</p>`
         : it.failLast && setCount > 1 ? `<p class="rir">Satz 1–${setCount - 1}: ${r} Wdh. im Tank. Letzter Satz darf ans Versagen.</p>`
-          : def.mode === 'time' ? '<p class="rir">Sauber bis zur Zielzeit halten. Der Timer endet von selbst, am Ende der Übung gibst du die Anstrengung (RPE) an.</p>'
+          : def.mode === 'time' ? `<p class="rir">Sauber bis zur Zielzeit halten. Der Timer endet von selbst${['aufwaermen', 'mobility'].includes(def.cat) ? '.' : ', am Ende der Übung gibst du die Anstrengung (RPE) an.'}</p>`
           : `<p class="rir">Alle Sätze mit ${r} Wdh. im Tank${it.noFailure ? ', kein Versagen' : ''}. ${helpDot('rir')}</p>`;
 
   const nextK = entry.sets.findIndex((x) => !x.done);
@@ -315,7 +321,9 @@ function setsView(c, a) {
   const ramp = rampBlock(c, a, i, it, def, open);
   const ss = supersetBlock(a, i);
   const allDone = entry.sets.every((s) => s.done);
-  const effort = allDone ? `<div class="effort${entry.rpe ? ' set' : ''}"><small>Wie hart war das? RPE</small>
+  // Aufwärmen und Mobility brauchen keine Anstrengungs-Abfrage
+  const noRpe = ['warmup', 'mobility'].includes(it.block) || ['aufwaermen', 'mobility'].includes(def.cat) || !!it.prep;
+  const effort = allDone && !noRpe ? `<div class="effort${entry.rpe ? ' set' : ''}"><small>Wie hart war das? RPE</small>
     <div class="rpe-chips">${Array.from({ length: 10 }, (_, k) => k + 1).map((v) => `<button class="${entry.rpe === v ? 'on' : ''}" data-act="t-rpe" data-v="${v}">${v}</button>`).join('')}</div>
     <div class="effort-scale"><span>locker</span><span>maximal</span></div></div>` : '';
   const lastFull = last ? `<div class="last-sets">${last.sets.map((x, k) => `<span><i>${k + 1}</i>${esc(lastSetText(def, x))}</span>`).join('')}</div>` : '<b>–</b>';
@@ -794,12 +802,21 @@ function adjustRest(c, dir) {
 function swapTo(c, id, scope) {
   const a = c.data.active;
   const old = a.plan.items[a.index];
-  const it = itemFor(id, { data: c.data, profile: a.plan.profile, sets: old.sets, arcN: a.plan.arc?.n });
-  Object.assign(it, { noFailure: old.noFailure, rir: old.rir, failLast: old.failLast, main: old.main, slotKey: old.slotKey,
-    optional: old.optional, swappedFrom: old.swappedFrom || old.exId, swapScope: scope });
+  const it = itemFor(id, { data: c.data, profile: a.plan.profile, sets: old.sets, arcN: a.plan.arc?.n, range: old.topSet ? old.range : undefined });
+  // Block, Rolle und Anstrengung bleiben beim Platz: Ein getauschter Anker bleibt im CMPND Block und im Superset.
+  Object.assign(it, { noFailure: old.noFailure, rir: old.rir, failLast: old.failLast, lastZero: old.lastZero, main: old.main, slotKey: old.slotKey,
+    optional: old.optional, block: old.block, role: old.role, anchor: old.anchor, arms: old.arms, effort: old.effort, explosive: old.explosive,
+    note: old.note, swappedFrom: old.swappedFrom || old.exId, swapScope: scope });
+  // Hauptübung mit Top-Satz: gleiche Struktur mit der Last der neuen Übung
+  if (old.setPlan && getDef(id).load) {
+    const bdLoad = snap(it.ladder, it.load * BACKDOWN_PCT);
+    it.setPlan = old.setPlan.map((x) => (x.label === 'Top-Satz' ? { ...x, value: it.target, load: it.load } : { ...x, load: bdLoad }));
+    Object.assign(it, { topSet: old.topSet, bdRange: old.bdRange, sets: it.setPlan.length });
+  }
   a.plan.items[a.index] = it;
   a.log[a.index] = { key: it.key, exId: it.exId,
-    sets: Array.from({ length: it.sets }, () => ({ value: it.target, load: it.load, done: false })) };
+    sets: it.setPlan ? it.setPlan.map((x) => ({ value: x.value, load: x.load, label: x.label, done: false }))
+      : Array.from({ length: it.sets }, () => ({ value: it.target, load: it.load, done: false })) };
   c.modal(null);
   if (scope === 'arc' && old.slotKey) {
     // Gilt bis zum Arc-Wechsel; danach wieder der geplante Platz
@@ -878,13 +895,16 @@ const training = {
       const open = sets.find((s) => !s.done) || sets[sets.length - 1];
       const nl = d.kg != null ? d.kg : stepLoad(it.ladder, open.load, Number(d.dir));
       if (it.topSet && open.label === 'Top-Satz') {
-        // Top-Satz bestimmt den Backdown: ca. 18 % weniger.
+        // Top-Satz bestimmt den Backdown: ca. 15 % weniger.
         open.load = nl;
-        sets.forEach((s) => { if (!s.done && s.label === 'Backdown') s.load = snap(it.ladder, nl * 0.82); });
+        sets.forEach((s) => { if (!s.done && s.label === 'Backdown') s.load = snap(it.ladder, nl * BACKDOWN_PCT); });
+      } else if (sets.every((s) => s.done)) {
+        // Alles abgehakt: nachträgliche Korrektur gilt für alle Sätze (beim Top-Satz-Schema nur für die Backdowns)
+        const lbl = sets[sets.length - 1].label;
+        sets.forEach((s) => { if (!it.topSet || s.label === lbl) s.load = nl; });
       } else {
         // Neue Last gilt für alle offenen Sätze.
         sets.forEach((s) => { if (!s.done) s.load = nl; });
-        if (sets.every((s) => s.done)) sets[sets.length - 1].load = nl;
       }
       save(c);
     },
@@ -1028,8 +1048,9 @@ const training = {
       const ks = def.mode === 'fixed' ? sets.map((s, j) => (!s.done && j >= k ? j : -1)).filter((j) => j >= 0) : [k];
       const rounds = def.mode === 'fixed' && ks.length > 1;
       const it0 = a.plan.items[a.index];
-      const phases = exercisePhases({ target, perSide: (def.perSide || it0.bothSides) && def.mode === 'time', rounds: rounds ? ks.length : 0, rest: 60, reps: it0.holdReps || 1, directions: def.directions });
-      a.cardTimer = { i: a.index, k, ks, rounds, phases, startAt: Date.now(), seen: 0, target: def.directions ? phases.reduce((n, p) => n + p.sec, 0) : target };
+      const prep = def.prep || 0;
+      const phases = exercisePhases({ prep, target, perSide: (def.perSide || it0.bothSides) && def.mode === 'time', rounds: rounds ? ks.length : 0, rest: 60, reps: it0.holdReps || 1, directions: def.directions });
+      a.cardTimer = { i: a.index, k, ks, rounds, phases, prep, startAt: Date.now(), seen: 0, target: def.directions ? phases.reduce((n, p) => n + p.sec, 0) - prep : target };
       keepAwake(true);
       signal(1);
       rest = null;
@@ -1050,8 +1071,10 @@ const training = {
         save(c);
         return;
       }
+      // Im Vorlauf gestoppt: nichts loggen
+      if (st.phase === 'prep') { save(c); return; }
       // Echte Zeit loggen (je Seite: die Zeit der zweiten Seite; Zeitübung in 5-s-Schritten wie der Stepper)
-      const secs = Math.round(st.phase === 'switch' ? ct.phases[0].sec : st.elapsed);
+      const secs = Math.round(st.phase === 'switch' ? ct.phases.find((x) => x.phase !== 'prep').sec : st.elapsed);
       const s = a.log[ct.i].sets[ct.k];
       if (def.mode === 'time') s.value = Math.max(5, Math.round(secs / 5) * 5);
       else s.sec = secs;

@@ -27,15 +27,36 @@ export function setSound(on) {
   soundOn = on;
 }
 
+// Nach dem Zurückkommen in die App (anderer Tab, andere App, Sperre) ist der Kontext auf iOS oft hängen geblieben:
+// Zustand „interrupted“/„suspended“ oder „running“, aber die Uhr steht. Dann beim nächsten Tipp einen frischen bauen.
+let back = null; // { at: Zeitpunkt der Rückkehr, t: audio.currentTime in dem Moment }
+
+function stuck() {
+  if (!audio) return false;
+  if (audio.state === 'closed' || audio.state === 'interrupted') return true;
+  if (!back) return false;
+  if (audio.state !== 'running') return true;
+  return performance.now() - back.at > 300 && audio.currentTime === back.t; // Uhr läuft nicht weiter
+}
+
 // Muss in einem Tap-Handler laufen, sonst bleibt der Ton auf iOS stumm.
 export function unlockAudio() {
   applySession();
   try {
+    if (stuck()) {
+      try { audio.close(); } catch { /* egal */ }
+      audio = null;
+    }
+    back = null;
     audio ||= new (window.AudioContext || window.webkitAudioContext)();
     // Nach einer Unterbrechung (Anruf, Spotify-Wechsel) meldet iOS „interrupted“: beim nächsten Tap fortsetzen.
     if (audio.state !== 'running') audio.resume().catch(() => {});
   } catch { /* kein Web Audio */ }
 }
+
+// Jede Berührung zählt als Tipp (nicht nur Knöpfe), damit der Ton nach dem Zurückkommen sofort wieder geht.
+document.addEventListener('touchend', unlockAudio, { passive: true });
+document.addEventListener('pointerdown', unlockAudio, { passive: true });
 
 // Visuelles Signal: Bildschirm pulsiert violett, laufende Timer-Zahlen blinken (auch ohne Ton sichtbar).
 export function pulse(strong = false) {
@@ -70,8 +91,12 @@ function whenRunning(fn) {
 
 // Kontext wach halten: beim Zurückkommen in die App sofort wieder aufwecken
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && audio && audio.state !== 'running') audio.resume().catch(() => {});
+  if (document.visibilityState !== 'visible' || !audio) return;
+  applySession();
+  back = { at: performance.now(), t: audio.currentTime };
+  if (audio.state !== 'running') audio.resume().catch(() => {});
 });
+window.addEventListener('pageshow', () => { if (audio) back = { at: performance.now(), t: audio.currentTime }; });
 
 export function beep(times = 1, freq = 880) {
   if (!soundOn) return;

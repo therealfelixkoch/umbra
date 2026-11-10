@@ -56,7 +56,7 @@ const BSS = an('bulgarian_split_squat', [8, 10]);
 const CHIN = an('chinup', [6, 10]);
 
 // Zusätze, die das ganze Jahr bleiben
-const PUSH_X = [co('band_pull_apart', 2, [20, 25]), co('neck_flex_side', 2, [12, 15])];
+const PUSH_X = [co('band_pull_apart', 2, [20, 25]), co('neck_curl_plate', 2, [12, 15]), co('neck_lateral_plate', 2, [10, 15])];
 const PULL_X = [co('suitcase_carry', 2, [40, 60]), co('neck_ext_harness', 2, [15, 20])];
 const LEG_X = [co('nordic_curl', 3, [3, 6]), co('calf_raise_sl', 2, [15, 20]), co('tibialis_raise', 2, [20, 25])];
 

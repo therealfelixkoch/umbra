@@ -6,7 +6,7 @@ import { fixCaveMurph } from './engine/pillars.js';
 import { toDay } from './engine/dates.js';
 import { effortToRpe, sessionIntensity, intensityFromRpe, trainingLoad } from './engine/session.js';
 
-export const SCHEMA_VERSION = 11;
+export const SCHEMA_VERSION = 12;
 
 export function defaultData() {
   return {
@@ -16,7 +16,7 @@ export function defaultData() {
       onboarded: false,
       equipment: {
         room: ['bag', 'bar', 'dipbars', 'box', 'kb', 'hammer', 'medball'],
-        gym: ['barbell', 'rack', 'dumbbells', 'cable', 'rower', 'bar', 'medball'],
+        gym: ['barbell', 'rack', 'dumbbells', 'cable', 'rower', 'bar', 'rings', 'medball'],
       },
       weekPlan: { 1: 'C', 2: 'B', 4: 'A', 5: 'D' }, // UMBRA 2.0: Mo Push, Di Legs, Do Pull, Fr Full Body
       mtDays: [1, 4], // Muay Thai abends
@@ -172,6 +172,38 @@ MIGRATIONS[10] = (raw) => {
     settings: { ...raw.settings, weekPlan: raw.settings?.weekPlan || { 1: 'C', 2: 'B', 4: 'A', 5: 'D' }, mtDays: raw.settings?.mtDays || [1, 4],
       equipment: { ...eq, ...(eq.room ? { room: add(eq.room) } : {}), ...(eq.gym ? { gym: add(eq.gym) } : {}) } },
     ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v11', day: toDay(), suggestion: 'umbra_2_week_plan', decision: 'applied' }] };
+};
+
+MIGRATIONS[11] = (raw) => {
+  // v11 → v12 (V44): Turnringe im Home Gym (Ring Rows statt Rudern am Barren). Nacken vorne und seitlich getrennt:
+  // Neck Curls übernehmen den Stand der alten Übung, seitlich startet eine Stufe leichter.
+  // Korrektur auf Wunsch: Suitcase Carry der letzten Einheit mit 22 kg statt 12 kg.
+  const eq = raw.settings?.equipment || {};
+  const exState = { ...(raw.exState || {}) };
+  const old = exState.neck_flex_side;
+  if (old && !exState.neck_curl_plate) exState.neck_curl_plate = { ...old, exId: 'neck_curl_plate' };
+  if (old && !exState.neck_lateral_plate) {
+    const kg = old.load > 0 ? Math.max(0, Math.round((old.load * 0.6) / 1.25) * 1.25) : 0;
+    exState.neck_lateral_plate = { ...old, exId: 'neck_lateral_plate', load: kg };
+  }
+  const sessions = (raw.sessions || []).slice();
+  const at = sessions.map((x, i) => [x, i]).filter(([x]) => (x.exercises || []).some((e) => e.exId === 'suitcase_carry')).pop();
+  let fixed = false;
+  if (at) {
+    const [sess, i] = at;
+    sessions[i] = { ...sess, exercises: sess.exercises.map((e) => (e.exId !== 'suitcase_carry' ? e
+      : { ...e, sets: e.sets.map((x) => (x.load === 12 ? (fixed = true, { ...x, load: 22 }) : x)) })) };
+    if (fixed && exState.suitcase_carry?.load === 12) exState.suitcase_carry = { ...exState.suitcase_carry, load: 22 };
+    const rec = raw.records?.suitcase_carry;
+    if (fixed && rec && rec.load === 12 && rec.day === sess.day) raw = { ...raw, records: { ...raw.records, suitcase_carry: { ...rec, load: 22 } } };
+  }
+  // ASCENT: Tactical Pull-ups wieder als Anker im CMPND Block (ein Tausch „für den Rest des Arcs“ wird aufgehoben)
+  const swaps = Object.fromEntries(Object.entries(raw.engine?.arcSwaps || {}).filter(([k, v]) => !(k.startsWith('A:') && v?.from === 'pullup_tactical')));
+  const engine = raw.engine ? { ...raw.engine, arcSwaps: swaps } : raw.engine;
+  return { ...raw, schemaVersion: 12, exState, sessions, engine,
+    settings: { ...raw.settings, equipment: { ...eq, ...(eq.gym ? { gym: [...new Set([...eq.gym, 'rings'])] } : {}) } },
+    ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v12', day: toDay(),
+      suggestion: `rings_gym, neck_split${fixed ? ', suitcase_carry_22kg' : ''}`, decision: 'applied' }] };
 };
 
 export function migrate(raw) {

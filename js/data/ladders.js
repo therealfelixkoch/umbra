@@ -4,6 +4,7 @@
 // Aus den Leitern werden `easier`/`harder` der Übungen abgeleitet (Stagnation, Kalibrierung, Arc-Wechsel nutzen das mit).
 
 export const LADDERS = [
+  { id: 'ringrow', name: 'Rudern an den Ringen', steps: ['ring_row', 'ring_row_elevated', 'archer_ring_row'] },
   { id: 'row', name: 'Rudern am Barren', steps: ['bw_row_bent', 'bw_row', 'bw_row_elevated', 'bw_row_weighted', 'archer_row', 'one_arm_row_assisted'] },
   { id: 'pushup', name: 'Push-ups', steps: ['pushup', 'pushup_feet_elevated', 'pushup_deficit', 'plyo_pushup', 'archer_pushup', 'pseudo_planche_pushup'] },
   { id: 'pike', name: 'Pike Push-ups', steps: ['pike_pushup', 'pike_pushup_box', 'pike_pushup_high', 'hspu_negative', 'hspu_wall'] },

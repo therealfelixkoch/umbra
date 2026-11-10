@@ -13,7 +13,8 @@ export function ladderFor(loadType, settings) {
     case 'barbell': return Array.from({ length: 113 }, (_, i) => 20 + i * 2.5);
     case 'dumbbell': return settings.dbWeights?.length ? [...settings.dbWeights].sort((a, b) => a - b) : Array.from({ length: 30 }, (_, i) => 2 + i * 2);
     case 'cable': return Array.from({ length: 40 }, (_, i) => 5 + i * 2.5);
-    case 'plate': return [0, 1.25, 2.5, 5, 7.5, 10, 12.5, 15, 20];
+    // Scheiben (Nacken): feine Stufen, dazu jedes frei eingegebene Gewicht
+    case 'plate': return [0, 1.25, 2.5, 3.75, 5, 6.25, 7.5, 8.75, 10, 11.25, 12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30, 35, 40];
     default: return [0];
   }
 }

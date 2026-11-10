@@ -643,11 +643,13 @@ describe('Phase 3: Ascensions und Attribut-Ränge', () => {
 
 describe('Übungstausch', () => {
   it('Alternativen mit vorhandenem Equipment, ohne die Übung selbst', () => {
-    const opts = swapOptions('kb_row_ballistic', { data: defaultData(), profile: 'room', today: T, all: EXERCISES });
+    const d = defaultData();
+    d.settings.equipment.room.push('rings');
+    const opts = swapOptions('kb_row_ballistic', { data: d, profile: 'room', today: T, all: EXERCISES });
     expect(opts.length > 0).toBe(true);
     expect(opts.some((o) => o.id === 'kb_row_ballistic')).toBe(false);
-    expect(opts[0].id).toBe('bw_row');
-    expect(opts.every((o) => (getDef(o.id).equipment || []).every((e) => defaultData().settings.equipment.room.includes(e)))).toBe(true);
+    expect(opts[0].id).toBe('ring_row');
+    expect(opts.every((o) => (getDef(o.id).equipment || []).every((e) => d.settings.equipment.room.includes(e)))).toBe(true);
   });
   it('markiert Übungen, die eine Wochenlücke füllen', () => {
     const opts = swapOptions('dip', { data: defaultData(), profile: 'room', today: T, all: EXERCISES });
@@ -1052,7 +1054,7 @@ describe('Migration v1 → v2', () => {
     expect(m.engine.queue).toEqual(['C', 'D', 'FORGE', 'A', 'B']);
     expect(m.engine.fullSinceDeload).toBe(undefined);
     expect(m.settings.holiday.enabled).toBe(true);
-    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7', 'migration:v8', 'migration:v9', 'migration:v10', 'migration:v11']);
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7', 'migration:v8', 'migration:v9', 'migration:v10', 'migration:v11', 'migration:v12']);
     expect(m.mobility.length).toBe(1);
   });
   it('nach der Migration startet Arc I am Tag der ersten Mission (v3)', () => {
@@ -1808,7 +1810,7 @@ describe('v3 · Migration v2 → v3', () => {
     expect(m.exState.pullup.target).toBe(6);
     expect(m.engine.queue).toEqual(['B', 'C', 'D', 'FORGE', 'A']);
     expect(m.engine.arc.week).toBe(1);
-    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7', 'migration:v8', 'migration:v9', 'migration:v10', 'migration:v11']);
+    expect(m.ruleLog.map((e) => e.rule)).toEqual(['migration:v3', 'migration:v4', 'migration:v5', 'migration:v6', 'migration:v7', 'migration:v8', 'migration:v9', 'migration:v10', 'migration:v11', 'migration:v12']);
     expect(m.techChecks).toEqual({});
   });
   it('Migration ist wiederholbar', () => {
@@ -3197,6 +3199,73 @@ describe('UMBRA 2.0 · Blöcke und Sätze', () => {
     expect(m.settings.weekPlan[1]).toBe('C');
     expect(m.settings.mtDays).toEqual([1, 4]);
     expect(m.settings.equipment.room).toContain('medball');
+    expect(m.schemaVersion).toBe(SCHEMA_VERSION);
+  });
+});
+
+import { EQUIPMENT_GROUPS } from '../js/engine/equipment.js';
+import { supersetOptions as ssOptions } from '../js/engine/warmup.js';
+
+describe('V44', () => {
+  it('Turnringe und Medizinball lassen sich im Setup abhaken', () => {
+    const all = EQUIPMENT_GROUPS.flatMap((g) => g.items);
+    expect(all).toContain('rings');
+    expect(all).toContain('medball');
+  });
+  it('mit Ringen: Ring Rows im CMPND Block von ASCENT, ohne Ringe Rudern am Barren', () => {
+    const d = defaultData();
+    d.settings.equipment.room.push('rings');
+    const withRings = buildPlan({ missionId: 'A', profile: 'room', data: d, today: T }).items.find((i) => i.role === 'partner');
+    expect(withRings.exId.startsWith('ring_') || withRings.exId === 'archer_ring_row').toBe(true);
+    const without = buildPlan({ missionId: 'A', profile: 'room', data: defaultData(), today: T });
+    expect(without.items.some((i) => i.role === 'partner')).toBe(true);
+    expect(ssOptions(without.items).some((o) => o.cmpnd)).toBe(true);
+  });
+  it('Ellbogen-Ersatz nimmt Ring Rows, wenn Ringe da sind', () => {
+    const d = defaultData();
+    d.settings.equipment.room.push('rings');
+    for (let i = 0; i < 3; i++) Object.assign(d, reportElbow(d, { day: T, source: 'checkin' }));
+    const plan = buildPlan({ missionId: 'A', profile: 'room', data: d, today: T });
+    const row = plan.items.find((i) => i.originalKey === 'kb_row_ballistic');
+    if (row) expect(row.exId).toBe('ring_row');
+  });
+  it('Nacken vorne und seitlich getrennt, mit eigenem Gewicht', () => {
+    expect(getDef('neck_curl_plate').load).toBe('plate');
+    expect(getDef('neck_lateral_plate').perSide).toBe(true);
+    const ids = buildPlan({ missionId: 'C', profile: 'gym', data: defaultData(), today: T }).items.map((i) => i.exId);
+    expect(ids).toContain('neck_curl_plate');
+    expect(ids).toContain('neck_lateral_plate');
+    expect(ids.includes('neck_flex_side')).toBe(false);
+  });
+  it('Neck Harness braucht keine Kettlebell und hat feine Stufen', () => {
+    expect(getDef('neck_ext_harness').equipment).toEqual(['harness']);
+    expect(ladderFor('plate', {})).toContain(3.75);
+  });
+  it('Front Lever: 5 s Vorlauf vor dem Halten', () => {
+    const ph = exercisePhases({ prep: getDef('fl_tuck_hold').prep, target: 15 });
+    expect(ph[0]).toEqual({ phase: 'prep', sec: 5 });
+    expect(ph[1].phase).toBe('work');
+    expect(ph[1].sec).toBe(15);
+    expect(exercisePhases({ target: 15 })[0].phase).toBe('work');
+  });
+  it('Migration v11 → v12: Ringe im Home Gym, Nacken getrennt, Suitcase Carry 22 kg', () => {
+    const m = normalize({ schemaVersion: 11, settings: { equipment: { room: ['bar'], gym: ['barbell'] } },
+      engine: { arcSwaps: { 'A:WINTER0:2': { id: 'chinup', arc: 0, from: 'pullup_tactical' }, 'C:WINTER0:3': { id: 'pushup', arc: 0, from: 'pushup_deficit' } } },
+      exState: { neck_flex_side: { exId: 'neck_flex_side', load: 5, target: 12 }, suitcase_carry: { exId: 'suitcase_carry', load: 12, target: 40 } },
+      records: { suitcase_carry: { score: 1, value: 40, load: 12, day: '2026-11-09' } },
+      sessions: [
+        { day: '2026-11-02', exercises: [{ exId: 'suitcase_carry', sets: [{ value: 40, load: 12 }] }] },
+        { day: '2026-11-09', exercises: [{ exId: 'suitcase_carry', sets: [{ value: 40, load: 12 }, { value: 40, load: 12 }] }] },
+      ] });
+    expect(m.settings.equipment.gym).toContain('rings');
+    expect(m.settings.equipment.room.includes('rings')).toBe(false);
+    expect(m.exState.neck_curl_plate.load).toBe(5);
+    expect(m.exState.neck_lateral_plate.load).toBe(2.5);
+    expect(m.sessions[1].exercises[0].sets.map((s) => s.load)).toEqual([22, 22]);
+    expect(m.sessions[0].exercises[0].sets[0].load).toBe(12);
+    expect(m.exState.suitcase_carry.load).toBe(22);
+    expect(m.records.suitcase_carry.load).toBe(22);
+    expect(Object.keys(m.engine.arcSwaps)).toEqual(['C:WINTER0:3']);
     expect(m.schemaVersion).toBe(SCHEMA_VERSION);
   });
 });

@@ -72,6 +72,20 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 10.11.2026 (v44): Feedback aus den ersten Einheiten
+
+**Vor dem Update eine JSON-Sicherung exportieren:** Die Daten werden auf Schema v12 migriert.
+
+- **Übung tauschen:** Die getauschte Übung bleibt in ihrem Block, mit Rolle und Anstrengung. Ein getauschter Anker oder Partner bleibt im CMPND Block und im Superset. Eine getauschte Hauptübung behält Top-Satz und Backdowns. Ein Tausch der Tactical Pull-ups in ASCENT „für den Rest des Arcs“ wird per Migration aufgehoben, sie sind wieder der Anker.
+- **Turnringe:** Im Setup abhakbar (Ziehen, Stützen, Klettern), im Home Gym per Migration an. Mit Ringen laufen Ring Rows statt Rudern am Barren, auch als Ellbogen-Ersatz und als Alternative zu Klimmzügen. Neue Stufenleiter: Ring Rows → Füße erhöht → Archer. Der Medizinball steht jetzt auch in der Liste.
+- **Nacken:** vorne (Neck Curls) und seitlich (Lateral Flexion, je Seite) getrennt, mit eigenem Gewicht und eigener Progression. Seitlich startet eine Stufe leichter. Neck Harness braucht keine Kettlebell mehr und hat feine Scheiben-Stufen (1,25 kg).
+- **Gewicht nachträglich:** Sind alle Sätze abgehakt, gilt eine Gewichtsänderung für alle Sätze (Korrektur). Suitcase Carry der letzten Einheit per Migration auf 22 kg korrigiert.
+- **Front Lever Tuck:** 5 s Vorlauf mit 3-2-1-Tönen, dann startet die Haltezeit. Im Vorlauf heißt der Knopf „Abbrechen“ und loggt nichts.
+- **Kein RPE** bei Aufwärmen und Mobility.
+- **Töne:** Timer-Signale laufen auch, wenn du in einen anderen Tab der App wechselst. Nach dem Zurückkommen aus einer anderen App baut der erste Tipp den Ton neu auf, falls iOS ihn angehalten hat.
+- **Animationen** laufen immer, auch mit „Bewegung reduzieren“ in iOS.
+- **Wächter- und Boss-Bilder:** kein Rand mehr. Die Maske ist an allen Kanten ganz durchsichtig, dunkle Bildteile nehmen die Farbe der Fläche dahinter an.
+
 ### Update 05.11.2026 (v43): UMBRA 2.0 – feste Wochentage, Blöcke, neue Saison-Programme
 
 Konzept aus dem Interview vom 05.11.2026 (Dokument „UMBRA 2.0 – Trainingslogik“). **Vor dem Hochladen eine JSON-Sicherung exportieren:** Die Daten werden auf Schema v11 migriert.

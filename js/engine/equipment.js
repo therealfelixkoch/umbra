@@ -19,8 +19,8 @@ export const bandLabel = (id) => { const b = BANDS.find((x) => x.id === id); ret
 // Katalog: nur Teile, die mindestens eine Übung in UMBRA nutzt (sonst wäre es Deko).
 export const EQUIPMENT_GROUPS = [
   { id: 'weights', name: 'Gewichte', items: ['kb', 'dumbbells', 'barbell', 'rack', 'bench', 'belt', 'vest'] },
-  { id: 'pull', name: 'Ziehen, Stützen, Klettern', items: ['bar', 'dipbars', 'climb_rope', 'harness', 'cable'] },
-  { id: 'floor', name: 'Sprung und Boden', items: ['box', 'abwheel', 'band', 'chair'] },
+  { id: 'pull', name: 'Ziehen, Stützen, Klettern', items: ['bar', 'dipbars', 'rings', 'climb_rope', 'harness', 'cable'] },
+  { id: 'floor', name: 'Sprung und Boden', items: ['box', 'abwheel', 'band', 'medball', 'chair'] },
   { id: 'fight', name: 'Kampf und Kondition', items: ['bag', 'rope', 'rower', 'bike', 'treadmill'] },
   { id: 'joints', name: 'Füße, Hände, Gelenke', items: ['hammer', 'ball', 'balance_board', 'slant', 'pipes'] },
 ];
