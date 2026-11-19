@@ -12,6 +12,9 @@ import { comicPanels, bindPanels } from './ui/lore.js';
 import { XP_CONFIG } from './data/xp-config.js';
 import { rankFor, totalXp, rankName } from './engine/game.js';
 import { APP_VERSION } from './version.js';
+import { SEASON_STORY } from './data/story.js';
+import { seasonImage } from './data/lore.js';
+import { UNITS_PER_CHAPTER } from './engine/run.js';
 import today from './ui/today.js';
 import training from './ui/training.js';
 import arena from './ui/arena.js';
@@ -215,10 +218,10 @@ function sync() {
   if (!r.changed) return false;
   app.data = r.data;
   for (const e of r.events) {
-    if (['arc_complete', 'week_done', 'week_repeat', 'boss_defeated', 'boss_retreat', 'nemesis_appears', 'nemesis_fades'].includes(e.type)) app.events.push(e);
+    if (['arc_complete', 'chapter_complete', 'week_done', 'week_repeat', 'boss_defeated', 'boss_retreat', 'nemesis_appears', 'nemesis_fades'].includes(e.type)) app.events.push(e);
   }
-  // Nur die letzte Wochenmeldung zeigen, Arc-Wechsel immer.
-  const keep = ['ascension', 'micro', 'quest', 'boss_defeated', 'boss_retreat', 'nemesis_appears', 'nemesis_fades'];
+  // Nur die letzte Wochenmeldung zeigen, Saisonwechsel und Kapitelende immer.
+  const keep = ['ascension', 'micro', 'quest', 'chapter_complete', 'boss_defeated', 'boss_retreat', 'nemesis_appears', 'nemesis_fades'];
   const arcs = app.events.filter((e) => e.type === 'arc_complete');
   const weeks = app.events.filter((e) => e.type !== 'arc_complete' && !keep.includes(e.type));
   app.events = [...app.events.filter((e) => keep.includes(e.type)), ...arcs.slice(-1), ...(arcs.length ? [] : weeks.slice(-1))];
@@ -241,9 +244,14 @@ function flushEvents() {
     ctx.panels('Nemesis', nemesisPanels(ev.type === 'nemesis_fades' ? 'fades' : 'appears'), ev.type === 'nemesis_fades' ? 'gold' : 'warn');
     return;
   }
+  if (ev.type === 'chapter_complete') {
+    // BANG COMBAT: Kapitel nach 15 Einheiten geschafft. Kein Sieg, keine Niederlage, nur was passiert ist und wie es weitergeht.
+    ctx.panels('Kapitel geschafft', chapterDonePanels(app.data, ev), 'gold');
+    return;
+  }
   if (ev.type === 'arc_complete') {
     const a = arcOf(app.data.engine.arc.n);
-    ctx.system(a.name, `<p class="reason">${esc(a.focus)}.</p><p class="muted">Eine neue Saison beginnt. Das Intro wartet auf „Heute“.</p>`,
+    ctx.system(`BANG COMBAT · ${a.sub}`, `<p class="reason">${esc(SEASON_STORY[a.id]?.theme || a.focus)}.</p><p class="muted">Eine neue Saison beginnt. Das Intro wartet auf „Heute“.</p>`,
       [['close-modal', 'Weiter', 'primary']], 'gold aura');
     return;
   }
@@ -270,6 +278,25 @@ function flushEvents() {
     ctx.system('Quest erfüllt', `<p class="reason">${esc(ev.quest.title)}: ${esc(ev.quest.desc)}.</p><div class="xp-gain num">+${XP_CONFIG.sources.quest} XP</div>`,
       [['close-modal', 'Weiter', 'primary']], 'gold');
   }
+}
+
+// Panels zum Kapitelende aus SEASON_STORY: was geschafft ist, am Saisonende das Saisonbild, dann die Empfehlung.
+function chapterDonePanels(data, ev) {
+  const a = arcOf(ev.n);
+  const story = SEASON_STORY[a.id];
+  const fill = (l) => l.replace('{einheiten}', String(UNITS_PER_CHAPTER)).replace('{muaythai}', String(seasonArena(data, ev.n)));
+  const idx = ((ev.n % 4) + 4) % 4;
+  const panels = [{ file: seasonImage(idx, ev.chapter === 1 ? 'end' : 'start'), title: `BANG COMBAT · ${a.sub} · Kapitel ${ev.chapter + 1}`,
+    lines: (story?.chapters?.[ev.chapter]?.done || ['Kapitel geschafft.']).map(fill) }];
+  if (ev.chapter === 1 && story?.done) panels.push({ title: `${a.sub} ist durch`, stats: [['Einheiten', String(2 * UNITS_PER_CHAPTER)], ['Muay Thai', String(seasonArena(data, ev.n))]], lines: story.done.map(fill) });
+  if (ev.choice?.text) panels.push({ title: 'Wie es weitergeht', stats: [], lines: [ev.choice.text, 'Auf „Heute“ entscheidest du: übernehmen oder ein anderes Kapitel wählen.'] });
+  return panels;
+}
+
+// Muay-Thai-Einheiten seit Beginn der Saison (für die Zahl im Kapitel- und Saisontext)
+function seasonArena(data, n) {
+  const from = (data.engine.arcHistory || []).filter((h) => h.n === n).map((h) => h.from).filter(Boolean)[0] || data.engine.arc?.startedDay || '0000';
+  return data.sessions.filter((s) => s.kind === 'arena' && s.day >= from).length;
 }
 
 function tabbar(route) {

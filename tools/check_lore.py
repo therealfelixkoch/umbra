@@ -8,7 +8,8 @@ LORE = os.path.join(ROOT, 'assets/lore')
 MAX = 300 * 1024
 src = open(os.path.join(ROOT, 'js/data/lore.js'), encoding='utf-8').read()
 expected = set(re.findall(r"'([a-z0-9-]+\.(?:webp|png))'", src))
-expected |= {f'arc{a}-{k}.webp' for a in range(1, 5) for k in ['establishing', 'confront', 'victory', 'retreat']}
+# BANG COMBAT: Saisonbilder je Saison Start und Ende (seasonImage in lore.js baut die Namen zur Laufzeit)
+expected |= {f'season{a}-{k}.webp' for a in range(1, 5) for k in ['start', 'end']}
 
 def webp_size(path):
     b = open(path, 'rb').read(64)

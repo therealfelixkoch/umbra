@@ -1,7 +1,9 @@
 // Entscheidungsregeln: Check-in + Wissen aus dem Log → Empfehlung für heute.
 // Reihenfolge der Regeln ist bewusst fix (siehe README). Jede Empfehlung ist überstimmbar.
 
-const NAMES = { A: 'ASCENT', B: 'BEDROCK', C: 'IMPACT', D: 'INFILTRATION', FORGE: 'FORGE' };
+const NAMES = { A: 'ASCENT', B: 'BEDROCK', C: 'IMPACT', D: 'INFILTRATION', FORGE: 'FORGE',
+  BC_A: 'Einheit A', BC_B: 'Einheit B', BC_C: 'Einheit C' };
+const PROGRAM_IDS = ['BC_A', 'BC_B', 'BC_C'];
 
 // Ort und Zeit getrennt. Alte Check-ins hatten beides in „where“ (kompakt, express, five, mobility).
 const TIMES = ['kompakt', 'express', 'five', 'mobility'];
@@ -10,7 +12,7 @@ export function placeAndTime(checkin) {
   return { where: legacy ? 'room' : checkin.where || 'room', time: legacy ? checkin.where : checkin.time || 'full' };
 }
 
-const HIGH = new Set(['B', 'FORGE', 'NOR4X4']);
+const HIGH = new Set(['B', 'FORGE', 'NOR4X4']); // BANG COMBAT: kein Tausch nach Belastung, nur Hinweise
 
 /**
  * Hinweise statt Tausch: Die Rotation bleibt, du entscheidest über die Dauer.
@@ -147,16 +149,17 @@ export function decideWeek({ checkin, hardStreak, yesterday, pick, profile, time
   const hint = advice({ checkin: { ...checkin, tonightMT: 'no' }, hardStreak, yesterday, next });
   if (time === 'express') {
     return { rule: 5, kind: 'express', missionId: 'EXPRESS', profile, hint, next, pick,
-      reason: `Nur 15 Minuten: SHADOWSTEP. ${NAMES[next]} bleibt für diese Woche offen.` };
+      reason: `Nur 15 Minuten: SHADOWSTEP. ${NAMES[next] || next} wartet, es verfällt nichts.` };
   }
   if (profile === 'travel') {
     return { rule: 11, kind: 'mission', missionId: 'HOTEL', slot: next, profile, hint, pick,
-      reason: `Unterwegs: Mini-Mission mit Band statt ${NAMES[next]}. 10–15 min, zählt als erledigt.` };
+      reason: `Unterwegs: Mini-Mission mit Band, 10–15 min. ${NAMES[next] || next} wartet, bis du wieder trainieren kannst.` };
   }
   const compact = time === 'kompakt';
   const reasons = [pick.reason];
   if (profile === 'room') reasons.push('Fighting Cave: Langhantel-Übungen laufen als Kettlebell-Variante.');
-  if (compact) reasons.push('30 Minuten: QUICK STRIKE mit Power, Hauptübung und Anker.');
+  if (compact) reasons.push(PROGRAM_IDS.includes(next) ? '30 Minuten: Kurzversion mit Hauptübung und CMPND Block, zählt als volle Einheit.'
+    : '30 Minuten: QUICK STRIKE mit Power, Hauptübung und Anker.');
   return { rule: pick.kind === 'planned' ? 7 : 12, kind: 'mission', missionId: next, slot: null, rotate: null, compact, profile, hint, pick,
     reason: reasons.join(' ') };
 }

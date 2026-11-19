@@ -7,6 +7,7 @@ import { programSlots, BACKDOWN_PCT } from '../data/program.js';
 import { gapDays, lastSetsFor, ROTATION } from './history.js';
 import { initialArc, weekInfo, holidayActive, DEFAULT_HOLIDAY } from './arc.js';
 import { modifierFor, completeMission } from './cycle.js';
+import { unitInfo, isProgramUnit, activeRun, activeProgramId } from './run.js';
 import { initialState, progress, ladderFor, snap, canLoad, setScore, stepLoad, withLoad } from './progression.js';
 import { sessionXp } from './game.js';
 import { daysBetween } from './dates.js';
@@ -124,14 +125,18 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
   const inHoliday = holidayActive(today, holiday);
   const gap = gapDays(data.sessions, today, holiday);
   // Im Feiertagsmodus greift die Pausenlogik nicht.
-  const modifier = full ? modifierFor(data.engine, inHoliday ? null : gap) : { type: 'none' };
   const arc = data.engine.arc || initialArc(today);
-  const info = weekInfo(arc);
+  // BANG COMBAT: Kapitel, Einheit und Deload kommen aus dem Programm-Stand (run.js), nicht aus der Kalenderwoche.
+  const uInfo = mission.program && isProgramUnit(data.engine, missionId) ? unitInfo(data.engine, today) : null;
+  const modifier = full ? modifierFor(data.engine, inHoliday ? null : gap, { today, unit: uInfo?.unit || null }) : { type: 'none' };
+  const info = uInfo ? { ...weekInfo(arc), ...uInfo } : weekInfo(arc);
   const isCompact = compact && mission.format === 'sets';
-  const base = { missionId, name: isCompact ? `QUICK STRIKE · ${mission.name}` : mission.name,
-    focus: isCompact ? 'Hauptübungen · je 2 Sätze' : mission.focus, minutes: isCompact ? 30 : mission.minutes,
+  const base = { missionId, name: isCompact ? `${uInfo ? 'Kurzversion' : 'QUICK STRIKE'} · ${mission.name}` : mission.name,
+    focus: isCompact ? (uInfo ? 'Hauptübung + CMPND Block' : 'Hauptübungen · je 2 Sätze') : mission.focus, minutes: isCompact ? 30 : mission.minutes,
     format: mission.format, kind: MISSION_KIND(missionId), profile, modifier, gap, compact: isCompact,
-    slot, rotate, arc: { n: arc.n, week: arc.week }, rir: modifier.type === 'deload' ? 3 : info.rir };
+    slot, rotate, arc: { n: uInfo ? uInfo.unit.n : arc.n, week: uInfo ? uInfo.chapterIndex * 6 + uInfo.chapterWeek : arc.week },
+    unit: uInfo ? { programId: uInfo.unit.programId, n: uInfo.unit.n, chapter: uInfo.unit.chapter, unitNo: uInfo.unit.unitNo, phase: uInfo.unit.phase } : undefined,
+    rir: modifier.type === 'deload' ? 3 : info.rir };
 
   const loadFor = (def, st) => {
     if (!def.load || !canLoad(def, equipment)) return { load: 0, ladder: [0] };
@@ -340,6 +345,7 @@ export function programItems({ missionId, profile, data, today, arc, info, isCom
   const first = wk === 1;
   const peak = wk === 4 || wk === 5;
   const deload = modifier.type === 'deload';
+  const comeback = modifier.type === 'comeback';
   const declined = data.engine.signalsDeclined === today;
   const sig = declined ? { elbowFull: false, regions: [] }
     : { elbowFull: elbowStatus(data, today).full, regions: activeRegions(data.signals, today) };
@@ -348,14 +354,15 @@ export function programItems({ missionId, profile, data, today, arc, info, isCom
 
   // Aufwärmen: Home Gym Rudern, Fighting Cave Seil. Danach der freie Mobility-Block.
   const warm = pick(profile === 'gym' ? 'rower_warmup' : 'jump_rope') || pick('warmup_general');
-  if (warm) items.push({ ...itemFor(warm, { data, profile, sets: 1, getDef }), block: 'warmup', rir: null, trend: null, minutesHint: '3–5 min' });
+  if (warm) items.push({ ...itemFor(warm, { data, profile, sets: 1, getDef }), block: 'warmup', rir: null, trend: null, minutesHint: isCompact ? '5 min' : '3–5 min' });
   if (full && !isCompact) {
     items.push({ key: 'mobility_block', exId: 'mobility_block', sets: 1, target: 3, load: 0, ladder: [0], block: 'warmup',
       optional: true, prep: true, rir: null, trend: null, lastTime: null });
   }
 
   prog.slots.forEach((s, i) => {
-    if (isCompact && !(s.b === 'power' || s.b === 'main' || s.role === 'anchor')) return;
+    // Kurzversion (~30 min, zählt voll): Aufwärmen, Hauptübung Top-Satz + 1 Backdown, CMPND Block (Anker + Partner) 2 Runden
+    if (isCompact && !(s.b === 'main' || s.b === 'cmpnd')) return;
     const slotKey = `${missionId}:${info.arc.id}${prog.chapter}:${i}`;
     const arcSwap = data.engine.arcSwaps?.[slotKey];
     const wanted = (arcSwap && arcSwap.arc === arc.n && arcSwap.id) || data.engine.slotVariant?.[slotKey]
@@ -368,7 +375,7 @@ export function programItems({ missionId, profile, data, today, arc, info, isCom
     const topSet = s.b === 'main' && loadable;
     const bd = isCompact ? 1 : (s.bd ?? setup.bd);
     const range = topSet ? (s.top || setup.top) : s.range || undefined;
-    const sets = isCompact && s.role === 'anchor' ? 2 : s.b === 'main' && !topSet ? 1 + bd : s.sets;
+    const sets = isCompact && s.b === 'cmpnd' ? 2 : s.b === 'main' && !topSet ? 1 + bd : s.sets;
     let item = itemFor(key, { data, profile, sets: topSet ? 1 + bd : sets, getDef, arcN: arc.n, range });
     item = { ...item, block: s.b, role: s.role, note: [s.note, s.b === 'main' && setup.tempo ? '3 s ablassen' : null].filter(Boolean).join(' · ') || undefined,
       optional: !!s.optional, main: s.b === 'main' || s.role === 'anchor', anchor: s.role === 'anchor', arms: !!s.arms, slotKey,
@@ -404,27 +411,24 @@ export function programItems({ missionId, profile, data, today, arc, info, isCom
       if (deload) item.topSet = false;
     }
     item = applyModifier(item, deload && item.setPlan ? { ...modifier, setFactor: 1 } : modifier, getDef(item.exId));
-    if (item.setPlan && modifier.type === 'comeback') {
-      item.setPlan = item.setPlan.slice(0, Math.max(1, item.sets)).map((x, j) => (j === 0 && x.label === 'Top-Satz'
-        ? { ...x, value: item.target, load: item.load } : { ...x, load: snap(item.ladder, item.load * BACKDOWN_PCT) }));
-      item.sets = item.setPlan.length;
-    }
-
-    // RIR je Übungsart und Kapitelwoche (Woche 1 eine Wdh. mehr im Tank, Woche 4–5 Zuspitzung)
+    // RIR je Übungsart und Kapitelphase (Einheit 1–3 eine Wdh. mehr im Tank, 10–12 Spitze)
+    // Wiedereinstieg nach langer Pause: +1 RIR auf alles, kein Satz bis RIR 0 oder ans Versagen.
+    const plus = comeback ? modifier.rirPlus || 1 : 0;
     if (type === 'main') {
-      item.rir = deload ? 3 : peak ? Math.min(setup.topRir, 1) : setup.topRir + (first ? 1 : 0);
+      item.rir = deload ? 3 : (peak ? Math.min(setup.topRir, 1) : setup.topRir + (first ? 1 : 0)) + plus;
       item.noFailure = true;
     } else if (type === 'power') {
       item.rir = null;
       item.noFailure = true;
     } else if (type === 'toZero') {
-      item.rir = deload ? 3 : first ? 2 : 1;
-      item.lastZero = !deload && !setup.noZero && !first;
-      item.failLast = !deload && !setup.noZero && peak && !item.noFailure;
+      item.rir = deload ? 3 : (first ? 2 : 1) + plus;
+      item.lastZero = !deload && !comeback && !setup.noZero && !first;
+      item.failLast = !deload && !comeback && !setup.noZero && peak && !item.noFailure;
     } else if (type === 'mid') {
-      item.rir = deload ? 3 : first ? 3 : peak ? 1 : 2;
+      item.rir = deload ? 3 : (first ? 3 : peak ? 1 : 2) + plus;
     } else item.rir = null;
     if (deload) item.noFailure = true;
+    if (comeback && item.rir != null) item.comeback = true;
     items.push(item);
 
     // Kontrast (Frühjahr Kapitel 1): nach dem Top-Satz 3 explosive Wiederholungen im gleichen Muster
@@ -476,6 +480,7 @@ export function itemFor(key, { data, profile, sets, getDef = defaultGetDef, arcN
   if (arcN != null && st.arc != null && st.arc !== arcN) st = { ...st, target: r[0], lastChange: null };
   if (range && st.range && (st.range[0] !== range[0] || st.range[1] !== range[1])) st = { ...st, target: range[0], lastChange: null };
   if (range && st.target > range[1]) st = { ...st, target: range[1] };
+  if (range && st.target < range[0]) st = { ...st, target: range[0] }; // neuer Stand oder Bereich des Slots höher als die Grundeinstellung
   let def = getDef(st.exId) || baseDef;
   if (!(def.equipment || []).every((e) => equipment.includes(e))) def = baseDef;
   let load = 0;
@@ -596,7 +601,7 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
   const bodyweight = data.settings.bodyweight || 80;
 
   const session = { id: id || `s${now}`, day, kind: p.kind, missionId: p.missionId, profile: p.profile,
-    compact: p.compact || undefined, slot: p.slot || undefined, arc: p.arc,
+    compact: p.compact || undefined, slot: p.slot || undefined, arc: p.arc, unit: p.unit || undefined,
     stage: p.feet ? p.stage : undefined, noJumps: p.feet && p.noJumps ? true : undefined,
     afterPause: p.gap != null && p.gap >= 8 ? true : undefined, gap: p.gap ?? undefined,
     modifier: p.modifier?.type || 'none', completion,
@@ -628,7 +633,8 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
       // Progression nur bei normalen Einheiten, nie für explosive Kontrast-Partner
       const item = p.items[i];
       if (item.explosive || item.wrist) return; // Handgelenk-Übungen steigern über die Ampel, nicht per Double Progression
-      if (p.modifier?.type && p.modifier.type !== 'none') return;
+      // Deload: keine Progression. Wiedereinstieg (+1 RIR) zählt normal.
+      if (p.modifier?.type === 'deload') return;
       const base = getDef(entry.key);
       const sk = stateKey(p.profile, entry.key);
       const st = exState[sk] ||
@@ -684,18 +690,21 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
 
   const holiday = data.settings.holiday ?? DEFAULT_HOLIDAY;
   const gap = holidayActive(day, holiday) ? null : gapDays(data.sessions, day, holiday);
-  const engine = p.compact || FULL_MISSIONS.includes(p.missionId)
-    ? completeMission(data.engine, { missionId: p.missionId, slot: p.slot, rotate: p.rotate, gap, modifier: p.modifier })
+  // BANG COMBAT: Einheit zählt im Kapitel (auch Kurzversion und teilweise), Reihenfolge läuft weiter
+  const { lastEvents: events = [], ...engine } = p.compact || FULL_MISSIONS.includes(p.missionId)
+    ? completeMission(data.engine, { missionId: p.missionId, slot: p.slot, rotate: p.rotate, gap, modifier: p.modifier, today: day })
     : data.engine;
 
-  // Für „Einheit löschen“: vorheriger Stand von Rotation, Progression und Bestleistungen (nur was sich geändert hat)
+  // Für „Einheit löschen“: vorheriger Stand von Rotation, Programm, Progression und Bestleistungen (nur was sich geändert hat)
   const diff = (before, after) => Object.fromEntries(Object.keys(after).filter((k) => after[k] !== before[k]).map((k) => [k, before[k] ?? null]));
-  session.undo = { queue: data.engine.queue, comeback: data.engine.comeback ?? null, exState: diff(data.exState, exState), records: diff(data.records, records) };
+  session.undo = { queue: data.engine.queue, comeback: data.engine.comeback ?? null, exState: diff(data.exState, exState), records: diff(data.records, records),
+    ...(engine.programs !== data.engine.programs ? { programs: data.engine.programs ?? null, arc: data.engine.arc ?? null } : {}) };
 
   return {
     data: { ...data, exState, records, engine, sessions: [...data.sessions, session], active: null,
       ...(p.wrist?.variant ? { wrist: { ...(data.wrist || {}), lastVariant: p.wrist.variant } } : {}) },
     session,
+    events, // chapter_complete (mit Empfehlung), chapter_start, arc_complete
   };
 }
 
@@ -719,8 +728,11 @@ export function deleteSession(data, id) {
       return out;
     };
     return { ...data, sessions, exState: restore(data.exState, s.undo.exState), records: restore(data.records, s.undo.records),
-      engine: { ...data.engine, queue: s.undo.queue, comeback: s.undo.comeback } };
+      engine: { ...data.engine, queue: s.undo.queue, comeback: s.undo.comeback,
+        ...(s.undo.programs ? { programs: s.undo.programs, arc: s.undo.arc } : {}) } };
   }
+  // Ältere BANG-COMBAT-Einheit: der Kapitel-Stand bleibt (nichts verfällt, nichts wird zurückgedreht)
+  if (s.unit) return { ...data, sessions };
   const pos = ROTATION.includes(s.missionId) ? s.missionId : s.slot;
   if (!pos || !FULL_MISSIONS.includes(s.missionId) || !data.engine.queue.includes(pos)) return { ...data, sessions };
   return { ...data, sessions, engine: { ...data.engine, queue: [pos, ...data.engine.queue.filter((m) => m !== pos)] } };

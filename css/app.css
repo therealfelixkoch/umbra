@@ -1,4 +1,4 @@
-:root { --app-version: "v44"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
+:root { --app-version: "v45"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
 @font-face {
   font-family: 'Oxanium';
   src: url('../fonts/oxanium.woff2') format('woff2');
@@ -1382,3 +1382,62 @@ body.scrolled .screen-training .t-mini { display: block; }
 .wp-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
 .wp-row > b { width: 28px; }
 .wp-row .chips { flex: 1; }
+
+/* ——— BANG COMBAT: „Was geht heute?“, Kurzversion, Einheiten statt Wochen ——— */
+.ask-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ask-opt { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; min-height: 76px; padding: 12px 14px; text-align: left;
+  border-radius: 16px; border: 1px solid var(--glass-line); background: rgba(255, 255, 255, 0.04); transition: transform 0.12s ease, border-color 0.2s, background 0.2s, box-shadow 0.2s; }
+.ask-opt b { font: 700 18px/1.1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.ask-opt small { font-size: 13px; color: var(--muted); }
+.ask-opt:active { transform: scale(0.97); }
+.ask-opt.on { border-color: var(--sys); background: color-mix(in srgb, var(--sys) 18%, transparent); box-shadow: 0 0 18px var(--sys-glow) inset; }
+.ask-opt.on small { color: var(--text); }
+.ask-week { margin: 10px 0 2px; }
+.ask-more { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.kurz-btn { flex-direction: column; gap: 2px; margin-top: 10px; min-height: 58px; }
+.kurz-btn b { font: 700 16px/1.1 var(--display); letter-spacing: 0.06em; text-transform: uppercase; }
+.kurz-btn small { font-size: 12px; color: var(--muted); font-weight: 500; }
+.kurz-btn + .muted { margin: 6px 0 0; }
+.comeback-note b { color: var(--calm); }
+.comeback-note { border-color: color-mix(in srgb, var(--calm) 45%, transparent); background: color-mix(in srgb, var(--calm) 8%, transparent); }
+
+/* Kapitel als 15 Einheiten (statt 13 Wochen) */
+.unit-track { display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 2px; align-items: center; min-width: 0; }
+.unit-track i { height: 6px; border-radius: 2px; background: rgba(255, 255, 255, 0.14); }
+.unit-track i.in, .unit-track i.dl { opacity: 0.6; }
+.unit-track i.on { background: var(--sys); opacity: 1; }
+.unit-track i.cur { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); opacity: 1; }
+.sys .unit-track { margin: 10px 0; }
+.strip-boss .num { font-size: 11px; color: var(--muted); }
+.wdots i.mt { border-color: var(--gold); }
+.wdots i.mt.on { background: var(--gold); border-color: var(--gold); box-shadow: 0 0 8px var(--gold-glow); }
+.sh-kick { display: block; margin-bottom: 6px; font: 600 11px/1 var(--display); letter-spacing: 0.3em; text-transform: uppercase; color: var(--muted); }
+
+/* Woche auf Heute: Gute Woche und Reihenfolge */
+.rot-line { margin: 10px 0 8px; text-align: left; font-size: 14px; }
+.wk-tally { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
+.wk-tally b { font: 700 14px/1 var(--display); letter-spacing: 0.04em; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--glass-line); color: var(--muted); }
+.wk-tally b.ok { color: var(--text); border-color: color-mix(in srgb, var(--sys) 55%, transparent); background: color-mix(in srgb, var(--sys) 12%, transparent); }
+.wk-tally b.bonus { color: var(--gold); border-color: rgba(255, 207, 90, 0.4); }
+.rot-chips { justify-content: flex-start; margin-top: 10px; }
+.rot-chip { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 56px; min-width: 84px; padding: 6px 14px; border-radius: 14px; }
+.rot-chip b { font: 700 18px/1 var(--display); }
+.rot-chip small { font-size: 10px; line-height: 1; }
+.swap.rec { border-color: var(--sys); box-shadow: 0 0 14px var(--sys-glow) inset; }
+
+/* Bibliothek */
+.lib-list { display: flex; flex-direction: column; gap: 8px; }
+.lib-item { display: flex; flex-direction: column; gap: 4px; width: 100%; text-align: left; padding: 12px 14px; border-radius: 14px; border: 1px solid var(--glass-line); background: rgba(255, 255, 255, 0.03); }
+.lib-item.on { border-color: var(--sys); box-shadow: 0 0 16px var(--sys-glow) inset; }
+.lib-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.lib-top b { font: 700 16px/1.2 var(--display); letter-spacing: 0.08em; margin-right: 4px; }
+.lib-item small { color: var(--muted); font-size: 13px; line-height: 1.35; }
+.lib-item .lib-status { color: var(--text); font-size: 14px; }
+.pill.on { color: var(--sys); border-color: var(--sys); }
+.pill.season { color: var(--gold); border-color: rgba(255, 207, 90, 0.45); }
+
+/* ARENA · Drills: Runden am Sack */
+.bag-modes { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 10px; }
+.bag-mode .seg { flex: none; min-width: 190px; }
+.bag-call { font: 800 34px/1.15 var(--display); letter-spacing: 0.06em; text-transform: uppercase; text-align: center; overflow-wrap: anywhere; padding: 0 8px; }
+.rt.bag .fw-cmd { min-height: 180px; }

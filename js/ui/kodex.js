@@ -2,7 +2,8 @@
 import { EXERCISES, CATEGORIES, EQUIPMENT, getDef } from '../data/exercises.js';
 import { EXPRESSIONS, ATTRIBUTES } from '../data/glyphs.js';
 import { esc, glyphChips, unitOf, sys } from './kit.js';
-import { GUARDIANS, BOSSES, SCENE_KINDS, sceneFile, NEMESIS_SCENES, LORE_DIR, MAX_KB, allLoreFiles } from '../data/lore.js';
+import { GUARDIANS, BOSSES, NEMESIS_SCENES, LORE_DIR, MAX_KB, allLoreFiles, SEASON_SUBS, SEASON_IMAGE_KINDS, seasonImage } from '../data/lore.js';
+import { SEASON_STORY } from '../data/story.js';
 import { guardianImage, bossImage, loreImage, scenePlaceholder, comicPanels, bindPanels } from './lore.js';
 import { codexEntry } from '../engine/story.js';
 import { formatDay } from '../engine/dates.js';
@@ -49,27 +50,30 @@ function list(c) {
     <div><b>${esc(d.name)}</b><small>${esc(CATEGORIES[d.cat])}</small></div>${glyphChips(d, { small: true })}</button>`).join('');
 }
 
-const STATES = [['full', 'Unversehrt'], ['half', 'Angeschlagen 50 %'], ['heavy', 'Schwer getroffen 85 %'], ['defeated', 'Besiegt'], ['retreat', 'Rückzug']];
+// THE PLATEAU (Der Stillstand) bleibt als einziger Gegenspieler, sanft: Er verblasst, statt besiegt zu werden.
+const STATES = [['full', 'Da'], ['half', 'Verblasst 50 %'], ['retreat', 'Verblasst']];
 
 function archive(c) {
-  const st = c.ui.bossDemo || 'half';
-  const bossOpts = st === 'full' ? {} : st === 'half' ? { hp: 7.5, max: 15 } : st === 'heavy' ? { hp: 2.2, max: 15 } : { state: st };
+  const st = c.ui.bossDemo || 'full';
+  const plateauOpts = st === 'full' ? {} : st === 'half' ? { hp: 7.5, max: 15 } : { state: 'retreat' };
   const cell = (html, file) => `<div class="lore-cell">${html}<small data-file="${file}">${file}</small></div>`;
-  const scenes = [0, 1, 2, 3].map((a) => `<div class="label">${['Winter', 'Frühjahr', 'Sommer', 'Herbst'][a]}</div><div class="lore-grid">${SCENE_KINDS.map((k) =>
-    cell(loreImage({ file: sceneFile(a, k), ratio: 4 / 5, placeholder: scenePlaceholder(4 / 5) }), sceneFile(a, k))).join('')}</div>`).join('');
+  // Saisonbilder: je Saison der eigene Fighter am Anfang (start) und am Ende (end)
+  const seasons = [0, 1, 2, 3].map((a) => `<div class="label">${SEASON_SUBS[a]} · ${['Winter', 'Frühling', 'Sommer', 'Herbst'][a]}</div><div class="lore-grid">${SEASON_IMAGE_KINDS.map((k) =>
+    cell(loreImage({ file: seasonImage(a, k), ratio: 4 / 5, placeholder: scenePlaceholder(4 / 5), caption: k === 'start' ? 'Anfang' : 'Ende' }), seasonImage(a, k))).join('')}</div>`).join('');
+  const w = SEASON_STORY.WINTER;
   const demo = comicPanels([
-    { file: sceneFile(0, 'establishing'), title: 'WINTER ARC', lines: ['Eine Schmiede, in der das Feuer erloschen ist.', 'Der Winter ist lang. Hier wird Kraft gesammelt.'] },
-    { file: BOSSES.coldiron.file, ratio: 3 / 4, title: 'COLDIRON', lines: ['Er macht dich schwach und träge, wenn es dunkel wird.', 'Er weicht nur der Kraft.'] },
-    { title: 'Bilanz', stats: [['Missionen', '14'], ['ARENA', '9'], ['FLOW-Tage', '21'], ['Längste Serie', '6 W']], lines: ['Beispielzahlen. Im Debrief stehen deine echten.'] },
+    { file: seasonImage(0, 'start'), title: 'BANG COMBAT · IRON', lines: w.now },
+    { file: seasonImage(0, 'end'), title: 'Wohin', lines: w.goal },
+    { title: 'Bilanz', stats: [['Einheiten', '30'], ['Muay Thai', '11'], ['FLOW-Tage', '21'], ['Bestwerte', '6']], lines: ['Beispielzahlen. Am Saisonende stehen deine echten.'] },
   ], 'demo-panels');
   return `<button class="btn ghost back" data-act="go" data-to="kodex">← Kodex</button>
     <h1 class="h">Archiv</h1>
     <p class="muted small">Alle Lore-Bilder. Fehlende zeigen einen Platzhalter, bis du sie in assets/lore ablegst.</p>
     ${sys('Der Wächter', `<div class="lore-grid">${GUARDIANS.map((g, i) => cell(guardianImage(i, { caption: g.name }), g.file)).join('')}</div>`)}
-    ${sys('Bosse', `<div class="chips scroll">${STATES.map(([k, v]) => `<button class="chip${st === k ? ' on' : ''}" data-act="boss-state" data-v="${k}">${v}</button>`).join('')}</div>
-      <div class="lore-grid">${Object.entries(BOSSES).map(([id, b]) => cell(bossImage(id, { ...bossOpts, caption: b.name }), b.file)).join('')}</div>`)}
-    ${sys('Szenen', `${scenes}<div class="label">Nemesis</div><div class="lore-grid">${Object.values(NEMESIS_SCENES).map((f) => cell(loreImage({ file: f, ratio: 4 / 5 }), f)).join('')}</div>`)}
-    ${sys('Comic-Panels (Vorschau)', `${demo}<p class="muted small">Zum Durchwischen. Bild-Panels mit Systemtext, Statistik-Panels ohne Bild.</p>`)}
+    ${sys('Saisons', seasons)}
+    ${sys('Der Stillstand', `<div class="chips scroll">${STATES.map(([k, v]) => `<button class="chip${st === k ? ' on' : ''}" data-act="boss-state" data-v="${k}">${v}</button>`).join('')}</div>
+      <div class="lore-grid">${cell(bossImage('plateau', { ...plateauOpts, caption: BOSSES.plateau.name }), BOSSES.plateau.file)}${Object.values(NEMESIS_SCENES).map((f) => cell(loreImage({ file: f, ratio: 4 / 5 }), f)).join('')}</div>`)}
+    ${sys('Comic-Panels (Vorschau)', `${demo}<p class="muted small">Zum Durchwischen. Bild-Panels mit Text, Statistik-Panels ohne Bild.</p>`)}
     <p class="foot muted">${allLoreFiles().length} Bilder in der Liste.</p>`;
 }
 
@@ -82,8 +86,8 @@ function chronicle(c) {
   const rest = entries.filter((x) => x.e.kind !== 'boss');
   return `<button class="btn ghost back" data-act="go" data-to="kodex">← Kodex</button>
     <h1 class="h">Chronik</h1>
-    <p class="muted small">Jede neue Übung, jeder Rekord und jeder Gegner schaltet einen Eintrag frei.</p>
-    ${bosses.length ? sys('Gegner', bosses.map((x) => `<div class="chron boss"><div class="chron-img">${bossImage(x.e.id, { cls: 'lore-small' })}</div><div><b>${esc(x.e.title)}</b><p>${esc(x.e.text)}</p></div></div>`).join('')) : ''}
+    <p class="muted small">Jede neue Übung, jeder Rekord und jede Saison schaltet einen Eintrag frei.</p>
+    ${bosses.length ? sys('Besondere Einträge', bosses.map((x) => `<div class="chron boss"><div class="chron-img">${bossImage(x.e.id, { cls: 'lore-small' })}</div><div><b>${esc(x.e.title)}</b><p>${esc(x.e.text)}</p></div></div>`).join('')) : ''}
     ${sys('Einträge', rest.length ? rest.map((x) => `<div class="chron"><small>${formatDay(x.meta.day || '2026-01-01')}</small><b>${esc(x.e.title)}</b><p>${esc(x.e.text)}</p></div>`).join('') : '<p class="muted">Noch leer. Die erste Mission schreibt den ersten Eintrag.</p>')}`;
 }
 

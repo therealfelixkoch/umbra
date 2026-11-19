@@ -72,6 +72,34 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 19.11.2026 (v45): BANG COMBAT – 3× Ganzkörper in Reihenfolge, Drills in der ARENA
+
+**Vor dem Update eine JSON-Sicherung exportieren:** Die Daten werden auf Schema v13 migriert.
+
+- **BANG COMBAT:** Das Hauptprogramm hat drei Ganzkörper-Einheiten statt vier fester Wochentage:
+  - **A:** Kniebeuge + Drücken
+  - **B:** Hüfte + Ziehen
+  - **C:** Einbeinig + Athletik
+  
+  Die Anker sind Dip, Tactical Pull-up, Bulgarian Split Squat und Chin-up. Die Saisons heißen IRON (Winter), STRIKE (Frühling), FIGHT (Sommer) und RESET (Herbst).
+- **Reihenfolge statt Wochentage:** Die App zeigt die nächste Einheit. Nichts verfällt, es gibt kein „verpasst“. Eine gute Woche sind 2× Gym und 1× Muay Thai, alles darüber ist Bonus.
+- **„Was geht heute?“:** Gym, Muay Thai, beides oder nichts. Sagt der Partner ab, schlägt die App Sack und optional die Kurzversion vor.
+- **Kapitel = 15 Einheiten:**
+  - 1–3: Einstieg (+1 RIR)
+  - 4–9: normal
+  - 10–12: Spitze
+  - 13–15: leicht
+  
+  Die Migration übernimmt den laufenden Stand, jede volle Mission zählt als 1 Einheit.
+- **Kurzversion (~30 min):** Aufwärmen, Hauptübung (Top-Satz + 1 Backdown), CMPND Block 2 Runden. Sie zählt fürs Kapitel voll und gibt 70 XP.
+- **Wiedereinstieg:** Ab 10 Tagen Pause schlägt die App für 2 Einheiten +1 RIR vor. Der Vorschlag ist wegklickbar, es gibt keine Strafe.
+- **Programm-Bibliothek:** Es ist immer ein Programm aktiv, der Fortschritt bleibt je Programm gespeichert. Die Saison-Empfehlung kommt erst am Kapitelende.
+- **Story ohne Endbosse:** Jede Saison erzählt den Fighter selbst. Statt der Prüfwoche gibt es einen freiwilligen Vergleichstest nach Einheit 15. THE PLATEAU bleibt, ist aber sanft. Titel gibt es ohne Serien, Events ab Einheit 8. Side Quests sind mit 2 Gym-Einheiten + 1 ARENA machbar.
+- **Home Gym:** Box, Dip-Barren und Hantelbank sind per Migration abgehakt.
+- **ARENA · Drills** (vorher „Footwork“) mit zwei Unter-Tabs:
+  - **Footwork:** unverändert.
+  - **Runden am Sack:** Die Systemstimme sagt Kombis an. Kicks: nur die Zahl. Knee: Zahl + „Knee“. Hands: Zahl + „Hands“. Dazu kommen Jab Jab Cross, Hook Cross, Cross Hook, Hook und Cross mit dem Zusatz der Kategorie. Je Kategorie wählst du „In Order“ (1–4, Jab Jab Cross) oder „Mixed“, dazu Dauer, Runden und Tempo.
+
 ### Update 10.11.2026 (v44): Feedback aus den ersten Einheiten
 
 **Vor dem Update eine JSON-Sicherung exportieren:** Die Daten werden auf Schema v12 migriert.

@@ -1,10 +1,12 @@
-// UMBRA 2.0: feste Wochentage statt Rotation. Reine Funktionen über Wochenplan, Muay-Thai-Tage und Log.
-// Regeln (Interview 05.11.2026):
-// - Legs (B) und Full Body (D) nie an einem Muay-Thai-Tag, und ein Tag Abstand zwischen beiden.
-// - Verpasst: die App bietet den nächsten freien Tag in derselben Woche an. Kein Platz mehr: fällt aus, kein Nachholen.
-// - Mini-Mission (Jobtag) ersetzt die Mission des Tages und zählt als erledigt.
+// BANG COMBAT (Interview 19.11.2026): Reihenfolge statt Wochentage. Die App zeigt die nächste Einheit (A → B → C),
+// nichts verfällt, kein „verpasst“, keine Nachhol-Liste. Gute Woche = 2× Gym + 1× Muay Thai, alles darüber ist Bonus.
+// Muay Thai planen Felix und sein Partner selbst, die App plant es nicht voraus.
+// Die festen Wochentage von UMBRA 2.0 (v43/v44) stehen unten noch als Altlast (weekSchedule, allowedOn, nextFreeDay),
+// bis die Oberfläche umgestellt ist. todayPick liefert schon die nächste Einheit.
 import { addDays, weekStart } from './dates.js';
 import { PROGRAM_MISSIONS } from '../data/program.js';
+import { programOf, DEFAULT_PROGRAM } from '../data/library.js';
+import { MISSIONS } from '../data/missions.js';
 
 export const DEFAULT_WEEK_PLAN = { 1: 'C', 2: 'B', 4: 'A', 5: 'D' }; // ISO-Wochentag (1 = Mo) → Mission
 export const DEFAULT_MT_DAYS = [1, 4]; // Muay Thai abends
@@ -14,8 +16,51 @@ export const LEG_MISSIONS = ['B', 'D'];
 export const isoDow = (day) => { const d = new Date(`${day}T12:00:00Z`).getUTCDay(); return d === 0 ? 7 : d; };
 
 // Welche Mission hat eine Session erledigt? Die Mini-Mission zählt für den Platz, den sie ersetzt hat.
-const doneId = (s) => (s.kind === 'mission' && (PROGRAM_MISSIONS.includes(s.missionId) ? s.missionId
-  : PROGRAM_MISSIONS.includes(s.slot) ? s.slot : null));
+const OLD_MISSIONS = ['A', 'B', 'C', 'D'];
+const doneId = (s) => (s.kind === 'mission' && ([...PROGRAM_MISSIONS, ...OLD_MISSIONS].includes(s.missionId) ? s.missionId
+  : OLD_MISSIONS.includes(s.slot) ? s.slot : null));
+
+/** Nächste Einheit nach dem Log: nach der zuletzt erledigten A/B/C-Einheit die folgende, sonst A. */
+export function nextInOrder(sessions, units = PROGRAM_MISSIONS) {
+  const last = [...sessions].reverse().find((s) => s.kind === 'mission' && units.includes(s.missionId));
+  return last ? units[(units.indexOf(last.missionId) + 1) % units.length] : units[0];
+}
+
+/**
+ * Stand der Woche nach der Regel „Gute Woche = 2× Gym + 1× Muay Thai“. Darunter ist kein Problem, darüber Bonus.
+ * @returns {{gym:number, arena:number, good:boolean, bonus:number, units:{id:string, day:string}[]}}
+ */
+export function weekTally(sessions, today, goal = programOf(DEFAULT_PROGRAM).goodWeek) {
+  const ws = weekStart(today);
+  const list = sessions.filter((s) => s.day >= ws && s.day <= addDays(ws, 6));
+  const units = list.filter((s) => s.kind === 'mission' && PROGRAM_MISSIONS.includes(s.missionId)).map((s) => ({ id: s.missionId, day: s.day }));
+  const gym = list.filter((s) => s.kind === 'mission').length;
+  const arena = list.filter((s) => s.kind === 'arena').length;
+  const good = gym >= goal.gym && arena >= goal.arena;
+  return { gym, arena, good, bonus: Math.max(0, gym - goal.gym) + Math.max(0, arena - goal.arena), units, goal };
+}
+
+// „Was geht heute?“ – Antworten und was die App daraus vorschlägt (die Oberfläche fragt, Felix entscheidet).
+export const TODAY_ANSWERS = { gym: 'Gym', mt: 'Muay Thai', both: 'Beides', none: 'Nichts' };
+
+/**
+ * Vorschlag für heute.
+ * @param {'gym'|'mt'|'both'|'none'} answer
+ * @param {{next:string, partner?:boolean}} o next = nächste Einheit, partner = false, wenn der Partner abgesagt hat
+ * @returns {{items:{kind:'unit'|'arena'|'bag', missionId?:string, compact?:boolean, optional?:boolean, minutes?:number}[], text:string}}
+ */
+export function todaySuggestion(answer, { next, partner = true } = {}) {
+  if (answer === 'gym') return { items: [{ kind: 'unit', missionId: next }], text: 'Heute die nächste Einheit.' };
+  if (answer === 'both') {
+    return { items: [{ kind: 'unit', missionId: next }, { kind: 'arena' }], text: 'Nächste Einheit und Muay Thai, die Reihenfolge ist egal.' };
+  }
+  if (answer === 'mt') {
+    return partner ? { items: [{ kind: 'arena' }], text: 'Heute Muay Thai.' }
+      : { items: [{ kind: 'bag', minutes: 30 }, { kind: 'unit', missionId: next, compact: true, optional: true }],
+        text: 'Partner sagt ab: ca. 30 min am Sack, nach Lust dazu die nächste Einheit als Kurzversion.' };
+  }
+  return { items: [], text: 'Heute nichts. Die nächste Einheit wartet, es verfällt nichts.' };
+}
 
 /**
  * Stand der laufenden Woche.
@@ -82,32 +127,15 @@ export function nextFreeDay(id, { sched, today, mtDays = DEFAULT_MT_DAYS, sessio
 }
 
 /**
- * Was ist heute dran?
- * @returns {{missionId:string|null, kind:'planned'|'swap'|'catchup'|'free'|'done', reason:string, moved?:{id:string, to:string|null}}}
+ * Was ist heute dran? BANG COMBAT: immer die nächste Einheit, egal welcher Tag.
+ * Gleiche Rückgabe wie früher, damit die alte Oberfläche weiterläuft (kind 'next' statt 'planned').
+ * @returns {{missionId:string, kind:'next', reason:string, sched:object}}
  */
-export function todayPick({ weekPlan = DEFAULT_WEEK_PLAN, mtDays = DEFAULT_MT_DAYS, sessions, today, checkin = null, names = {} }) {
-  const sched = weekSchedule({ weekPlan, sessions, today });
-  const mt = mtOn(today, { mtDays, checkin });
-  const around = legsAround(today, sched, sessions);
-  const name = (id) => names[id] || id;
-  const dayName = (d) => DAY_NAMES[isoDow(d)];
-  if (sched.today) {
-    const ok = allowedOn(sched.today, { mt, legsAround: around });
-    if (ok.ok) return { missionId: sched.today, kind: 'planned', reason: `Heute laut Wochenplan: ${name(sched.today)}.`, sched };
-    // Heute geht die geplante Mission nicht: auf den nächsten freien Tag schieben, heute eine andere vorziehen.
-    const to = nextFreeDay(sched.today, { sched, today, mtDays, sessions });
-    const alt = [...sched.open, ...sched.upcoming].map((p) => p.id)
-      .find((x) => x !== sched.today && allowedOn(x, { mt, legsAround: around }).ok);
-    const movedTxt = `${ok.why} ${name(sched.today)} rutscht ${to ? `auf ${dayName(to)}` : 'raus, diese Woche ist kein Tag mehr frei'}.`;
-    if (alt) return { missionId: alt, kind: 'swap', reason: `${movedTxt} Heute stattdessen ${name(alt)}.`, moved: { id: sched.today, to }, sched };
-    return { missionId: null, kind: 'free', reason: movedTxt, moved: { id: sched.today, to }, sched };
-  }
-  const catchup = sched.open.find((p) => allowedOn(p.id, { mt, legsAround: around }).ok);
-  if (catchup) {
-    return { missionId: catchup.id, kind: 'catchup', reason: `${name(catchup.id)} war für ${dayName(catchup.day)} geplant. Heute ist frei, du kannst sie hier machen.`, sched };
-  }
-  if (sched.todayPlanned) return { missionId: null, kind: 'done', reason: `${name(sched.todayPlanned)} ist für diese Woche schon erledigt.`, sched };
-  const next = sched.upcoming[0];
-  return { missionId: null, kind: 'free',
-    reason: `Heute ist kein Kraft-Tag.${next ? ` Als Nächstes: ${name(next.id)} am ${dayName(next.day)}.` : ' Die Woche ist geschafft.'}`, sched };
+export function todayPick({ weekPlan = DEFAULT_WEEK_PLAN, sessions, today, names = {}, next = null }) {
+  const sched = weekSchedule({ weekPlan: {}, sessions, today });
+  const id = next || nextInOrder(sessions);
+  const name = names[id] || MISSIONS[id]?.name || id;
+  const done = sessions.some((s) => s.day === today && s.kind === 'mission' && PROGRAM_MISSIONS.includes(s.missionId));
+  return { missionId: id, kind: 'next', sched,
+    reason: done ? `Heute schon trainiert. Als Nächstes: ${name}, wann es passt.` : `Nächste Einheit: ${name}.` };
 }

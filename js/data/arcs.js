@@ -1,4 +1,6 @@
-// Saisons (Makro-Arcs): 4 pro Jahr, je 13 Trainingswochen = 2 Kapitel à 6 Wochen (5 Aufbau + 1 Deload) + 1 Prüfwoche.
+// Saisons (Makro-Arcs): 4 pro Jahr. BANG COMBAT (19.11.2026): ein Kapitel = 15 Einheiten A/B/C statt 6 Kalenderwochen,
+// die Saison folgt dem Kalender und wird am Kapitelende empfohlen (js/engine/run.js). Die Wochen-Felder unten bleiben für alte Daten.
+// Früher: je 13 Trainingswochen = 2 Kapitel à 6 Wochen (5 Aufbau + 1 Deload) + 1 Prüfwoche.
 // UMBRA 2.0: Übungen je Saison und Kapitel in js/data/program.js. rules hier nur noch für Extras (ZONE 2, optionaler 4x4).
 // Stand 27.10.2026, Konzept: docs/umbra-saisons-konzept.md. Intern heißt eine Saison weiter „arc“ (n = laufende Nummer).
 // rules: extraMainSet (+1 Satz Hauptübungen) · topSet (Top-Satz + Backdown) · contrast (Kontrastpaare) ·
@@ -11,17 +13,17 @@ export const EXAM_WEEK = 13;
 export const MIN_MISSIONS_PER_WEEK = 2;
 
 export const ARCS = [
-  { id: 'WINTER', name: 'WINTER ARC', guardian: 'coldiron', months: [11, 12, 1], weeks: 13,
+  { id: 'WINTER', name: 'WINTER ARC', sub: 'IRON', guardian: 'coldiron', months: [11, 12, 1], weeks: 13,
     focus: 'Kraft und etwas Muskel',
     desc: 'Erst Fundament mit mehr Wiederholungen, dann schwer heben.',
-    why: 'Im Winter baust du Kraft und etwas Muskel auf. Kapitel 1 legt mit Top-Satz 6–8 das Fundament, Kapitel 2 macht daraus mit Top-Satz 3–5 Kraft. Power, Rumpf, Mobility und Muay Thai laufen in jeder Mission mit.',
+    why: 'Im Winter baust du Kraft und etwas Muskel auf. Kapitel 1 legt mit Top-Satz 6–8 das Fundament, Kapitel 2 macht daraus mit Top-Satz 3–5 Kraft. Power, Rumpf, Prehab und Muay Thai laufen in jeder Einheit mit.',
     chapters: [
       { name: 'Fundament', rules: {}, plyo: [1, 1, 2, 2, 2, 1],
-        changes: ['Hauptübung: Top-Satz 6–8 Wdh. (1 im Tank), 2 Backdowns 8–10 mit ca. −15 %', 'CMPND Block: 3 Sätze, letzter Satz bis RIR 0', 'Power: Landungen und leichte Plyo-Push-ups', 'Finisher: Zirkel'] },
+        changes: ['Hauptübung: Top-Satz 6–8 Wdh. (1 im Tank), 2 Backdowns 8–10 mit ca. −15 %', 'CMPND Block: 3 Sätze, letzter Satz bis RIR 0', 'Power: Landungen und leichte Plyo-Push-ups', 'Finisher in C: Zirkel'] },
       { name: 'Kraft', rules: {}, plyo: [2, 3, 3, 3, 3, 2],
-        changes: ['Hauptübung: Top-Satz 3–5 Wdh., 2 Backdowns 5–7', 'Neue Varianten: Push Press, Pendlay Row, Kniebeuge, Kreuzheben', 'CMPND Block: Anker 3, Partner 2 Sätze', 'Finisher: EMOM'] },
+        changes: ['Hauptübung: Top-Satz 3–5 Wdh., 2 Backdowns 5–7', 'Neue Varianten: Kniebeuge, Kreuzheben, Push Press und Pendlay Row als Partner', 'Finisher in C: EMOM'] },
     ] },
-  { id: 'SPRING', name: 'FRÜHJAHR', guardian: 'stormlung', months: [2, 3, 4], weeks: 13,
+  { id: 'SPRING', name: 'FRÜHJAHR', sub: 'STRIKE', guardian: 'stormlung', months: [2, 3, 4], weeks: 13,
     focus: 'Power und Kondition: Fight-Shape',
     desc: 'Aus Kraft wird Schnelligkeit, der Motor hält harte Runden.',
     why: 'Die Kraft aus dem Winter wird schnell: Nach dem Top-Satz kommt ein Sprung oder Slam im gleichen Muster. Kapitel 2 baut mit kurzen harten Intervallen den Motor.',
@@ -29,9 +31,9 @@ export const ARCS = [
       { name: 'Kontrast', rules: { contrast: true }, plyo: [3, 4, 4, 4, 4, 2],
         changes: ['Hauptübung: Top-Satz 3–5 → 3 explosive Wiederholungen → 1 Backdown', 'Power: seitliche und reaktive Sprünge', 'Finisher: 10 × 30/30'] },
       { name: 'Motor', rules: { optional4x4: true }, plyo: [3, 4, 4, 4, 4, 2],
-        changes: ['Hauptübung: explosive Varianten (Landmine Press, Hang Power Clean), 2 Backdowns 4–6', 'Finisher: 2 × 4 min hart', 'Optional: voller 4x4 an einem freien Tag'] },
+        changes: ['Hauptübung: Front Squat und Hang Power Clean, 2 Backdowns 4–6', 'Finisher: 2 × 4 min hart', 'Optional: voller 4x4 an einem freien Tag'] },
     ] },
-  { id: 'SUMMER', name: 'SOMMER', guardian: 'scorch', months: [5, 6, 7], weeks: 13,
+  { id: 'SUMMER', name: 'SOMMER', sub: 'FIGHT', guardian: 'scorch', months: [5, 6, 7], weeks: 13,
     focus: 'Athletik und Ausdauer, Kraft auf Erhalt',
     desc: 'Einbeinig, seitlich, schnell. Kraft mit weniger Sätzen halten.',
     why: 'Im Sommer hältst du die Kraft mit einem Top-Satz und einem Backdown und wirst athletisch: einbeinig, seitlich, schnelle Richtungswechsel. Dazu kommt Ausdauer, gern draußen.',
@@ -41,15 +43,15 @@ export const ARCS = [
       { name: 'Motor', rules: { zone2: true }, plyo: [3, 3, 3, 3, 3, 2],
         changes: ['Hauptübung: Top-Satz 3–5 + 1 Backdown', 'Finisher: 2 × 4 min hart', '1× pro Woche ZONE 2: 30–45 min locker draußen'] },
     ] },
-  { id: 'AUTUMN', name: 'HERBST', guardian: 'wither', months: [8, 9, 10], weeks: 13,
+  { id: 'AUTUMN', name: 'HERBST', sub: 'RESET', guardian: 'wither', months: [8, 9, 10], weeks: 13,
     focus: 'Gelenke, Mobility, Reset',
     desc: 'Entlasten, beweglicher werden, Basis für den Winter.',
     why: 'Nach drei Saisons holen Gelenke und Sehnen auf: weniger Sätze, langsames Tempo, mehr belastete Mobility. Kapitel 2 legt mit höheren Wiederholungen die Basis für den nächsten Winter.',
     chapters: [
       { name: 'Reset', rules: {}, plyo: [1, 1, 2, 2, 2, 1],
-        changes: ['Hauptübung: Top-Satz 10–12 mit 2 Wdh. im Tank, 3 s ablassen, 1 Backdown', 'Letzter Satz RIR 1 statt 0', 'Belastete Mobility in jeder Mission', 'Finisher: Zirkel locker'] },
+        changes: ['Hauptübung: Top-Satz 10–12 mit 2 Wdh. im Tank, 3 s ablassen, 1 Backdown', 'Letzter Satz RIR 1 statt 0', 'Belastete Mobility in jeder Einheit', 'Finisher: Zirkel locker'] },
       { name: 'Basis', rules: {}, plyo: [1, 2, 2, 2, 2, 1],
-        changes: ['Hauptübung: Top-Satz 8–10 + 2 Backdowns 10–12', 'Normale Satzzahl', 'Prüfwoche: Jahresvergleich mit den Ankern'] },
+        changes: ['Hauptübung: Top-Satz 8–10 + 2 Backdowns 10–12', 'Normale Satzzahl'] },
     ] },
 ];
 
@@ -67,10 +69,10 @@ export const seasonIndexForMonth = (m) => ARCS.findIndex((a) => a.months.include
 
 // Was in jeder Saison gleich bleibt und wie Übungen wechseln (für die Erklärung im Profil)
 export const CYCLE_INFO = {
-  name: 'Das Jahr',
-  summary: 'Vier Saisons pro Jahr, je 13 Wochen: zwei Kapitel à 6 Wochen und eine Prüfwoche. Vier feste Kraft-Tage pro Woche: Push, Pull, Legs, Full Body. Jedes Muster kommt zweimal pro Woche dran. Jede Saison stellt einen Schwerpunkt nach vorn: Winter Kraft, Frühjahr Fight-Shape, Sommer Athletik, Herbst Reset.',
-  stays: ['Jede Mission in Blöcken: Aufwärmen, Power, Hauptübung, CMPND Block, Rumpf & Zusätze', 'Die vier Anker: Dips, Tactical Pull-ups, Bulgarian Split Squat, Chin-ups', 'Hauptübung als Top-Satz mit Backdowns, steigern nach Double Progression', 'Nacken, Nordic Curls, Waden und Tibialis', 'FLOW täglich, Muay Thai, Wochenrhythmus im Kapitel'],
-  exercises: 'Mit jedem Kapitel (alle 6 Wochen) wechseln Power, die Variante der Hauptübung, der CMPND-Partner, Rumpf, Arme, Mobility und Finisher. Der Anker im CMPND Block und die Prehab-Zusätze bleiben das ganze Jahr. So bleibt das Training frisch, und jede Prüfwoche misst an denselben vier Ankern.',
+  name: 'BANG COMBAT',
+  summary: 'Drei Ganzkörper-Einheiten in fester Reihenfolge: A Kniebeuge + Drücken, B Hüfte + Ziehen, C Einbeinig + Athletik. Die App zeigt immer die nächste Einheit, nichts verfällt. Ein Kapitel hat 15 Einheiten: 1–3 Einstieg, 4–9 normal, 10–12 Spitze, 13–15 leicht. Gute Woche: 2× Gym und 1× Muay Thai. Die Saison gibt den Schwerpunkt: IRON (Winter) Kraft, STRIKE (Frühling) Power, FIGHT (Sommer) Athletik, RESET (Herbst) Gelenke.',
+  stays: ['Jede Einheit in Blöcken: Aufwärmen, Power, Hauptübung, CMPND Block, Rumpf & Zusätze', 'Die vier Anker: Dips, Tactical Pull-ups, Bulgarian Split Squat, Chin-ups', 'Hauptübung als Top-Satz mit Backdowns, steigern nach Double Progression', 'Nacken, Nordic Curls, Waden und Tibialis, verteilt auf A, B und C', 'FLOW täglich, Muay Thai nach Absprache'],
+  exercises: 'Mit jedem Kapitel wechseln Power, die Variante der Hauptübung, die CMPND-Partner, Rumpf, Arme, Mobility und Finisher. Die Anker und das Prehab bleiben das ganze Jahr, so lässt sich jedes Jahr an denselben vier Übungen messen.',
 };
 
 // RIR-Ziel je Kapitelwoche (1–6) und Prüfwoche

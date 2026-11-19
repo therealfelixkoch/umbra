@@ -111,7 +111,7 @@ export function rankFor(xp) {
 
 // Einsätze, die für die Woche zählen: ARENA, Missionen, SHADOWSTEPs.
 export const countsForWeek = (s) => s.kind === 'arena' || s.kind === 'mission' || s.kind === 'express';
-export const WEEK_GOAL = 3;
+export const WEEK_GOAL = 3; // BANG COMBAT: gute Woche = 2× Gym + 1× Muay Thai (Detail: weekTally in schedule.js)
 export const HOLIDAY_GOAL = 2;
 
 export function weekCounts(sessions, holiday) {

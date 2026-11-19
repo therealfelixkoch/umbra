@@ -227,8 +227,9 @@ export function strengthAllowed(data, today) {
 export function blockForMission(data, missionId, today) {
   const w = W(data);
   if (!w.on) return null;
-  const upper = ['A', 'C', 'FORGE'].includes(missionId);
-  const lower = ['B', 'D', 'D_LIGHT', 'HOTEL'].includes(missionId);
+  // BANG COMBAT: Kraftblock in A (Dip) und B (Klimmzug + Drücken), Aktivierung in C (einbeinig, Finisher)
+  const upper = ['BC_A', 'BC_B', 'A', 'C', 'FORGE'].includes(missionId);
+  const lower = ['BC_C', 'B', 'D', 'D_LIGHT', 'HOTEL'].includes(missionId);
   if (!upper && !lower) return null;
   if (lower) return { kind: 'activation', reason: 'Handgelenk-Aktivierung im Aufwärmen.' };
   const s = strengthAllowed(data, today);

@@ -2,7 +2,7 @@
 // Gezeichnet auf einem Canvas, geteilt über das Teilen-Menü (iPhone) bzw. als Download.
 import { playerStats, rankName } from '../engine/game.js';
 import { arcOf } from '../data/arcs.js';
-import { guardianName } from '../data/lore.js';
+import { activeRun, UNITS_PER_CHAPTER } from '../engine/run.js';
 import { quoteOfDay } from '../engine/story.js';
 import { pillars } from '../engine/pillars.js';
 import { getDef } from '../data/exercises.js';
@@ -85,7 +85,8 @@ async function draw(data, today, info) {
   g.fillText(info.title || '', W / 2, 1200);
   g.fillStyle = '#9aa3b8';
   g.font = '400 34px -apple-system, system-ui, sans-serif';
-  const season = arc && arc.n >= 0 ? `${arcOf(arc.n).name} · Woche ${arc.week}/13 · ${guardianName(arc.n)}` : '';
+  const run = activeRun(data.engine);
+  const season = run ? `BANG COMBAT · ${arcOf(run.n).sub} · ${Math.min(run.done, UNITS_PER_CHAPTER)} von ${UNITS_PER_CHAPTER} Einheiten geschafft` : '';
   g.fillText(`${rankName(st.rank)}${season ? ` · ${season}` : ''}`, W / 2, 1264);
   // Zahlen
   const stats = (info.stats || []).slice(0, 3);

@@ -1,5 +1,5 @@
-// Freiwillige Events: eins pro Kapitel, am Samstag/Sonntag der Kapitelwoche 4, eine Woche vorher angekündigt.
-// Zählen nicht für Rotation und Wochenziel, bringen ein Event-Abzeichen und XP.
+// Freiwillige Events: eins pro Kapitel. Angekündigt, wenn Einheit 6–7 die nächste ist, angeboten ab Einheit 8
+// bis Kapitelende, an jedem Tag. Zählen nicht als Einheit, bringen ein Event-Abzeichen und XP.
 export const EVENTS = [
   { id: 'hero', name: 'HERO DAY', desc: 'Ein langes Workout für einen ganzen Vormittag.',
     parts: ['1 km Laufen oder 5 min Seil', '100 Push-ups', '100 Kniebeugen', '50 Klimmzüge oder Rows', '1 km Laufen oder 5 min Seil'] },

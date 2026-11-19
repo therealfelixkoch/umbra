@@ -1,7 +1,7 @@
-// Arc-Stand mit dem Log abgleichen: Wochen weiterzählen, beim Arc-Wechsel Varianten setzen.
+// Saison-Stand mit dem Programm abgleichen (BANG COMBAT: Einheiten statt Wochen), beim Saisonwechsel Varianten setzen.
 import { MISSIONS } from '../data/missions.js';
-import { initialArc, syncArc, DEFAULT_HOLIDAY } from './arc.js';
-import { gapDays } from './history.js';
+import { initialArc } from './arc.js';
+import { ensurePrograms, arcFromRun, activeRun } from './run.js';
 import { addDays } from './dates.js';
 import { ensureSideQuest } from './progress.js';
 import { storyEvents, unlockCodex } from './story.js';
@@ -39,17 +39,28 @@ export function applyArcChange(engine, exState) {
 
 /** @returns {{data:object, events:object[], changed:boolean}} */
 export function syncData(data, today) {
-  const holiday = data.settings.holiday ?? DEFAULT_HOLIDAY;
   let engine = data.engine;
   let changed = false;
   if (!engine.arc) {
     engine = { ...engine, arc: initialArc(today) };
     changed = true;
   }
-  const gap = gapDays(data.sessions, today, holiday);
-  const { arc, events } = syncArc(engine.arc, data.sessions, today, { holiday, gap });
+  // BANG COMBAT: Saison und Kapitel kommen aus dem Programm-Stand (Einheiten), nicht mehr aus Kalenderwochen.
+  const withPrograms = ensurePrograms(engine, today);
+  if (withPrograms !== engine) { engine = withPrograms; changed = true; }
+  const events = [];
+  const prevArc = engine.arc;
+  const arc = arcFromRun(engine, today, prevArc);
+  if (prevArc && arc.n !== prevArc.n) events.push({ type: 'arc_complete', n: prevArc.n, to: arc.n });
   if (JSON.stringify(arc) !== JSON.stringify(engine.arc)) {
     engine = { ...engine, arc };
+    changed = true;
+  }
+  // Kapitelende: einmal melden, die Empfehlung steht in run.choice
+  const run = activeRun(engine);
+  if (run?.choice && !run.choiceAnnounced) {
+    events.push({ type: 'chapter_complete', n: run.n, chapter: run.chapter, choice: run.choice });
+    engine = { ...engine, programs: { ...engine.programs, runs: { ...engine.programs.runs, [engine.programs.active]: { ...run, choiceAnnounced: true } } } };
     changed = true;
   }
   let exState = data.exState;
@@ -58,7 +69,8 @@ export function syncData(data, today) {
     // Abgeschlossene Arcs merken (Zeitraum für Debrief und Export)
     const prev = data.engine.arc || engine.arc;
     const history = [...(engine.arcHistory || [])];
-    done.forEach((e) => history.push({ n: e.n, from: e.n === prev.n ? prev.startedWeek : arc.startedWeek, to: addDays(arc.startedWeek, -1), byPause: !!e.byPause }));
+    const to = addDays(arc.startedDay || today, -1);
+    done.forEach((e) => history.push({ n: e.n, from: e.n === prev.n ? prev.startedWeek : arc.startedWeek, to, byPause: !!e.byPause, byUnits: true }));
     engine = { ...engine, arcHistory: history };
     ({ engine, exState } = applyArcChange(engine, exState));
     changed = true;

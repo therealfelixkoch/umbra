@@ -8,7 +8,8 @@ export function loadClass({ kind, missionId, compact, intensity, rpe }) {
   if (kind === 'arena') return (rpe ?? (intensity === 'hard' ? 8 : 4)) >= 7 ? 'high' : 'low';
   if (kind !== 'mission') return 'low';
   if (compact) return 'low';
-  if (['B', 'D', 'FORGE', 'NOR4X4'].includes(missionId)) return 'high'; // D: Full Body mit Kreuzheben
+  // BANG COMBAT: jede Einheit hat eine schwere Beinübung (Kniebeuge, Kreuzheben/RDL, BSS)
+  if (['BC_A', 'BC_B', 'BC_C', 'B', 'D', 'FORGE', 'NOR4X4'].includes(missionId)) return 'high'; // D: Full Body mit Kreuzheben
   if (['A', 'C', 'HOTEL'].includes(missionId)) return 'normal';
   return 'low'; // D leicht
 }

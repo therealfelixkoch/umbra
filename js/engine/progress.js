@@ -1,5 +1,5 @@
 // Wochenabdeckung der Glyphen, saisonale Wochen-Quest, Mikro-Erfolge pro Kapitel, Ascensions (Abzeichen bis große Errungenschaften), Attribut-Ränge.
-import { PROGRAM_MAIN_IDS } from '../data/program.js';
+import { PROGRAM_MAIN_IDS, programSlots } from '../data/program.js';
 import { getDef as defaultGetDef } from '../data/exercises.js';
 import { PROFILES } from '../data/glyphs.js';
 import { weekStart, addDays, daysBetween } from './dates.js';
@@ -8,6 +8,8 @@ import { latestTest } from './mobility.js';
 import { XP_CONFIG } from '../data/xp-config.js';
 import { MISSIONS } from '../data/missions.js';
 import { arcOf } from '../data/arcs.js';
+import { nextUnit } from './run.js';
+import { programOf } from '../data/library.js';
 
 // Was ein Muay-Thai-Abend trainiert.
 export const ARENA_TAGS = [['strike', 'explosiv'], ['strike', 'proprio'], ['rotation', 'explosiv'], ['hip_rot', 'elastisch'],
@@ -69,50 +71,77 @@ const doneSets = (s, pred) => (s.exercises || []).filter((e) => pred(e.exId)).fl
 
 // Wochen-Quests pro Saison (seasons: WINTER, SPRING, SUMMER, AUTUMN). Sie bereiten die Säulen vor.
 export const QUESTS = [
-  { id: 'neck', title: 'STEEL NECK', desc: '3 Einheiten mit Nackentraining', target: 3, gap: { attrs: ['neck'] }, seasons: ['WINTER', 'AUTUMN'],
+  { id: 'neck', title: 'STEEL NECK', desc: '2 Einheiten mit Nackentraining', target: 2, gap: { attrs: ['neck'] }, seasons: ['WINTER', 'AUTUMN'],
     progress: (l, g) => countSessions(l, (s) => s.kind !== 'arena' && hasTag(s, g, ([a, x]) => a === 'neck' && x !== 'mobil')) },
-  { id: 'flow5', title: 'FLOWING SHADOW', desc: 'FLOW an 5 Tagen', target: 5, gap: { expressions: ['mobil'] }, seasons: ['SUMMER', 'AUTUMN'],
+  { id: 'flow4', title: 'FLOWING SHADOW', desc: 'FLOW an 4 Tagen', target: 4, gap: { expressions: ['mobil'] }, seasons: ['SUMMER', 'AUTUMN'],
     progress: (l) => new Set(l.filter((s) => s.kind === 'flow').map((s) => s.day)).size },
-  { id: 'carry', title: 'BURDEN', desc: '2 Einheiten mit einseitigem Tragen', target: 2, gap: { attrs: ['carry', 'anti_lat'] }, seasons: ['WINTER', 'AUTUMN'],
+  { id: 'carry', title: 'BURDEN', desc: 'Eine Einheit mit einseitigem Tragen', target: 1, gap: { attrs: ['carry', 'anti_lat'] }, seasons: ['WINTER', 'AUTUMN'],
     progress: (l, g) => countSessions(l, (s) => hasTag(s, g, ([a]) => a === 'carry' || a === 'anti_lat')) },
-  { id: 'rotation', title: 'TORQUE', desc: '2 Einheiten mit Rotation', target: 2, gap: { attrs: ['rotation'] }, seasons: ['SPRING', 'AUTUMN'],
+  { id: 'rotation', title: 'TORQUE', desc: 'Eine Einheit mit Rotation', target: 1, gap: { attrs: ['rotation'] }, seasons: ['SPRING', 'AUTUMN'],
     progress: (l, g) => countSessions(l, (s) => s.kind !== 'arena' && hasTag(s, g, ([a, x]) => a === 'rotation' && x !== 'mobil')) },
   { id: 'explosive', title: 'SPARK', desc: '2 Einheiten mit Sprüngen oder Swings', target: 2, gap: { expressions: ['explosiv'] }, seasons: ['SPRING', 'SUMMER'],
     progress: (l, g) => countSessions(l, (s) => s.kind !== 'arena' && hasTag(s, g, ([, x]) => x === 'explosiv')) },
-  { id: 'arena2', title: 'CALL OF THE ARENA', desc: '2 ARENA-Einheiten', target: 2, gap: { attrs: ['strike'] }, seasons: ['SPRING', 'SUMMER'],
-    progress: (l) => countSessions(l, (s) => s.kind === 'arena') },
-  { id: 'legs', title: 'BEDROCK', desc: 'Mission BEDROCK abschließen', target: 1, gap: { attrs: ['squat', 'lunge'] }, seasons: ['WINTER'],
-    progress: (l) => countSessions(l, (s) => s.missionId === 'B') },
-  { id: 'hinge', title: 'POSTERIOR CHAIN', desc: '2 Einheiten mit Hip Hinge', target: 2, gap: { attrs: ['hinge'] }, seasons: ['WINTER', 'SUMMER'],
+  { id: 'legs', title: 'BEDROCK', desc: '2 Einheiten mit Kniebeuge oder einbeinig', target: 2, gap: { attrs: ['squat', 'lunge'] }, seasons: ['WINTER'],
+    progress: (l, g) => countSessions(l, (s) => s.kind !== 'arena' && hasTag(s, g, ([a, x]) => (a === 'squat' || a === 'lunge') && x === 'kraft')) },
+  { id: 'hinge', title: 'POSTERIOR CHAIN', desc: 'Eine Einheit mit Hip Hinge', target: 1, gap: { attrs: ['hinge'] }, seasons: ['WINTER', 'SUMMER'],
     progress: (l, g) => countSessions(l, (s) => hasTag(s, g, ([a, x]) => a === 'hinge' && x !== 'mobil')) },
   // Saison-Fokus
-  { id: 'pullvol', title: 'IRON CLIMB', desc: '40 Klimmzüge in der Woche', target: 40, gap: { attrs: ['v_pull'] }, seasons: ['WINTER'],
-    progress: (l) => l.reduce((n, s) => n + doneSets(s, (id) => id.startsWith('pullup')).reduce((m, x) => m + (x.value || 0), 0), 0) },
-  { id: 'mainsets', title: 'FULL LOAD', desc: '2 Missionen mit allen Sätzen der Hauptübungen', target: 2, gap: { expressions: ['kraft'] }, seasons: ['WINTER'],
+  { id: 'pullvol', title: 'IRON CLIMB', desc: '25 Klimmzüge oder Chin-ups in der Woche', target: 25, gap: { attrs: ['v_pull'] }, seasons: ['WINTER'],
+    progress: (l) => l.reduce((n, s) => n + doneSets(s, (id) => id.startsWith('pullup') || id.startsWith('chinup')).reduce((m, x) => m + (x.value || 0), 0), 0) },
+  { id: 'mainsets', title: 'FULL LOAD', desc: '2 Einheiten mit allen Sätzen', target: 2, gap: { expressions: ['kraft'] }, seasons: ['WINTER'],
     progress: (l) => countSessions(l, (s) => s.kind === 'mission' && (s.exercises || []).length > 0 && (s.completion ?? 0) >= 0.999) },
   { id: 'topsets', title: 'PEAK', desc: '2 Top-Sätze erledigt', target: 2, gap: { expressions: ['kraft'] }, seasons: ['WINTER', 'SPRING'],
     progress: (l) => l.reduce((n, s) => n + (s.exercises || []).flatMap((e) => e.sets || []).filter((x) => x.done && x.label === 'Top-Satz').length, 0) },
-  { id: 'engine', title: 'SECOND WIND', desc: 'Eine 4x4-Einheit oder ein voller Zirkel', target: 1, gap: { attrs: ['cardio'] }, seasons: ['SPRING', 'SUMMER'],
-    progress: (l) => countSessions(l, (s) => s.missionId === 'NOR4X4' || (['D', 'HOTEL'].includes(s.missionId) && (s.completion ?? 0) >= 0.999)) },
-  { id: 'spar', title: 'BLOODED', desc: '2 ARENA-Einheiten mit Sparring', target: 2, gap: { attrs: ['strike'] }, seasons: ['SPRING'],
+  { id: 'engine', title: 'SECOND WIND', desc: 'Einheit C mit Finisher oder eine 4x4-Einheit', target: 1, gap: { attrs: ['cardio'] }, seasons: ['SPRING', 'SUMMER'],
+    progress: (l) => countSessions(l, (s) => s.missionId === 'NOR4X4' || (['BC_C', 'D', 'HOTEL'].includes(s.missionId) && (s.completion ?? 0) >= 0.999)) },
+  { id: 'spar', title: 'BLOODED', desc: 'Eine ARENA-Einheit mit Sparring', target: 1, gap: { attrs: ['strike'] }, seasons: ['SPRING'],
     progress: (l) => countSessions(l, (s) => s.kind === 'arena' && (s.sparRounds > 0 || s.intensity === 'hard')) },
   { id: 'mobload', title: 'DEEP ROOTS', desc: '3 Einheiten mit belasteter Mobility oder FLOW', target: 3, gap: { expressions: ['mobil'] }, seasons: ['AUTUMN'],
     progress: (l, g) => countSessions(l, (s) => s.kind === 'flow' || hasTag(s, g, ([, x]) => x === 'mobil')) },
 ];
 
 const seasonOf = (data) => (data.engine?.arc ? arcOf(data.engine.arc.n).id : null);
+
+/**
+ * Machbar mit der Basis-Woche (Interview 19.11.2026)? Basis = die nächsten 2 Einheiten in der Reihenfolge + 1× ARENA, FLOW täglich.
+ * Geprüft wird an einer gedachten Woche aus genau diesen Einheiten (alle Sätze erledigt, untere Wiederholungszahl).
+ * @param {{missionId:string, seasonId:string, chapter:number}[]} upcoming
+ */
+export function baseWeek(upcoming) {
+  const units = upcoming.map((u, i) => {
+    const prog = programSlots(u.seasonId, u.chapter, u.missionId);
+    const exercises = (prog?.slots || []).map((sl) => ({ exId: sl.ex,
+      sets: Array.from({ length: sl.sets || 1 }, (_, k) => ({ done: true, value: sl.range ? sl.range[0] : 1, label: sl.b === 'main' && k === 0 ? 'Top-Satz' : undefined })) }));
+    return { kind: 'mission', missionId: u.missionId, day: `base-${i}`, completion: 1, exercises };
+  });
+  const flows = Array.from({ length: 7 }, (_, i) => ({ kind: 'flow', day: `flow-${i}`, items: [] }));
+  return [...units, { kind: 'arena', day: 'base-arena', minutes: 60, sparRounds: 1, intensity: 'hard' }, ...flows];
+}
+export const questFeasible = (q, week, getDef) => q.progress(week, getDef) >= q.target;
+
+// Die nächsten zwei Einheiten des aktiven Programms (für die Machbarkeit der Side Quest)
+function upcomingUnits(data, today) {
+  const u = data.engine?.programs ? nextUnit(data.engine, today) : null;
+  if (!u) return null;
+  const prog = programOf(data.engine.programs.active);
+  const i = prog.units.indexOf(u.missionId);
+  return [0, 1].map((k) => ({ missionId: prog.units[(i + k) % prog.units.length], seasonId: u.seasonId, chapter: u.chapter }));
+}
 const isGap = (q, cov) => (q.gap.attrs || []).some((a) => !cov.attrs[a]) || (q.gap.expressions || []).some((x) => !cov.expressions[x]);
 
 /**
  * Side Quest der Woche: aus den Lücken der Vorwoche, stabil über die ganze Woche,
  * nie zweimal hintereinander dieselbe (`previousId` = Quest der Vorwoche).
  */
-export function questForWeek(sessions, today, getDef, previousId = null, season = null) {
+export function questForWeek(sessions, today, getDef = defaultGetDef, previousId = null, season = null, upcoming = null) {
   const ws = weekStart(today);
   const lastCov = weekCoverage(sessions, addDays(ws, -7), getDef);
   const hadWeek = weekSessions(sessions, addDays(ws, -7)).length > 0;
   const seasonal = season ? QUESTS.filter((q) => q.seasons.includes(season)) : QUESTS;
-  const pool = seasonal.filter((q) => q.id !== previousId);
+  // Nur Quests, die mit 2 Gym-Einheiten + 1 ARENA erreichbar sind (nicht geschafft = verfällt still)
+  const base = upcoming ? baseWeek(upcoming) : null;
+  const doable = base ? seasonal.filter((q) => questFeasible(q, base, getDef)) : seasonal;
+  const pool = (doable.length ? doable : seasonal).filter((q) => q.id !== previousId);
   const candidates = hadWeek ? pool.filter((q) => isGap(q, lastCov)) : pool;
   const list = candidates.length ? candidates : pool;
   const idx = Math.floor(Math.abs(daysBetween('2024-01-01', ws)) / 7) % list.length;
@@ -124,7 +153,7 @@ export function ensureSideQuest(data, today, getDef) {
   const ws = weekStart(today);
   if (data.sideQuests?.[ws]) return data;
   const prev = data.sideQuests?.[addDays(ws, -7)] || null;
-  const q = questForWeek(data.sessions, today, getDef, prev, seasonOf(data));
+  const q = questForWeek(data.sessions, today, getDef, prev, seasonOf(data), upcomingUnits(data, today));
   return { ...data, sideQuests: { ...(data.sideQuests || {}), [ws]: q.id } };
 }
 
@@ -132,7 +161,7 @@ export function questStatus(data, today, getDef = defaultGetDef) {
   const ws = weekStart(today);
   const stored = data.sideQuests?.[ws];
   const quest = (stored && QUESTS.find((q) => q.id === stored))
-    || questForWeek(data.sessions, today, getDef, data.sideQuests?.[addDays(ws, -7)] || null, seasonOf(data));
+    || questForWeek(data.sessions, today, getDef, data.sideQuests?.[addDays(ws, -7)] || null, seasonOf(data), upcomingUnits(data, today));
   const list = weekSessions(data.sessions, ws);
   const progress = Math.min(quest.target, quest.progress(list, getDef));
   const rewarded = data.sessions.some((s) => s.kind === 'quest' && s.week === ws);

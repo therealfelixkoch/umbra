@@ -4,7 +4,11 @@ let current = '';
 
 export function describe(name, fn) {
   current = name;
-  fn();
+  try {
+    fn();
+  } catch (e) {
+    results.push({ name: `${name} › (Aufbau)`, ok: false, error: e.message });
+  }
   current = '';
 }
 

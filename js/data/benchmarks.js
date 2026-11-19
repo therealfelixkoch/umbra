@@ -1,10 +1,12 @@
-// Benchmark-Workouts der Saison-Wächter (Säule 1). Fest und wiederholbar: Baseline in Woche 1, Revanche in der Prüfwoche.
+// Vergleichstests (BANG COMBAT, 19.11.2026): freiwillig nach Einheit 15 eines Kapitels, wegklickbar, kein Sieg, keine Niederlage.
+// Ein festes Workout je Saison (season), verglichen mit dem letzten Mal derselben Version. Texte: BENCH_TEXT in js/data/story.js.
+// Die Schlüssel (coldiron …) bleiben als IDs, weil alte Einträge im Log sie tragen; mit den früheren Gegnern hat das nichts mehr zu tun.
 // score: 'time' = auf Zeit (weniger ist besser), 'count' = Wiederholungen/Runden (mehr ist besser).
-// Halbe Version für Gelenke und Alltag. Verglichen wird immer die Version, die bei der Baseline gewählt wurde.
+// Halbe Version für Gelenke und Alltag. Verglichen wird immer mit derselben Version.
 
 export const BENCHMARKS = {
   coldiron: {
-    id: 'coldiron', name: 'CAVE-MURPH', score: 'time', cap: 60,
+    id: 'coldiron', season: 'WINTER', name: 'CAVE-MURPH', score: 'time', cap: 60,
     intro: 'Auf Zeit. Klimmzüge, Push-ups und Kniebeugen frei aufteilen, z. B. 10 Runden à 5 / 10 / 15. Cardio am Anfang und am Ende am Stück: Seil oder Rudergerät.',
     // Cardio-Block am Anfang und Ende: wird bei der Baseline gewählt und gilt auch für die Revanche
     cardio: {
@@ -18,7 +20,7 @@ export const BENCHMARKS = {
     subs: ['Klimmzüge → Bodyweight Rows (Gelenk)', 'Push-ups → auf Fäusten oder Griffen', 'Seil → Shadow Boxing'],
   },
   stormlung: {
-    id: 'stormlung', name: 'STORM ROUNDS', score: 'count', unit: 'Sprawls',
+    id: 'stormlung', season: 'SPRING', name: 'STORM ROUNDS', score: 'count', unit: 'Sprawls',
     intro: 'Jede Runde 3 min: 1 min Sack (Kombinationen), 1 min Sprawls so viele wie möglich, 1 min Sack. 1 min Pause. Gezählt werden alle Sprawls.',
     variants: {
       full: { label: 'Voll', parts: ['5 Runden à 3 min', 'Minute 1: Sack', 'Minute 2: Sprawls max.', 'Minute 3: Sack', '1 min Pause'], rounds: 5, work: 180, rest: 60 },
@@ -27,7 +29,7 @@ export const BENCHMARKS = {
     subs: ['Sack → Shadow Boxing mit vollem Tempo', 'Sprawls → Burpees ohne Sprung'],
   },
   scorch: {
-    id: 'scorch', name: 'SCORCH CHAIN', score: 'time', cap: 40,
+    id: 'scorch', season: 'SUMMER', name: 'SCORCH CHAIN', score: 'time', cap: 40,
     intro: 'Auf Zeit, Runde für Runde ohne Pause.',
     variants: {
       full: { label: 'Voll', parts: ['5 Runden:', '5 Broad Jumps', '15 KB Swings', 'Bear Crawl 2 Bahnen', '60 Seilsprünge'] },
@@ -36,7 +38,7 @@ export const BENCHMARKS = {
     subs: ['Broad Jumps → Squat Jumps', 'Seil → 30 s Laufen auf der Stelle'],
   },
   wither: {
-    id: 'wither', name: 'WITHER FLOW', score: 'count', unit: 'Runden',
+    id: 'wither', season: 'AUTUMN', name: 'WITHER FLOW', score: 'count', unit: 'Runden',
     intro: 'So viele saubere Runden wie möglich. Qualität vor Tempo: jede Runde zählt nur, wenn sie sauber war.',
     variants: {
       full: { label: 'Voll', parts: ['10 min, so viele Runden wie möglich:', '1 Turkish Get-up je Seite', '5 Cossack Squats je Seite', '30 s Deep Squat Hold'], amrap: 600 },
@@ -45,3 +47,6 @@ export const BENCHMARKS = {
     subs: ['Turkish Get-up → ohne Gewicht'],
   },
 };
+
+/** Vergleichstest je Saison (Schlüssel wie in arcs.js). */
+export const BENCH_BY_SEASON = { WINTER: 'coldiron', SPRING: 'stormlung', SUMMER: 'scorch', AUTUMN: 'wither' };

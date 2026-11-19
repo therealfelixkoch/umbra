@@ -7,13 +7,18 @@
 // prehab: Ellbogen-Prehab (unter 3 Minuten, nicht im Kompakt-Modus).
 
 export const MISSIONS = {
-  // UMBRA 2.0: A–D kommen aus dem Saison-Programm (js/data/program.js), in Blöcken. Feste Wochentage statt Rotation.
-  A: { id: 'A', name: 'ASCENT', focus: 'Pull · Ziehen, Rumpf, Nacken', minutes: 50, format: 'sets', program: true },
-  B: { id: 'B', name: 'BEDROCK', focus: 'Legs · Beine und Hüfte', minutes: 50, format: 'sets', program: true },
-  C: { id: 'C', name: 'IMPACT', focus: 'Push · Drücken, Rotation, Schulter', minutes: 50, format: 'sets', program: true },
+  // BANG COMBAT (19.11.2026): 3× Ganzkörper in fester Reihenfolge A → B → C, Übungen aus js/data/program.js.
+  BC_A: { id: 'BC_A', name: 'BANG COMBAT · A', letter: 'A', focus: 'Kniebeuge + Drücken', minutes: 60, format: 'sets', program: true },
+  BC_B: { id: 'BC_B', name: 'BANG COMBAT · B', letter: 'B', focus: 'Hüfte + Ziehen', minutes: 60, format: 'sets', program: true },
+  BC_C: { id: 'BC_C', name: 'BANG COMBAT · C', letter: 'C', focus: 'Einbeinig + Athletik', minutes: 60, format: 'sets', program: true },
+  // UMBRA 2.0 (v43/v44, bis 19.11.2026): Push/Pull/Legs/Full Body an festen Tagen. Bleiben für alte Einheiten im Log,
+  // werden nicht mehr geplant (legacy). D liefert weiter die Zirkel-Übungen für INFILTRATION · leicht.
+  A: { id: 'A', name: 'ASCENT', legacy: true, focus: 'Pull · Ziehen, Rumpf, Nacken', minutes: 50, format: 'sets', program: true },
+  B: { id: 'B', name: 'BEDROCK', legacy: true, focus: 'Legs · Beine und Hüfte', minutes: 50, format: 'sets', program: true },
+  C: { id: 'C', name: 'IMPACT', legacy: true, focus: 'Push · Drücken, Rotation, Schulter', minutes: 50, format: 'sets', program: true },
   // Full Body als Krafteinheit mit Finisher. Die Zirkel-Übungen bleiben für INFILTRATION · leicht.
   D: {
-    id: 'D', name: 'INFILTRATION', focus: 'Full Body · Kraft, Mobility, Finisher', minutes: 60, format: 'sets', program: true,
+    id: 'D', name: 'INFILTRATION', legacy: true, focus: 'Full Body · Kraft, Mobility, Finisher', minutes: 60, format: 'sets', program: true,
     rounds: [3, 4], restBetween: 120,
     items: [
       { ex: 'kb_swing', value: 20 },
@@ -100,7 +105,7 @@ export const MISSION_KIND = (id) =>
   id === 'FLOW' ? 'flow' : id === 'EXPRESS' || id === 'EXPRESS_BAG' ? 'express' : id === 'WRIST' ? 'wrist' : id === 'HANDS' ? 'hands' : id === 'FEET' ? 'feet' : id === 'ZONE2' ? 'zone2' : 'mission';
 
 // Missionen, die als volle Mission zählen (Rotation, Arc-Woche, Pausen). FORGE und 4x4 belegen einen Rotationsplatz.
-export const FULL_MISSIONS = ['A', 'B', 'C', 'D', 'FORGE', 'NOR4X4', 'HOTEL', 'BENCH'];
+export const FULL_MISSIONS = ['BC_A', 'BC_B', 'BC_C', 'A', 'B', 'C', 'D', 'FORGE', 'NOR4X4', 'HOTEL', 'BENCH'];
 
 // Unterwegs: bevorzugter Ersatz mit gleichem Bewegungsmuster (vor den allgemeinen Alternativen).
 export const TRAVEL_SWAP = {

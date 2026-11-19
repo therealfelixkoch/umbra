@@ -1,28 +1,30 @@
 // Events und Körpergewicht: reine Funktionen.
 import { EVENTS } from '../data/events.js';
-import { CHAPTER_WEEKS, chapterOf } from '../data/arcs.js';
-import { weekStart, addDays } from './dates.js';
+import { activeRun, UNITS_PER_CHAPTER } from './run.js';
+import { weekStart } from './dates.js';
 
 /** Event des Kapitels (deterministisch). */
 export const eventOf = (n, c) => EVENTS[((n * 2 + c) % EVENTS.length + EVENTS.length) % EVENTS.length];
 
+// BANG COMBAT (19.11.2026): Events hängen an Einheiten statt an Wochenenden.
+export const EVENT_ANNOUNCE_FROM = 6; // ab Einheit 6 des Kapitels angekündigt
+export const EVENT_FROM = 8; // ab Einheit 8 angeboten, bis das Kapitel fertig ist (Einheit 15)
+
 /**
- * Event-Stand für heute: 'announce' in Kapitelwoche 3 (Samstag danach ist Event-Woche),
- * 'live' am Samstag/Sonntag der Kapitelwoche 4, solange nicht erledigt.
+ * Event-Stand für heute: 'announce' bei Einheit 6–7 als nächster, 'live' ab Einheit 8 bis Kapitelende, solange nicht erledigt.
+ * Freiwillig, an jedem Tag, zählt nicht als Einheit.
  */
 export function eventToday(data, today) {
-  const arc = data.engine?.arc;
-  if (!arc || arc.n < 0 || (arc.startedDay && today < arc.startedDay)) return null;
-  const c = chapterOf(arc.week);
-  if (c === 'exam') return null;
-  const cw = arc.week - c * CHAPTER_WEEKS;
-  const ev = eventOf(arc.n, c);
-  const done = data.sessions.some((s) => s.kind === 'event' && s.n === arc.n && s.chapter === c);
+  const run = activeRun(data.engine);
+  if (!run || (run.startedDay && today < run.startedDay)) return null;
+  const next = run.done + 1;
+  if (run.done >= UNITS_PER_CHAPTER) return null;
+  const c = run.chapter;
+  const ev = eventOf(run.n, c);
+  const done = data.sessions.some((s) => s.kind === 'event' && s.n === run.n && s.chapter === c);
   if (done) return null;
-  const sat = addDays(weekStart(today), 5);
-  if (cw === 3) return { state: 'announce', event: ev, day: addDays(sat, 7), n: arc.n, chapter: c };
-  if (cw === 4 && today >= sat) return { state: 'live', event: ev, day: sat, n: arc.n, chapter: c };
-  if (cw === 4) return { state: 'announce', event: ev, day: sat, n: arc.n, chapter: c };
+  if (next >= EVENT_FROM) return { state: 'live', event: ev, day: today, n: run.n, chapter: c, unit: next };
+  if (next >= EVENT_ANNOUNCE_FROM) return { state: 'announce', event: ev, day: null, n: run.n, chapter: c, unit: next, from: EVENT_FROM };
   return null;
 }
 

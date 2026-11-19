@@ -1,6 +1,98 @@
-// Lore als Daten: Saison-Wächter, Vorlagen für Saison-Intro und Debrief (Platzhalter {…} für echte Zahlen),
-// Codex-Vorlagen, Titel und Zitate. Erzähler ist das System: kurz, ernst, ohne Ausrufezeichen.
+// Lore als Daten: Saison-Geschichte (BANG COMBAT), Nemesis, Codex-Vorlagen, Titel und Zitate.
+// Erzähler: kurz, ernst, ohne Ausrufezeichen, ohne Schuld. Platzhalter {…} füllt die Engine mit echten Zahlen.
 
+/**
+ * BANG COMBAT · Saison-Geschichte (Stand 19.11.2026, Entscheid Felix: keine Gegner, keine Endbosse).
+ * Erzählt wird der Fighter selbst: wo er steht, was ihn erwartet, wohin es nach der Saison geht.
+ * Schlüssel = Saison-id aus js/data/arcs.js. Ein Kapitel = 15 Einheiten (A → B → C), kein Kalender.
+ *   sub       Saison-Unternamen (IRON · STRIKE · FIGHT · RESET)
+ *   now       Saisonstart: wo du stehst
+ *   ahead     Saisonstart: was dich erwartet (je Kapitel ein Satz)
+ *   goal      Saisonstart: wohin es nach dieser Saison geht
+ *   chapters  je Kapitel: start (eine Zeile beim Kapitelstart), done (Abschluss nach Einheit 15)
+ *   done      Saisonende: Rückblick und Übergang zur nächsten Saison (next)
+ *   codex     Kodex-Eintrag der Saison
+ * Platzhalter: {einheiten} Kraft-Einheiten im Kapitel bzw. in der Saison · {muaythai} Muay-Thai-Einheiten
+ *   in der Saison. Fehlt ein Wert, bleibt die Stelle leer, darum stehen
+ *   Zahlen immer in eigenen Sätzen.
+ * Optional zum Kapitelende: freiwilliger Vergleichstest (BENCH_TEXT), nie Pflicht, kein Sieg, keine Niederlage.
+ */
+export const SEASON_STORY = {
+  WINTER: {
+    sub: 'IRON', theme: 'Fundament und Kraft', next: 'SPRING',
+    now: ['Der Herbst hat Gelenke und Sehnen beruhigt. Die Basis ist da. Die Kraft noch nicht.'],
+    ahead: ['Kapitel 1 · Fundament: mehr Wiederholungen, saubere Technik, die richtigen Gewichte finden.',
+      'Kapitel 2 · Kraft: weniger Wiederholungen, mehr Last. Schwerer werden, ohne zu hetzen.'],
+    goal: ['Am Ende des Winters ist mehr Kraft da als im Herbst. Der Frühling macht daraus Schlagkraft.'],
+    chapters: [
+      { start: 'Kapitel 1 · Fundament. Erst die Technik, dann die Last.',
+        done: ['Das Fundament steht. Die Bewegungen sitzen, die Gewichte sind gefunden.', '{einheiten} Einheiten in diesem Kapitel.'] },
+      { start: 'Kapitel 2 · Kraft. Jetzt wird es schwer.',
+        done: ['Die Kraft ist gewachsen. Sie bleibt, auch wenn das Training sich ändert.', '{einheiten} Einheiten in diesem Kapitel.'] },
+    ],
+    done: ['IRON ist durch. {einheiten} Einheiten Kraft, {muaythai} Mal Muay Thai.', 'Als Nächstes: STRIKE. Aus Kraft wird Schnelligkeit.'],
+    codex: 'IRON ist der Winter von BANG COMBAT. Wenig Licht, wenig Antrieb, darum ein klarer Auftrag: Kraft aufbauen. Erst das Fundament mit mehr Wiederholungen, dann schwere Sätze mit wenigen. Kraft ist die Grundlage für alles, was danach kommt.',
+  },
+  SPRING: {
+    sub: 'STRIKE', theme: 'Schnellkraft und Kondition', next: 'SUMMER',
+    now: ['Aus dem Winter bringst du Kraft mit. Noch ist sie langsam.'],
+    ahead: ['Kapitel 1 · Kontrast: nach dem schweren Satz ein Sprung oder Wurf im selben Muster. Kraft wird schnell.',
+      'Kapitel 2 · Motor: kurze, harte Intervalle. Schläge, die auch in späten Runden noch sitzen.'],
+    goal: ['Am Ende des Frühlings ist aus Kraft Schnellkraft geworden, und der Atem hält länger. Der Sommer macht daraus Kampfform.'],
+    chapters: [
+      { start: 'Kapitel 1 · Kontrast. Schwer, dann schnell.',
+        done: ['Die Kraft ist schneller geworden. Sprünge und Würfe sitzen.', '{einheiten} Einheiten in diesem Kapitel.'] },
+      { start: 'Kapitel 2 · Motor. Hart, kurz, wiederholt.',
+        done: ['Der Motor läuft länger. Die späten Runden werden leichter.', '{einheiten} Einheiten in diesem Kapitel.'] },
+    ],
+    done: ['STRIKE ist durch. {einheiten} Einheiten, {muaythai} Mal Muay Thai.', 'Als Nächstes: FIGHT. Aus Schlagkraft wird Kampfform.'],
+    codex: 'STRIKE ist der Frühling von BANG COMBAT. Die Kraft aus dem Winter wird schnell: Kontrastpaare aus schwerem Satz und explosiver Bewegung, danach harte Intervalle für die Kondition. Ziel ist Schlagkraft, die bis in die späten Runden hält.',
+  },
+  SUMMER: {
+    sub: 'FIGHT', theme: 'Athletik und Ausdauer', next: 'AUTUMN',
+    now: ['Kraft und Schnellkraft sind da. Jetzt zählt, wie du dich bewegst.'],
+    ahead: ['Kapitel 1 · Athletik: einbeinig, seitlich, schnelle Richtungswechsel. Die Kraft wird mit weniger Sätzen gehalten.',
+      'Kapitel 2 · Ausdauer: harte Intervalle und lockere, lange Einheiten draußen.'],
+    goal: ['Am Ende des Sommers bist du leicht, beweglich und hältst lange Runden durch. Danach brauchen Gelenke und Sehnen Ruhe.'],
+    chapters: [
+      { start: 'Kapitel 1 · Athletik. Leicht auf den Füßen.',
+        done: ['Die Füße sind schneller geworden, die Richtungswechsel sauberer.', '{einheiten} Einheiten in diesem Kapitel.'] },
+      { start: 'Kapitel 2 · Ausdauer. Lange tragen, was du aufgebaut hast.',
+        done: ['Die Ausdauer trägt. Die Kraft ist geblieben.', '{einheiten} Einheiten in diesem Kapitel.'] },
+    ],
+    done: ['FIGHT ist durch. {einheiten} Einheiten, {muaythai} Mal Muay Thai.', 'Als Nächstes: RESET. Der Körper holt auf.'],
+    codex: 'FIGHT ist der Sommer von BANG COMBAT. Die Kraft wird mit wenig Aufwand gehalten, der Schwerpunkt liegt auf Athletik und Ausdauer: einbeinig, seitlich, schnell, dazu Intervalle und lockere Einheiten draußen. Ziel ist Kampfform.',
+  },
+  AUTUMN: {
+    sub: 'RESET', theme: 'Gelenke, Beweglichkeit, Basis', next: 'WINTER',
+    now: ['Drei Saisons Last stecken in Gelenken und Sehnen. Jetzt holen sie auf.'],
+    ahead: ['Kapitel 1 · Reset: weniger Sätze, langsames Ablassen, Beweglichkeit unter Last.',
+      'Kapitel 2 · Basis: höhere Wiederholungen, saubere Technik, wieder normale Satzzahl.'],
+    goal: ['Am Ende des Herbstes sind die Gelenke frei und die Technik sauber. Darauf baut der nächste Winter neue Kraft.'],
+    chapters: [
+      { start: 'Kapitel 1 · Reset. Langsam ist hier richtig.',
+        done: ['Die Gelenke sind ruhiger, die Positionen tiefer.', '{einheiten} Einheiten in diesem Kapitel.'] },
+      { start: 'Kapitel 2 · Basis. Saubere Wiederholungen für den Winter.',
+        done: ['Die Basis für den Winter steht.', '{einheiten} Einheiten in diesem Kapitel.'] },
+    ],
+    done: ['RESET ist durch. {einheiten} Einheiten, {muaythai} Mal Muay Thai.', 'Als Nächstes: IRON. Ein neues Jahr Kraft.'],
+    codex: 'RESET ist der Herbst von BANG COMBAT. Nach drei Saisons Last bekommen Gelenke und Sehnen Zeit: weniger Sätze, langsames Tempo, belastete Mobility. Danach legen höhere Wiederholungen die Basis für den nächsten Winter.',
+  },
+};
+
+/** Freiwilliger Vergleichstest am Kapitelende (nach Einheit 15). Wegklickbar, kein Sieg, keine Niederlage. */
+export const BENCH_TEXT = {
+  offer: ['Kapitel geschafft. Wenn du willst: ein Vergleichstest.', 'Dasselbe Workout wie beim letzten Mal. Nur um zu sehen, wo du stehst.'],
+  first: ['Erster Wert. Ab jetzt gibt es einen Vergleich.'],
+  better: ['{diff} besser als beim letzten Mal.'],
+  same: ['Etwa wie beim letzten Mal. Gehalten ist auch ein Ergebnis.'],
+  lower: ['Diesmal etwas weniger. Tagesform, Schlaf und Muay Thai spielen mit. Der Wert ist ein Blick, kein Urteil.'],
+};
+
+// ——— Veraltet (seit 19.11.2026): Saison-Gegner COLDIRON, STORMLUNG, SCORCH, WITHER ———
+// Felix hat entschieden: Die Gegner fallen ganz weg. Die Einträge bleiben nur, bis js/engine/story.js und die
+// Screens auf SEASON_STORY umgestellt sind (sonst bricht der Import). Danach löschen. Nicht mehr erweitern.
+// THE PLATEAU (unten im selben Objekt) bleibt, sanft formuliert.
 export const BOSS_LORE = {
   coldiron: {
     epithet: 'Der Koloss aus gefrorenem Eisen',
@@ -39,11 +131,12 @@ export const BOSS_LORE = {
     codex: 'WITHER ist Verschleiß: Steifheit und kleine Schmerzen, die sich festsetzen. Er verliert gegen Beweglichkeit unter Last und eine Saison, die dem Körper Zeit gibt.',
   },
   plateau: {
-    epithet: 'Die Nemesis',
-    weakness: 'Er tut nichts. Er wartet, bis du aufhörst, Fortschritt zu erwarten.',
-    appears: ['THE PLATEAU erscheint. Mehrere Muster stehen still.', 'Kein Gegner ist gefährlicher als der, der sich nicht bewegt.'],
-    fades: ['THE PLATEAU zerfällt zu grauem Staub.', 'Die Deload-Woche ist durch. Der Weg geht wieder nach oben.'],
-    codex: 'THE PLATEAU taucht auf, wenn mehrere Bewegungsmuster gleichzeitig stagnieren. Er verschwindet nicht durch mehr Härte, sondern durch eine Woche Entlastung.',
+    // Bleibt (Felix, 19.11.2026), aber sanft: ein Hinweis bei Stillstand, kein Kampf. Er verblasst nach der leichten Phase.
+    epithet: 'Der Stillstand',
+    weakness: 'Er kommt, wenn mehrere Muster gleichzeitig stehen bleiben. Das ist normal und kein Fehler.',
+    appears: ['THE PLATEAU taucht auf. Mehrere Muster stehen gerade still.', 'Mehr Härte hilft hier nicht. Ein paar leichte Einheiten schon.'],
+    fades: ['THE PLATEAU verblasst.', 'Die leichten Einheiten sind durch. Es geht wieder nach oben.'],
+    codex: 'THE PLATEAU zeigt sich, wenn mehrere Bewegungsmuster gleichzeitig stillstehen. Das passiert jedem, der lange trainiert. Mehr Härte vertreibt ihn nicht, eine leichte Phase schon. Danach verblasst er von selbst.',
   },
 };
 
@@ -61,12 +154,12 @@ export const CODEX_RECORD = [
 
 // Titel zum Ausrüsten: „Der Wächter · {Titel}“
 export const TITLES = [
-  { id: 'unermuedlich', name: 'Der Unermüdliche', desc: '12 Wochen in Folge mindestens 2 Einsätze' },
-  { id: 'geduldig', name: 'Der Geduldige', desc: 'Eine Deload-Woche vollständig durchgezogen' },
+  { id: 'unermuedlich', name: 'Der Unermüdliche', desc: '12 gute Wochen (2× Gym und 1× Muay Thai), egal wann' },
+  { id: 'geduldig', name: 'Der Geduldige', desc: 'Die leichten Einheiten 13–15 eines Kapitels gemacht' },
   { id: 'zurueckgekehrt', name: 'Der Zurückgekehrte', desc: 'Wiedereinstieg nach 15 oder mehr Tagen' },
   { id: 'arenagaenger', name: 'Der Arenagänger', desc: '25 ARENA-Einheiten' },
   { id: 'geschmeidig', name: 'Der Geschmeidige', desc: 'Mobility im Schnitt über 70' },
-  { id: 'eisern', name: 'Der Eiserne', desc: '50 volle Missionen' },
+  { id: 'eisern', name: 'Der Eiserne', desc: '50 Einheiten, die Kurzversion zählt mit' },
 ];
 
 /**

@@ -3,7 +3,6 @@ import { esc, sys, helpDot } from './kit.js';
 import { ATTRIBUTES, EXPRESSIONS, PROFILES } from '../data/glyphs.js';
 import { weekCoverage, gapsFor, attributePoints, attrRank, ATTR_GROUPS, ascensionStatus, microStatus, TIERS } from '../engine/progress.js';
 import { arcOf } from '../data/arcs.js';
-import { guardianName } from '../data/lore.js';
 import { countsForWeek, WEEK_GOAL } from '../engine/game.js';
 import { weekStart, addDays, formatDay } from '../engine/dates.js';
 import { questCard } from './today.js';
@@ -38,7 +37,7 @@ export function achievementsView(data, today) {
       return `<div class="label">Kapitel ${c + 1} · ${season.chapters[c].name} · ${list.filter((m) => m.unlocked).length}/${list.length}</div>
         <div class="micro-list">${list.map((m) => `<div class="micro${m.unlocked ? ' on' : ''}"><span>${m.unlocked ? '◆' : '◇'}</span><div><b>${esc(m.name)}</b><small>${esc(m.desc)}${m.target && !m.unlocked ? ` · ${m.current}/${m.target}` : ''}</small></div><em class="num">+${m.xp}</em></div>`).join('')}</div>`;
     };
-    out += sys(`${season.name} · Kapitel-Erfolge`, `${chap(0)}${chap(1)}<p class="muted small">${helpDot('achievements')} Kleine Erfolge pro Kapitel. Der große Brocken ist ${esc(guardianName(arc.n))} in der Prüfwoche.</p>`);
+    out += sys(`${season.sub} · Kapitel-Erfolge`, `${chap(0)}${chap(1)}<p class="muted small">${helpDot('achievements')} Kleine Erfolge pro Kapitel, ganz nebenbei.</p>`);
   }
   const events = data.sessions.filter((s) => s.kind === 'event');
   if (events.length) out += sys(`Events · ${events.length}`, `<div class="micro-list">${events.map((s) => `<div class="micro on"><span>◆</span><div><b>${esc(s.name || s.eventId)}</b><small>${esc(s.day)}</small></div><em class="num">+${s.xp}</em></div>`).join('')}</div>`);

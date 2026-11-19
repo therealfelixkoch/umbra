@@ -2,8 +2,9 @@
 import { sys, esc } from './kit.js';
 import { reviewDue, reviewSnapshot } from '../engine/debrief.js';
 import { REGIONS } from '../engine/signals.js';
-import { BOSSES } from '../data/lore.js';
-import { bossImage } from './lore.js';
+import { activeRun, UNITS_PER_CHAPTER } from '../engine/run.js';
+import { arcOf } from '../data/arcs.js';
+import { weekText } from './today.js';
 import { getDef } from '../data/exercises.js';
 import { weekStart, formatDay, addDays } from '../engine/dates.js';
 import { weekLoad } from '../engine/session.js';
@@ -31,7 +32,7 @@ export default {
     const f = c.ui.rv || (c.ui.rv = { ...(c.data.reviews?.[ws] || {}) });
     const total = snap.classes.high + snap.classes.normal + snap.classes.low || 1;
     const bar = (k, label) => `<div class="bar-row static"><span class="bar-label">${label}</span><span class="bar-track"><i class="bar-fill ${k}" style="width:${(snap.classes[k] / total) * 100}%"></i></span><span class="bar-val num">${snap.classes[k]}</span></div>`;
-    const boss = snap.boss;
+    const run = activeRun(c.data.engine);
     return `<button class="btn ghost back" data-act="go" data-to="heute">← Heute</button>
       <h1 class="h">Wochenrückblick</h1>
       <p class="muted">Woche ab ${formatDay(ws)}</p>
@@ -44,9 +45,8 @@ export default {
         </dl>
         <div class="label">Belastung</div><div class="bar-chart load-bars">${bar('high', 'High')}${bar('normal', 'Normal')}${bar('low', 'Low')}</div>
         ${snap.patterns.length ? `<div class="label">Muster</div><ul class="cues">${snap.patterns.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}`)}
-      ${boss ? sys(boss.name, `<div class="boss-row">${bossImage(boss.id, { cls: 'lore-small' })}
-          <div><p>${esc(boss.season.name)} · ${boss.chapter ? `Kapitel ${boss.chapterIndex + 1} ${esc(boss.chapter.name)}` : 'Prüfwoche'} · Woche ${boss.week}/${boss.weeks}</p>
-          <p class="muted small">Er fällt in der Prüfwoche über drei Säulen: Benchmark, Fortschritts-Index, Durchziehen.</p></div></div>`) : ''}
+      ${run ? sys(`BANG COMBAT · ${esc(arcOf(run.n).sub)}`, `<p>Kapitel ${run.chapter + 1} · ${Math.min(run.done, UNITS_PER_CHAPTER)} von ${UNITS_PER_CHAPTER} Einheiten geschafft</p>
+          <p class="muted small">${esc(weekText(c.data, addDays(ws, 6)))}.</p>`) : ''}
       ${insightsCard(c.data, c.today())}
       ${sys('Zwei Taps', `<div class="q"><div class="q-label">Spaß</div>${scale('fun', f.fun, 'zäh', 'stark')}</div>
         <div class="q"><div class="q-label">Belastung</div>${scale('strain', f.strain, 'leicht', 'am Limit')}</div>

@@ -1,7 +1,8 @@
-// Benchmark-Workout des Saison-Wächters (Säule 1): Baseline im ersten Kapitel, Revanche in der Prüfwoche.
+// Vergleichstest (BANG COMBAT): freiwillig, dasselbe Workout wie beim letzten Mal. Kein Sieg, keine Niederlage.
+// Wann er angeboten wird, entscheidet die Engine (benchmarkDue). Texte aus BENCH_TEXT (js/data/story.js).
 // Auf Zeit: Stoppuhr. Auf Anzahl: Rundenuhr (Storm Rounds) bzw. AMRAP-Uhr (Wither Flow), Zahl am Ende eintragen.
 import { sys, esc, stepper } from './kit.js';
-import { guardianName } from '../data/lore.js';
+import { BENCH_TEXT } from '../data/story.js';
 import { benchmarkOf, benchState, benchmarkDue, logBenchmark, formatScore, beats, partsOf, versionText } from '../engine/pillars.js';
 import { playTone } from './temper-audio.js';
 import { keepAwake, unlockAudio } from './sound.js';
@@ -38,9 +39,11 @@ export function benchmarkCard(c) {
   if (!due) return '';
   const n = c.data.engine.arc.n;
   const bench = benchmarkOf(n);
-  return `<section class="card flow-card bench-card"><div><b>${due === 'baseline' ? 'Baseline' : 'Revanche'} · ${bench.name}</b>
-    <small>${guardianName(n)}: ${due === 'baseline' ? 'dein Startwert für die Saison, ersetzt einmal INFILTRATION' : 'Prüfwoche, schlag deine Baseline'}</small></div>
-    <button class="btn primary" data-act="go" data-to="benchmark">Start</button></section>`;
+  const key = `${n}:${due}`;
+  if (c.data.settings.benchSkip === key) return '';
+  return `<section class="card flow-card bench-card"><div><b>Vergleichstest · ${esc(bench.name)}</b>
+    <small>Freiwillig: ein Vergleichstest. Dasselbe Workout wie beim letzten Mal.</small></div>
+    <div class="row gap"><button class="btn" data-act="go" data-to="benchmark">Start</button><button class="x" data-act="bench-skip" data-key="${key}" aria-label="Nicht jetzt">×</button></div></section>`;
 }
 
 const screen = {
@@ -56,15 +59,16 @@ const screen = {
     const v = bench.variants[variant];
     const parts = partsOf(bench, variant, cardio);
     const back = '<button class="btn ghost back" data-act="bm-cancel">← Zurück</button>';
-    const head = `<h1 class="h">${bench.name}</h1><p class="muted">${guardianName(n)} · ${kind === 'baseline' ? 'Baseline' : 'Revanche'}${st.baseline ? ` · Baseline ${formatScore(bench, st.baseline.value)}` : ''}</p>`;
+    const head = `<h1 class="h">${bench.name}</h1><p class="muted">Vergleichstest · ${kind === 'baseline' ? 'erster Wert' : 'mit letztem Mal'}${st.baseline ? ` · letztes Mal ${formatScore(bench, st.baseline.value)}` : ''}</p>`;
 
     if (f.phase === 'saved') {
       const base = st.baseline?.value;
       const won = kind === 'revenge' || st.revenge ? beats(bench, base, st.revenge?.value ?? f.value) : null;
-      return `${head}${sys(kind === 'revenge' ? (won ? 'Baseline geschlagen' : 'Knapp daneben') : 'Baseline steht', `
+      const txt = kind !== 'revenge' ? BENCH_TEXT.first : won ? BENCH_TEXT.better.map((l) => l.replace('{diff}', 'Etwas')) : base != null && Number(f.value ?? st.revenge?.value) === Number(base) ? BENCH_TEXT.same : BENCH_TEXT.lower;
+      return `${head}${sys(kind === 'revenge' ? 'Vergleich' : 'Erster Wert', `
         <p class="big num center">${formatScore(bench, f.value)}</p>
         ${f.pulse ? `<p class="center muted">Puls direkt danach: <b class="num">${f.pulse}</b> /min</p>` : ''}
-        <p>${kind === 'revenge' ? (won ? 'Die erste Säule steht. Der Wächter wankt.' : 'Die Säule bleibt offen. Fortschritt und Durchhalten zählen trotzdem.') : 'Das ist deine Messlatte für die Prüfwoche. Gleiche Version, gleiche Regeln.'}</p>
+        ${txt.map((l) => `<p>${esc(l)}</p>`).join('')}
         <button class="btn primary wide" data-act="bm-close">Fertig</button>
         <button class="btn wide share-btn" data-act="story-share">Story-Karte teilen</button>`, { tone: kind === 'revenge' && won ? 'gold' : 'sys' })}`;
     }
@@ -72,9 +76,9 @@ const screen = {
     if (f.phase === 'ready') {
       const cardioChips = bench.cardio ? `<div class="label">Cardio am Anfang und Ende</div><div class="chips">${Object.entries(bench.cardio).map(([k, x]) =>
         `<button class="chip${f.cardio === k ? ' on' : ''}" data-act="bm-cardio" data-v="${k}">${x.label}</button>`).join('')}</div>` : '';
-      const choose = kind === 'baseline' ? `<div class="label">Version (gilt auch für die Revanche)</div><div class="chips">${Object.entries(bench.variants).map(([k, x]) =>
+      const choose = kind === 'baseline' ? `<div class="label">Version (gilt auch fürs nächste Mal)</div><div class="chips">${Object.entries(bench.variants).map(([k, x]) =>
         `<button class="chip${f.variant === k ? ' on' : ''}" data-act="bm-variant" data-v="${k}">${x.label}</button>`).join('')}</div>${cardioChips}`
-        : `<p class="muted small">Version: ${esc(versionText(bench, variant, st.cardio))} (wie bei der Baseline)</p>`;
+        : `<p class="muted small">Version: ${esc(versionText(bench, variant, st.cardio))} (wie beim letzten Mal)</p>`;
       return `${back}${head}${sys('Ablauf', `<p>${esc(bench.intro)}</p><ul class="cues">${parts.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
         ${choose}
         <div class="label">Gelenk-Ersatz</div><ul class="cues small">${bench.subs.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>

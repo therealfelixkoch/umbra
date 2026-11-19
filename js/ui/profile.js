@@ -1,18 +1,21 @@
 // Profil: Rang, Verlauf, Bestleistungen, Einstellungen, Daten.
 import { esc, sys, stepper, loadText, kg, helpDot } from './kit.js';
-import { hud, seasonTrack } from './today.js';
-import { pillars, formatScore, versionText, MEDAL_NAMES, GROUP_NAMES } from '../engine/pillars.js';
+import { hud, unitTrack, SEASON_DE, chapterPicker, chapterActions } from './today.js';
+import { formatScore, versionText } from '../engine/pillars.js';
+import { activeRun, nextUnit, programStatus, switchProgram, activeProgramId, calendarSeasonN, UNITS_PER_CHAPTER } from '../engine/run.js';
+import { LIBRARY, programOf, programsForSeason } from '../data/library.js';
+import { CHAPTER_SETUP } from '../data/program.js';
+import { weekTally } from '../engine/schedule.js';
 import { BENCHMARKS } from '../data/benchmarks.js';
 import { weightSeries } from '../engine/events.js';
 import { playerStats, RANKS, rankName } from '../engine/game.js';
 import { rankEmblem } from './emblem.js';
 import { testSound } from './sound.js';
 import { titleStatus, equippedTitle } from '../engine/story.js';
-import { QUOTES, QUOTE_CATS } from '../data/story.js';
+import { QUOTES, QUOTE_CATS, SEASON_STORY } from '../data/story.js';
 import { startDeload } from '../engine/cycle.js';
-import { DEFAULT_WEEK_PLAN, DEFAULT_MT_DAYS, DAY_NAMES } from '../engine/schedule.js';
-import { weekInfo, holidayActive, DEFAULT_HOLIDAY, completeWeekManually, seasonPlan, inDeload } from '../engine/arc.js';
-import { ARCS, WEEK_PLAN, arcWeeks, planWeek, CYCLE_INFO, arcOf } from '../data/arcs.js';
+import { holidayActive, DEFAULT_HOLIDAY } from '../engine/arc.js';
+import { ARCS, CYCLE_INFO, arcOf } from '../data/arcs.js';
 import { logDecision } from '../engine/rulelog.js';
 import { formatDay } from '../engine/dates.js';
 import { MISSIONS } from '../data/missions.js';
@@ -35,7 +38,7 @@ import { overviewView } from './overview.js';
 import { setStory, shareStory } from './storycard.js';
 import { bladeTier } from '../engine/temper.js';
 import { journalView, xpSourceView, journalActions, journalChange } from './journal.js';
-import { guardianTier, GUARDIANS, BOSSES, BOSS_BY_ARC, guardianName } from '../data/lore.js';
+import { guardianTier } from '../data/lore.js';
 
 function holidayDate(h, key) {
   const md = (h ?? DEFAULT_HOLIDAY)[key];
@@ -63,55 +66,52 @@ function weightCard(data, c) {
     <p class="muted small">Optional. Keine Ernährungslogik, nur der Verlauf.</p>`);
 }
 
-// Die drei Säulen des Wächters mit aktuellem Stand
-function pillarPanel(data, arc) {
-  const p = pillars(data, arc.n, getDef);
-  const b = p.benchmark;
-  const ix = p.index;
-  const mark = (ok) => `<b class="${ok ? 'gold-text' : 'muted'}">${ok ? '✓' : '○'}</b>`;
-  const bench = `${mark(b.passed)} <b>Benchmark · ${esc(b.bench.name)}</b> ${helpDot('benchmark')}<br><span class="small">${b.baseline ? `Baseline ${formatScore(b.bench, b.baseline.value)} (${esc(versionText(b.bench, b.variant, b.cardio, b.baseline.pulse))})` : 'Baseline im ersten Kapitel'} · ${b.revenge ? `Revanche ${formatScore(b.bench, b.revenge.value)}` : 'Revanche in der Prüfwoche'}</span>`;
-  const groups = Object.keys(GROUP_NAMES).map((g) => {
-    const a = ix.areas.filter((x) => x.group === g);
-    return a.length ? `${GROUP_NAMES[g]}${ix.focus.includes(g) ? ' (Fokus)' : ''} ${a.filter((x) => x.better).length}/${a.length}` : null;
-  }).filter(Boolean).join(' · ');
-  const index = `${mark(ix.passed)} <b>Fortschritts-Index</b> ${helpDot('index')}<br><span class="small">${ix.areas.length ? `${ix.better} von ${ix.areas.length} Bereichen besser${ix.worse.length ? `, ${ix.worse.length} deutlich schlechter` : ''}. ${groups}` : 'Vergleich Wochen 1–4 mit Wochen 9–13. Noch keine Daten.'}</span>`;
-  const chap = `${mark(p.chapters.passed)} <b>Durchziehen</b><br><span class="small">Beide Kapitel inkl. Deload. Stand: Woche ${arc.week}/13.</span>`;
-  const ev = data.engine.bossEvents?.[arc.n];
-  return `<div class="pillar-panel"><div class="label">${helpDot('pillars')} Säulen · ${p.count}/3${p.medal ? ` · aktuell ${MEDAL_NAMES[p.medal]}` : ''}</div>
-    <p>${bench}</p><p>${index}</p><p>${chap}</p>
-    <p class="muted small">1 Säule = Bronze, 2 = Silber, 3 = Gold. Entschieden wird am Ende der Prüfwoche.${ev?.medal ? ` Ergebnis: ${MEDAL_NAMES[ev.medal]}.` : ''}</p></div>`;
-}
-
-function arcPanel(data, today) {
-  const arc = data.engine.arc;
-  if (!arc) return '';
-  const info = weekInfo(arc);
+// Programm-Stand (BANG COMBAT): Saison, Kapitel als 15 Einheiten, gute Woche, Jahr, Erklärung. Keine Gegner, keine Säulen.
+function programPanel(data, today) {
+  const run = activeRun(data.engine);
+  const u = nextUnit(data.engine, today);
+  if (!run || !u) return '';
+  const a = arcOf(run.n);
+  const story = SEASON_STORY[a.id] || {};
+  const done = Math.min(run.done, UNITS_PER_CHAPTER);
+  const t = weekTally(data.sessions, today);
   const holiday = holidayActive(today, data.settings.holiday ?? DEFAULT_HOLIDAY);
-  const plan = seasonPlan(arc, today, data.settings.holiday ?? DEFAULT_HOLIDAY);
-  const wp = WEEK_PLAN[planWeek(arc)];
-  const chap = (c, i) => `<div class="chapter${info.chapterIndex === i ? ' cur' : ''}"><b>Kapitel ${i + 1} · ${esc(c.name)}</b><ul class="cues">${c.changes.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
-  return sys(`${info.arc.name} · ${guardianName(arc.n)}`, `<p class="muted">${esc(info.arc.focus)}. ${esc(info.arc.desc)}</p>
-    ${seasonTrack(arc)}
+  const chap = (i) => `<div class="chapter${run.chapter === i ? ' cur' : ''}"><b>Kapitel ${i + 1} · ${esc(CHAPTER_SETUP[a.id][i].name)}</b>${story.ahead?.[i] ? `<p class="small">${esc(story.ahead[i].replace(/^Kapitel \d · [^:]+: /, ''))}</p>` : ''}</div>`;
+  return sys(`${u.programName} · ${a.sub}`, `<p class="muted">${esc(SEASON_DE[a.id])} · ${esc(story.theme || a.focus)}</p>
+    ${unitTrack(run)}
     <dl class="facts">
-      <div><dt>Woche</dt><dd>${arc.week}/${info.weeks} · ${info.chapter ? `Kapitel ${info.chapterIndex + 1} ${esc(info.chapter.name)}` : 'Prüfwoche'} · ${esc(wp.label)}</dd></div>
-      <div><dt>RIR-Ziel</dt><dd>${wp.rir}${wp.failLast ? ', letzter Satz darf ans Versagen' : ''}</dd></div>
-      <div><dt>Jahr</dt><dd>${ARCS.map((a, i) => (i === arc.n % 4 ? `<b>${esc(a.name)}</b>` : esc(a.name))).join(' → ')}</dd></div>
-      ${plan ? `<div><dt>Plan</dt><dd>${plan.startsIn ? `Start ${formatDay(plan.startsIn)} · ` : ''}Ende ca. ${formatDay(plan.end)}</dd></div>` : ''}
+      <div><dt>Kapitel</dt><dd>${run.chapter + 1} · ${esc(CHAPTER_SETUP[a.id][run.chapter].name)}</dd></div>
+      <div><dt>Einheit</dt><dd>${u.choice ? `${UNITS_PER_CHAPTER}/${UNITS_PER_CHAPTER} geschafft` : `${done + 1}/${UNITS_PER_CHAPTER} · ${esc(u.phaseLabel)}`}</dd></div>
+      <div><dt>Als Nächstes</dt><dd>${esc(u.programName)} · ${esc(u.letter)}</dd></div>
+      <div><dt>Diese Woche</dt><dd>Gym ${t.gym}/${t.goal.gym} · Muay Thai ${t.arena}/${t.goal.arena}${t.bonus ? ` · +${t.bonus}` : ''}</dd></div>
+      <div><dt>Jahr</dt><dd>${ARCS.map((x, i) => (i === ((run.n % 4) + 4) % 4 ? `<b>${esc(x.sub)}</b>` : esc(x.sub))).join(' → ')}</dd></div>
     </dl>
-    ${pillarPanel(data, arc)}
-    <details class="arc-why"><summary>Warum diese Saison, was sich ändert</summary>
-      <p>${esc(info.arc.why)}</p>
-      ${info.arc.chapters.map(chap).join('')}
-      <div class="chapter${info.chapterIndex === 'exam' ? ' cur' : ''}"><b>Woche 13 · Prüfwoche</b><p class="small">Ausgeruht nach dem zweiten Deload. Hier entscheiden die drei Säulen über den Wächter: Benchmark-Workout, Fortschritts-Index und ob beide Kapitel durchgezogen wurden.</p></div></details>
-    <details class="arc-why"><summary>${CYCLE_INFO.name}: alle vier Saisons</summary>
+    <details class="arc-why"><summary>Wo du stehst und wohin diese Saison geht</summary>
+      ${(story.now || []).map((l) => `<p>${esc(l)}</p>`).join('')}
+      ${chap(0)}${chap(1)}
+      ${(story.goal || []).map((l) => `<p class="small">${esc(l)}</p>`).join('')}</details>
+    <details class="arc-why"><summary>${esc(CYCLE_INFO.name)}: so funktioniert es</summary>
       <p>${esc(CYCLE_INFO.summary)}</p>
-      <ol class="arc-cycle">${ARCS.map((a, i) => `<li class="${i === arc.n % 4 ? 'cur' : ''}"><b>${esc(a.name)} · ${esc(BOSSES[BOSS_BY_ARC[i]].name)}</b><br><span>${esc(a.focus)}. Kapitel: ${a.chapters.map((c) => esc(c.name)).join(', ')}, dann Prüfwoche.</span></li>`).join('')}</ol>
+      <ol class="arc-cycle">${ARCS.map((x, i) => `<li class="${i === ((run.n % 4) + 4) % 4 ? 'cur' : ''}"><b>${esc(x.sub)} · ${esc(SEASON_DE[x.id])}</b><br><span>${esc(SEASON_STORY[x.id]?.theme || x.focus)}. Kapitel: ${CHAPTER_SETUP[x.id].map((ch) => esc(ch.name)).join(', ')}.</span></li>`).join('')}</ol>
       <div class="label">Bleibt in jeder Saison</div><ul class="cues">${CYCLE_INFO.stays.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
       <div class="label">Wechseln die Übungen?</div><p class="small">${esc(CYCLE_INFO.exercises)}</p></details>
-    <p class="muted small">Eine Woche zählt, sobald darin 2 volle Missionen stattfinden (Kompakt zählt, SHADOWSTEP nicht). Sonst wird sie wiederholt.${holiday ? ' Feiertagsmodus aktiv: Die Saison pausiert.' : ''}</p>
-    ${inDeload(arc) || info.chapterIndex === 'exam' ? '' : '<button class="btn wide" data-act="p-deload">Ich brauche einen Deload</button>'}
-    <button class="btn wide" data-act="p-season-story">Saison-Karte teilen</button>
-    <button class="btn ghost wide" data-act="p-week-manual">Saison-Woche manuell abschließen</button>`);
+    <p class="muted small">Nichts verfällt. Ein Kapitel endet nach ${UNITS_PER_CHAPTER} Einheiten, egal wie viele Wochen es dauert.${holiday ? ' Feiertagsmodus aktiv.' : ''}</p>
+    ${run.done < 12 ? '<button class="btn wide" data-act="p-deload">Leichte Einheiten vorziehen</button>' : ''}
+    <button class="btn wide" data-act="p-chapter">Kapitel wählen</button>
+    <button class="btn wide" data-act="p-season-story">Saison-Karte teilen</button>`);
+}
+
+// Bibliothek: Es ist immer ein Programm aktiv. Wechseln geht jederzeit, der Stand bleibt je Programm gespeichert.
+function libraryCard(data, today) {
+  const calId = arcOf(calendarSeasonN(today)).id;
+  const fits = programsForSeason(calId);
+  return `<section class="card"><div class="label">Programm</div><div class="lib-list">${LIBRARY.map((p) => {
+    const st = programStatus(data.engine, p.id, today);
+    return `<button class="lib-item${st.active ? ' on' : ''}" data-act="lib-pick" data-id="${p.id}">
+      <span class="lib-top"><b>${esc(p.name)}</b>${st.active ? '<em class="pill on">aktiv</em>' : ''}${fits.includes(p.id) ? `<em class="pill season">passt zum ${esc(SEASON_DE[calId])}</em>` : ''}</span>
+      <small>${esc(p.desc)}</small><small class="lib-status">${st.started ? esc(st.label) : 'Noch nicht begonnen'}</small></button>`;
+  }).join('')}</div>
+    <p class="muted small">Weitere Programme kommen später dazu. Der Fortschritt bleibt je Programm gespeichert.</p></section>`;
 }
 
 function quoteSettings(s) {
@@ -129,20 +129,6 @@ function quoteSettings(s) {
     <input class="search" data-input="qText" placeholder="Text" autocomplete="off">
     <input class="search" data-input="qPerson" placeholder="Person (optional)" autocomplete="off" style="margin-top:8px">
     <button class="btn wide" data-act="q-add" style="margin-top:8px">Hinzufügen</button></section>`;
-}
-
-// Wochenplan: Kraft-Tage (Push, Pull, Legs, Full Body) und Muay-Thai-Tage
-const WP_CHOICES = [['', '–'], ['C', 'Push'], ['A', 'Pull'], ['B', 'Legs'], ['D', 'Full Body']];
-function weekPlanSetup(s) {
-  const plan = s.weekPlan || DEFAULT_WEEK_PLAN;
-  const mt = s.mtDays || DEFAULT_MT_DAYS;
-  const used = Object.values(plan).filter(Boolean);
-  const legsOnMt = Object.entries(plan).filter(([d, id]) => ['B', 'D'].includes(id) && mt.includes(Number(d))).map(([d]) => DAY_NAMES[d]);
-  const rows = [1, 2, 3, 4, 5, 6, 7].map((d) => `<div class="wp-row"><b>${DAY_NAMES[d]}</b><div class="chips">${WP_CHOICES.map(([id, name]) =>
-    `<button class="chip${(plan[d] || '') === id ? ' on' : ''}" data-act="p-wp" data-d="${d}" data-v="${id}">${name}</button>`).join('')}</div>
-    <button class="chip${mt.includes(d) ? ' on' : ''}" data-act="p-mt" data-d="${d}" aria-pressed="${mt.includes(d)}">MT</button></div>`).join('');
-  return `<section class="card"><div class="label">Wochenplan ${helpDot('rotation')}</div>${rows}
-    <p class="muted small">Vier Kraft-Tage, jede Mission einmal. MT = Muay Thai abends. Legs und Full Body nie an einem Muay-Thai-Tag, und ein Tag Abstand zwischen beiden.${used.length !== 4 || new Set(used).size !== 4 ? ' <b>Noch nicht vollständig:</b> jede der vier Missionen genau einmal.' : ''}${legsOnMt.length ? ` <b>Achtung:</b> ${legsOnMt.join(', ')} hat Legs oder Full Body an einem Muay-Thai-Tag.` : ''}</p></section>`;
 }
 
 const setSettings = (c, patch) => c.update((data) => ({ ...data, settings: { ...data.settings, ...patch } }));
@@ -203,7 +189,7 @@ export default {
       out += achievementsView(data, c.today());
       out += weightCard(data, c);
       const e = data.engine;
-      out += arcPanel(data, c.today());
+      out += programPanel(data, c.today());
       out += xpSourceView(c);
       const recs = Object.entries(data.records).filter(([id]) => getDef(id) || id === 'EXPRESS');
       out += `<section class="card"><div class="label">Bestleistungen</div>${recs.length ? recs.map(([id, r]) => {
@@ -243,7 +229,7 @@ export default {
         <div class="chips">${SEASON_LOOKS.map(([id, name]) => `<button class="chip${look === id ? ' on' : ''}" data-act="p-look" data-v="${id}">${name}</button>`).join('')}</div>
         <p class="muted small">Nur Farben, Partikel und Headline. Training und Saison-Regeln bleiben bei der echten Saison. Automatisch folgt der laufenden Saison.</p>
         <button class="btn wide" data-act="p-gate">Saisonwechsel-Intro ansehen</button></section>
-      ${weekPlanSetup(s)}
+      ${libraryCard(data, c.today())}
       ${equipmentSetup(c)}
       <section class="card"><div class="label">Körpergewicht</div>${stepper('p-bw', kg(s.bodyweight), 'kg')}
         <div class="label">Satzpausen</div>
@@ -278,11 +264,36 @@ export default {
     ptab: (c, d) => c.setUi({ ptab: d.v }),
     jtab: (c, d) => c.setUi({ jtab: d.v }),
     'p-season-story': (c) => {
-      const arc = c.data.engine.arc;
-      const p = pillars(c.data, arc.n, getDef);
-      const done = c.data.sessions.filter((s) => s.arc?.n === arc.n && s.kind === 'mission').length;
-      setStory({ kicker: 'SAISON', title: arcOf(arc.n).name, stats: [[`${arc.week}/13`, 'Woche'], [done, 'Missionen'], [`${p.count}/3`, 'Säulen']] });
+      const run = activeRun(c.data.engine);
+      if (!run) return;
+      const done = c.data.sessions.filter((s) => s.unit?.n === run.n && s.kind === 'mission').length;
+      setStory({ kicker: 'BANG COMBAT', title: arcOf(run.n).sub, stats: [[`${Math.min(run.done, UNITS_PER_CHAPTER)}/${UNITS_PER_CHAPTER}`, `Kap. ${run.chapter + 1} geschafft`], [done, 'Einheiten'], [weekTally(c.data.sessions, c.today()).arena, 'Muay Thai']] });
       shareStory(c);
+    },
+    'p-chapter': (c) => chapterPicker(c),
+    ...chapterActions,
+    'lib-pick': (c, d) => {
+      const today = c.today();
+      const cur = programStatus(c.data.engine, activeProgramId(c.data.engine), today);
+      const target = programStatus(c.data.engine, d.id, today);
+      if (!target) return;
+      if (target.active) {
+        c.system(target.name, `<p class="reason">${esc(cur.label)}.</p><p class="muted small">${esc(programOf(d.id).desc)}</p>`,
+          [['p-chapter', 'Kapitel wählen'], ['close-modal', 'Schließen', 'primary']]);
+        return;
+      }
+      c.ui.libTarget = d.id;
+      c.system(`${target.name} starten?`, `<p class="reason">Gerade aktiv: ${esc(cur.label)}.</p>
+        <p class="muted small">${target.started ? `Dort ging es zuletzt bis: ${esc(target.label)}.` : `${esc(target.name)} beginnt bei Einheit 1.`} Der Stand von ${esc(cur.name)} bleibt gespeichert, zurückkommen geht jederzeit.</p>`,
+      [['lib-switch', 'Wechseln'], ['close-modal', 'Erst fertig machen', 'primary']]);
+    },
+    'lib-switch': (c) => {
+      const id = c.ui.libTarget;
+      const today = c.today();
+      if (!id) return;
+      c.modal(null);
+      c.update((data) => logDecision({ ...data, engine: switchProgram(data.engine, id, today) },
+        { rule: 'program:switch', day: today, input: { from: activeProgramId(data.engine), to: id }, decision: 'accepted' }));
     },
     'bw-step': (c, d) => c.setUi({ bwDraft: Math.round(((c.ui.bwDraft ?? c.data.settings.bodyweight ?? 80) + Number(d.dir) * 0.1) * 10) / 10 }),
     'bw-log': (c) => {
@@ -291,33 +302,12 @@ export default {
     },
     'joint-pause': (c, d) => setSettings(c, { jointPause: d.v === '1' }),
     'wk-tip': (c, d, el) => el.classList.toggle('open'),
-    'p-deload': (c) => c.system('Deload-Woche jetzt?', '<p>Das laufende Kapitel springt in seine Deload-Woche: halbe Sätze, gleiches Gewicht, 3 Wdh. im Tank. Danach geht es mit dem nächsten Kapitel weiter.</p>',
-      [['p-deload-yes', 'Deload-Woche starten', 'primary'], ['close-modal', 'Abbrechen']]),
+    'p-deload': (c) => c.system('Leichte Einheiten vorziehen?', '<p>Das laufende Kapitel springt zu den leichten Einheiten 13–15: halbe Sätze, gleiches Gewicht, 3 Wdh. im Tank. Danach geht es mit dem nächsten Kapitel weiter.</p>',
+      [['p-deload-yes', 'Leichte Einheiten', 'primary'], ['close-modal', 'Abbrechen']]),
     'p-deload-yes': (c) => {
       c.modal(null);
       c.update((data) => logDecision({ ...data, engine: startDeload(data.engine) },
         { rule: 'deload:manual', day: c.today(), suggestion: 'deload_week', decision: 'accepted' }));
-    },
-    'p-week-manual': (c) => c.system('Saison-Woche abschließen?', `<p>Für Sonderfälle: Die laufende Saison-Woche ${c.data.engine.arc?.week}/${arcWeeks(c.data.engine.arc?.n ?? 0)} gilt sofort als abgeschlossen, egal wie viele Missionen darin waren. Die Korrektur wird im Regel-Protokoll vermerkt.</p>`,
-      [['p-week-manual-yes', 'Abschließen', 'primary'], ['close-modal', 'Abbrechen']]),
-    'p-week-manual-yes': (c) => {
-      c.modal(null);
-      const before = c.data.engine.arc;
-      const r = completeWeekManually(before, c.today());
-      c.update((data) => logDecision({ ...data, engine: { ...data.engine, arc: r.arc } },
-        { rule: 'arc:manual_week', day: c.today(), input: { n: before.n, week: before.week }, suggestion: r.event.type, decision: 'accepted' }));
-    },
-    'p-wp': (c, d) => {
-      const plan = { ...(c.data.settings.weekPlan || DEFAULT_WEEK_PLAN) };
-      // Jede Mission nur an einem Tag: am alten Tag entfernen
-      if (d.v) for (const k of Object.keys(plan)) if (plan[k] === d.v) delete plan[k];
-      if (d.v) plan[d.d] = d.v; else delete plan[d.d];
-      setSettings(c, { weekPlan: plan });
-    },
-    'p-mt': (c, d) => {
-      const mt = c.data.settings.mtDays || DEFAULT_MT_DAYS;
-      const day = Number(d.d);
-      setSettings(c, { mtDays: mt.includes(day) ? mt.filter((x) => x !== day) : [...mt, day].sort() });
     },
     'p-holiday': (c, d) => {
       const h = c.data.settings.holiday ?? DEFAULT_HOLIDAY;

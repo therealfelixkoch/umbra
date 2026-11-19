@@ -1,6 +1,6 @@
 // Equipment: Katalog nach Gruppen, Bestand pro Ort (Gewichte, Anzahl, Höhen, Stärken) und was ein Teil freischalten würde.
 // Orte: room = Fighting Cave, gym = Home Gym. Reine Funktionen.
-import { PROGRAM } from '../data/program.js';
+import { PROGRAM, PROGRAM_MISSIONS } from '../data/program.js';
 import { MISSIONS } from '../data/missions.js';
 
 export const PLACE_NAMES = { room: 'Fighting Cave', gym: 'Home Gym', travel: 'Unterwegs' };
@@ -67,7 +67,7 @@ export function unlocks(item, equipment, all) {
  * @returns {{item:string, slots:string[]}[]} absteigend nach Anzahl
  */
 export function missionGaps(place, equipment, getDef) {
-  const ids = ['A', 'B', 'C', 'D'];
+  const ids = PROGRAM_MISSIONS; // BANG COMBAT A/B/C (alle Übungen des Jahres an diesem Ort)
   const have = new Set(equipment);
   const missing = new Map();
   const add = (item, name) => { if (!missing.has(item)) missing.set(item, new Set()); missing.get(item).add(name); };

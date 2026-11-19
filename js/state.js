@@ -1,12 +1,15 @@
 // Datenmodell: ein Dokument, das komplett in IndexedDB liegt und so auch exportiert wird.
 import { initialEngine } from './engine/cycle.js';
-import { DEFAULT_HOLIDAY, rebaseFirstArc, seasonStartFrom } from './engine/arc.js';
+import { DEFAULT_HOLIDAY, rebaseFirstArc, seasonStartFrom, countsForArc } from './engine/arc.js';
+import { calendarSeasonN, initialRun, arcFromRun, UNITS_PER_CHAPTER } from './engine/run.js';
+import { chapterOf } from './data/arcs.js';
+import { DEFAULT_PROGRAM } from './data/library.js';
 import { sessionXp } from './engine/game.js';
 import { fixCaveMurph } from './engine/pillars.js';
 import { toDay } from './engine/dates.js';
 import { effortToRpe, sessionIntensity, intensityFromRpe, trainingLoad } from './engine/session.js';
 
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 
 export function defaultData() {
   return {
@@ -16,10 +19,10 @@ export function defaultData() {
       onboarded: false,
       equipment: {
         room: ['bag', 'bar', 'dipbars', 'box', 'kb', 'hammer', 'medball'],
-        gym: ['barbell', 'rack', 'dumbbells', 'cable', 'rower', 'bar', 'rings', 'medball'],
+        gym: ['barbell', 'rack', 'dumbbells', 'cable', 'rower', 'bar', 'rings', 'medball', 'box', 'dipbars', 'bench'],
       },
-      weekPlan: { 1: 'C', 2: 'B', 4: 'A', 5: 'D' }, // UMBRA 2.0: Mo Push, Di Legs, Do Pull, Fr Full Body
-      mtDays: [1, 4], // Muay Thai abends
+      weekPlan: {}, // BANG COMBAT: keine festen Tage mehr, die nächste Einheit kommt aus der Reihenfolge
+      mtDays: [1, 4], // Muay Thai abends (nur noch Anzeige, die App plant Muay Thai nicht)
       kbWeights: [8, 12, 16, 20, 24],
       inventory: { room: {}, gym: {} }, // Bestand pro Ort; leer = allgemeine KB-Liste
       bodyweight: 80,
@@ -204,6 +207,50 @@ MIGRATIONS[11] = (raw) => {
     settings: { ...raw.settings, equipment: { ...eq, ...(eq.gym ? { gym: [...new Set([...eq.gym, 'rings'])] } : {}) } },
     ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v12', day: toDay(),
       suggestion: `rings_gym, neck_split${fixed ? ', suitcase_carry_22kg' : ''}`, decision: 'applied' }] };
+};
+
+MIGRATIONS[12] = (raw) => {
+  // v12 → v13: BANG COMBAT (Interview 19.11.2026). 3× Ganzkörper A/B/C in fester Reihenfolge statt fester Wochentage,
+  // Kapitel = 15 Einheiten, Programm-Bibliothek. Die laufende Saison und das laufende Kapitel bleiben:
+  // jede volle Mission des Kapitels zählt als eine Einheit (in der Deload-Woche mindestens bis Einheit 12),
+  // aus der Prüfwoche heraus ist Kapitel 2 fertig und die App empfiehlt die nächste Saison.
+  // Wiedereinstieg im alten Format (−10/−20 %) entfällt. Log, Rekorde und Progression bleiben unverändert.
+  // Home Gym: Box, Hantelbank und Dip-Barren sind da (Felix, 19.11.2026), sonst fallen BSS, Box Squat, Dip und Bankdrücken dort weg.
+  const today = toDay();
+  const eq = raw.settings?.equipment || {};
+  const gymAdd = ['box', 'dipbars', 'bench'].filter((x) => eq.gym && !eq.gym.includes(x));
+  const engine = { ...(raw.engine || {}) };
+  const arc = engine.arc;
+  const ch = arc ? chapterOf(arc.week) : 0;
+  const n = arc ? Math.max(0, arc.n) : calendarSeasonN(today);
+  const sessions = raw.sessions || [];
+  let chapter = 0;
+  let done = 0;
+  if (ch === 'exam') {
+    chapter = 1;
+    done = UNITS_PER_CHAPTER;
+  } else if (arc) {
+    chapter = ch;
+    const count = sessions.filter((x) => countsForArc(x) && x.arc && x.arc.n === arc.n && chapterOf(x.arc.week) === ch).length;
+    const wk = ((arc.week - 1) % 6) + 1;
+    done = Math.min(UNITS_PER_CHAPTER, Math.max(count, wk === 6 ? 12 : 0));
+  }
+  const lastDay = sessions.filter(countsForArc).map((x) => x.day).sort().pop() || null;
+  const run = { ...initialRun(today, { n, chapter, done }), startedDay: arc?.startedDay || today, lastDay };
+  const programs = { active: DEFAULT_PROGRAM, runs: { [DEFAULT_PROGRAM]: run } };
+  const next = { ...engine, programs, comeback: null, comebackDismissed: null };
+  next.arc = arcFromRun(next, today, arc || null);
+  // Kodex: alte Saison-Gegner werden zu Saison-Einträgen (Gegner gibt es nicht mehr), THE PLATEAU bleibt
+  const OLD = { coldiron: 'WINTER', stormlung: 'SPRING', scorch: 'SUMMER', wither: 'AUTUMN' };
+  const codex = Object.fromEntries(Object.entries(raw.codex || {}).map(([k, v]) => {
+    const [kind, id] = k.split(':');
+    return kind === 'boss' && OLD[id] ? [`season:${OLD[id]}`, v] : [k, v];
+  }));
+  return { ...raw, schemaVersion: 13, engine: next, ...(raw.codex ? { codex } : {}),
+    settings: { ...raw.settings, weekPlan: {}, weekPlanV2: raw.settings?.weekPlan || null,
+      ...(gymAdd.length ? { equipment: { ...eq, gym: [...eq.gym, ...gymAdd] } } : {}) },
+    ruleLog: [...(raw.ruleLog || []), { at: new Date().toISOString(), rule: 'migration:v13', day: today,
+      suggestion: `bang_combat:n${n}:ch${chapter}:unit${done}${gymAdd.length ? `, gym+${gymAdd.join('+')}` : ''}`, decision: 'applied' }] };
 };
 
 export function migrate(raw) {

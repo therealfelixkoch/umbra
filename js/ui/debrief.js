@@ -40,7 +40,6 @@ export default {
         <div><dt>TEMPER</dt><dd>${esc(st.temper)}</dd></div>
         ${st.wrist ? `<div><dt>Handgelenk</dt><dd>${esc(st.wrist)}</dd></div>` : ''}
         ${st.feet ? `<div><dt>FEET</dt><dd>${esc(st.feet)}</dd></div>` : ''}
-        ${st.boss ? `<div><dt>Wächter</dt><dd>${esc(st.boss.name)}${st.boss.defeated ? ' · besiegt' : ''}</dd></div>` : ''}
       </dl>`)}
       ${sys('ARENA', `<dl class="facts">
         <div><dt>Einheiten</dt><dd class="num">${st.arenaDetail.sessions} · ${st.arenaDetail.hours.toLocaleString('de-DE')} h</dd></div>

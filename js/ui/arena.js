@@ -5,6 +5,7 @@ import { addDays, formatDay } from '../engine/dates.js';
 import { startTimer, advanceTo, totalMinutes, WARN_SEC } from '../engine/roundtimer.js';
 import { ringBell, clack, keepAwake } from './sound.js';
 import { footworkView, footworkActions, isRunning as footworkRunning } from './footwork.js';
+import { bagView, bagActions, isRunning as bagRunning } from './bagdrill.js';
 import { bmtView, bmtActions, bmtInput } from './bmt.js';
 import { BMT_NAME } from '../engine/bmt.js';
 import { ARENA_CONTENT } from '../engine/arenastats.js';
@@ -65,6 +66,14 @@ function stopTicker() {
   keepAwake(false);
 }
 
+// Drills: Footwork (unverändert) und Runden am Sack. Läuft ein Drill, steht seine Ansicht vorn.
+function drillsView(c) {
+  const sub = footworkRunning() ? 'footwork' : bagRunning() ? 'bag' : (c.ui.dtab || 'footwork');
+  const tabs = [['footwork', 'Footwork', footworkRunning()], ['bag', 'Runden am Sack', bagRunning()]];
+  const seg = `<div class="seg sub">${tabs.map(([k, l, run]) => `<button class="${sub === k ? 'on' : ''}" data-act="dtab" data-v="${k}">${l}${run ? ' ●' : ''}</button>`).join('')}</div>`;
+  return `${seg}${sub === 'bag' ? bagView(c) : footworkView(c)}`;
+}
+
 function timerView() {
   const { cfg, st } = timer;
   if (st.phase === 'done') {
@@ -109,9 +118,9 @@ const screen = {
   render(c) {
     ctxRef = c;
     const tab = c.ui.atab || (timer ? 'timer' : 'log');
-    const seg = `<div class="seg"><button class="${tab === 'log' ? 'on' : ''}" data-act="atab" data-v="log">Eintragen</button><button class="${tab === 'bmt' ? 'on' : ''}" data-act="atab" data-v="bmt">BMT</button><button class="${tab === 'timer' ? 'on' : ''}" data-act="atab" data-v="timer">Timer${timer && timer.st.phase !== 'done' ? ' ●' : ''}</button><button class="${tab === 'footwork' ? 'on' : ''}" data-act="atab" data-v="footwork">Footwork${footworkRunning() ? ' ●' : ''}</button><button class="${tab === 'status' ? 'on' : ''}" data-act="atab" data-v="status">Status</button></div>`;
+    const seg = `<div class="seg"><button class="${tab === 'log' ? 'on' : ''}" data-act="atab" data-v="log">Eintragen</button><button class="${tab === 'bmt' ? 'on' : ''}" data-act="atab" data-v="bmt">BMT</button><button class="${tab === 'timer' ? 'on' : ''}" data-act="atab" data-v="timer">Timer${timer && timer.st.phase !== 'done' ? ' ●' : ''}</button><button class="${tab === 'footwork' ? 'on' : ''}" data-act="atab" data-v="footwork">Drills${footworkRunning() || bagRunning() ? ' ●' : ''}</button><button class="${tab === 'status' ? 'on' : ''}" data-act="atab" data-v="status">Status</button></div>`;
     if (tab === 'timer') return `<h1 class="h">ARENA</h1>${seg}${timer ? timerView() : setupView(c)}`;
-    if (tab === 'footwork') return `<h1 class="h">ARENA</h1>${seg}${footworkView(c)}`;
+    if (tab === 'footwork') return `<h1 class="h">ARENA</h1>${seg}${drillsView(c)}`;
     if (tab === 'bmt') return `<h1 class="h">ARENA</h1>${seg}${bmtView(c)}`;
     if (tab === 'status') return `<h1 class="h">ARENA</h1>${seg}${arenaStatusView(c)}`;
 
@@ -153,6 +162,8 @@ const screen = {
   },
   actions: {
     ...footworkActions,
+    ...bagActions,
+    dtab: (c, d) => c.setUi({ dtab: d.v }),
     ...bmtActions,
     ...arenaStatusActions,
     'a-content': (c, d) => {
@@ -176,7 +187,7 @@ const screen = {
     'bmt-footwork': (c, d) => {
       const min = Number(d.min) || 3;
       c.ui.fw = { ...(c.ui.fw || { tempo: 'mid' }), duration: Math.min(180, Math.max(60, Math.round(min * 2) * 30)), rounds: Number(d.rounds) || 1 };
-      c.setUi({ atab: 'footwork' });
+      c.setUi({ atab: 'footwork', dtab: 'footwork' });
     },
     // ARENA-Eintrag mit dieser BMT-Woche verknüpfen
     'bmt-log': (c, d) => {
