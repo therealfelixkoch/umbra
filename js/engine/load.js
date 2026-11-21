@@ -4,10 +4,11 @@ import { addDays } from './dates.js';
 const RANK = { low: 0, normal: 1, high: 2 };
 
 // Klasse einer geplanten oder erledigten Einheit.
-export function loadClass({ kind, missionId, compact, intensity, rpe }) {
+export function loadClass({ kind, missionId, compact, cave, intensity, rpe }) {
   if (kind === 'arena') return (rpe ?? (intensity === 'hard' ? 8 : 4)) >= 7 ? 'high' : 'low';
+  if (missionId === 'COND') return 'high'; // Conditioning am Sack: kurz, aber hart
   if (kind !== 'mission') return 'low';
-  if (compact) return 'low';
+  if (compact) return cave ? 'normal' : 'low'; // Cave-Zirkel: dichter als die Kurzversion
   // BANG COMBAT: jede Einheit hat eine schwere Beinübung (Kniebeuge, Kreuzheben/RDL, BSS)
   if (['BC_A', 'BC_B', 'BC_C', 'B', 'D', 'FORGE', 'NOR4X4'].includes(missionId)) return 'high'; // D: Full Body mit Kreuzheben
   if (['A', 'C', 'HOTEL'].includes(missionId)) return 'normal';

@@ -20,6 +20,7 @@ import { HANDS_SEQUENCE } from '../data/wrist.js';
 import { FT, feetSequence, sparTomorrow as feetSpar } from './feet.js';
 import { weightsOf } from './equipment.js';
 import { supersetOptions } from './warmup.js';
+import { condPlan } from './conditioning.js';
 
 // Equipment und Einstellungen für ein Profil. Im Home Gym ersetzen Kurzhanteln die Kettlebells.
 export function profileContext(settings, profile) {
@@ -117,8 +118,12 @@ const MOBILITY_POOL = (getDef) => {
  * @param {{missionId:string, profile:'room'|'gym', data:object, today:string, getDef?:Function}} p
  */
 export function buildPlan({ missionId, profile, data, today, compact = false, slot = null, rotate = null,
-  plyoCap = false, wristKind = null, getDef = defaultGetDef }) {
+  plyoCap = false, wristKind = null, getDef = defaultGetDef, cond = null, cave = false }) {
   const mission = MISSIONS[missionId];
+  // Cave-Zirkel: Kurzversion der Einheit in der Fighting Cave (+ Power-Finisher am Sack), zählt als Einheit.
+  // Ob die Cave das trägt, prüft vorher caveStatus (engine/conditioning.js).
+  const isCave = !!cave && !!mission.program;
+  if (isCave) { profile = 'room'; compact = true; }
   const { equipment, settings } = profileContext(data.settings, profile);
   const full = FULL_MISSIONS.includes(missionId);
   const holiday = data.settings.holiday ?? DEFAULT_HOLIDAY;
@@ -131,8 +136,9 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
   const modifier = full ? modifierFor(data.engine, inHoliday ? null : gap, { today, unit: uInfo?.unit || null }) : { type: 'none' };
   const info = uInfo ? { ...weekInfo(arc), ...uInfo } : weekInfo(arc);
   const isCompact = compact && mission.format === 'sets';
-  const base = { missionId, name: isCompact ? `${uInfo ? 'Kurzversion' : 'QUICK STRIKE'} · ${mission.name}` : mission.name,
-    focus: isCompact ? (uInfo ? 'Hauptübung + CMPND Block' : 'Hauptübungen · je 2 Sätze') : mission.focus, minutes: isCompact ? 30 : mission.minutes,
+  const base = { missionId, name: isCave ? `Cave-Zirkel · ${mission.name}` : isCompact ? `${uInfo ? 'Kurzversion' : 'QUICK STRIKE'} · ${mission.name}` : mission.name,
+    focus: isCave ? 'Hauptübung + CMPND Block + Power am Sack' : isCompact ? (uInfo ? 'Hauptübung + CMPND Block' : 'Hauptübungen · je 2 Sätze') : mission.focus,
+    minutes: isCompact ? 30 : mission.minutes, cave: isCave || undefined,
     format: mission.format, kind: MISSION_KIND(missionId), profile, modifier, gap, compact: isCompact,
     slot, rotate, arc: { n: uInfo ? uInfo.unit.n : arc.n, week: uInfo ? uInfo.chapterIndex * 6 + uInfo.chapterWeek : arc.week },
     unit: uInfo ? { programId: uInfo.unit.programId, n: uInfo.unit.n, chapter: uInfo.unit.chapter, unitNo: uInfo.unit.unitNo, phase: uInfo.unit.phase } : undefined,
@@ -156,6 +162,10 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
     const items = programItems({ missionId, profile, data, today, arc, info, isCompact, modifier, equipment, getDef, wrist, full });
     if (wInfo?.kind === 'strength') items.push(...wItems);
     else if (wInfo) items.splice(items.length ? 1 : 0, 0, ...wItems);
+    if (isCave) {
+      const fin = ['bag_speed_shots', 'bag_power_kicks', 'burpee'].find((id) => resolveExercise(id, equipment, getDef) === id);
+      if (fin) items.push({ ...itemFor(fin, { data, profile, sets: 3, getDef }), block: 'finisher', rir: null, trend: null, effort: 'power', explosive: true });
+    }
     const prog = programSlots(info.arc.id, info.chapterIndex, missionId);
     return { ...base, format: 'sets', items, plyo: null, wrist: wInfo, program: true,
       chapterName: prog?.setup.name, blocks: [...new Set(items.map((it) => it.block).filter(Boolean))] };
@@ -285,6 +295,12 @@ export function buildPlan({ missionId, profile, data, today, compact = false, sl
         load: loadFor(def, data.exState[stateKey(profile, id)]).load };
     }).filter(Boolean);
     return { ...base, items };
+  }
+
+  if (mission.cond) {
+    const cp = condPlan({ format: cond?.format || 'power', minutes: cond?.minutes || 15, equipment, kbWeights: settings.kbWeights, seed: cond?.seed });
+    if (cp) return { ...base, ...cp, profile, modifier, gap, kind: base.kind, arc: base.arc, rpeLog: true, calm: false };
+    return { ...base, rounds: 0, work: 0, rest: 0, exId: null, stations: [], items: [], unavailable: true };
   }
 
   if (mission.format === 'intervals') {
@@ -601,7 +617,7 @@ export function finishSession(data, active, { now = Date.now(), getDef = default
   const bodyweight = data.settings.bodyweight || 80;
 
   const session = { id: id || `s${now}`, day, kind: p.kind, missionId: p.missionId, profile: p.profile,
-    compact: p.compact || undefined, slot: p.slot || undefined, arc: p.arc, unit: p.unit || undefined,
+    compact: p.compact || undefined, cave: p.cave || undefined, cond: p.cond || undefined, slot: p.slot || undefined, arc: p.arc, unit: p.unit || undefined,
     stage: p.feet ? p.stage : undefined, noJumps: p.feet && p.noJumps ? true : undefined,
     afterPause: p.gap != null && p.gap >= 8 ? true : undefined, gap: p.gap ?? undefined,
     modifier: p.modifier?.type || 'none', completion,

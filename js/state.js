@@ -18,13 +18,13 @@ export function defaultData() {
     settings: {
       onboarded: false,
       equipment: {
-        room: ['bag', 'bar', 'dipbars', 'box', 'kb', 'hammer', 'medball'],
+        room: ['bag', 'kb'], // Fighting Cave (Stand 21.11.2026): Sack und eine 6-kg-Kettlebell
         gym: ['barbell', 'rack', 'dumbbells', 'cable', 'rower', 'bar', 'rings', 'medball', 'box', 'dipbars', 'bench'],
       },
       weekPlan: {}, // BANG COMBAT: keine festen Tage mehr, die nächste Einheit kommt aus der Reihenfolge
       mtDays: [1, 4], // Muay Thai abends (nur noch Anzeige, die App plant Muay Thai nicht)
       kbWeights: [8, 12, 16, 20, 24],
-      inventory: { room: {}, gym: {} }, // Bestand pro Ort; leer = allgemeine KB-Liste
+      inventory: { room: { kb: { 6: 1 } }, gym: {} }, // Bestand pro Ort; leer = allgemeine KB-Liste
       bodyweight: 80,
       restSec: 75,
       sound: true,

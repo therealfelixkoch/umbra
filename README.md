@@ -72,6 +72,15 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 23.11.2026 (v46): Conditioning in der Fighting Cave
+
+- **Conditioning** unter ARENA → Drills → Conditioning und auf „Heute“, wenn beim Muay Thai der Partner absagt (Sack-Runden, danach Conditioning). Es gibt zwei Formate, je 15 oder 30 min mit 2 min Aufwärmen:
+  - **POWER:** nur Sack, 20 s voll / 40 s locker
+  - **MIX:** Sack und Körpergewicht/KB im Wechsel, 40 s Arbeit / 20 s Pause
+  
+  Der Timer zeigt die Station der jeweiligen Runde, die Stationen richten sich nach der Ausstattung der Cave. Conditioning gibt XP wie SHADOWSTEP und ist keine Einheit, A/B/C bleibt stehen.
+- **Cave-Zirkel:** die Kurzversion der nächsten Einheit in der Cave plus Power-Finisher am Sack. Er zählt als Einheit (70 XP) und erscheint erst, wenn die Cave genug Ausstattung hat (Dip-Barren, Stange, KB ab 16 kg).
+
 ### Update 19.11.2026 (v45): BANG COMBAT – 3× Ganzkörper in Reihenfolge, Drills in der ARENA
 
 **Vor dem Update eine JSON-Sicherung exportieren:** Die Daten werden auf Schema v13 migriert.

@@ -88,6 +88,12 @@ export const MISSIONS = {
     id: 'EXPRESS_BAG', name: 'SHADOWSTEP · Sack', focus: '5 × 2 min Sack, 1 min Pause', minutes: 15,
     format: 'intervals', kind: 'express', rounds: 5, work: 120, rest: 60, ex: 'bag_rounds',
   },
+  // Conditioning in der Fighting Cave (21.11.2026): 15/30 min Power, Plan kommt aus engine/conditioning.js (condPlan).
+  // Zählt für die Woche wie SHADOWSTEP, nicht als Einheit von BANG COMBAT.
+  COND: {
+    id: 'COND', name: 'CONDITIONING', focus: 'Sack und Körpergewicht · 15 oder 30 min', minutes: 15,
+    format: 'intervals', kind: 'express', cond: true, rounds: 13, work: 20, rest: 40, warmup: 120, ex: 'bag_speed_shots',
+  },
   FLOW: {
     id: 'FLOW', name: 'FLOW', focus: 'Mobility · 10 Minuten', minutes: 10, format: 'flow',
     work: 30, rounds: 2,
@@ -102,7 +108,7 @@ export const MISSIONS = {
 };
 
 export const MISSION_KIND = (id) =>
-  id === 'FLOW' ? 'flow' : id === 'EXPRESS' || id === 'EXPRESS_BAG' ? 'express' : id === 'WRIST' ? 'wrist' : id === 'HANDS' ? 'hands' : id === 'FEET' ? 'feet' : id === 'ZONE2' ? 'zone2' : 'mission';
+  id === 'FLOW' ? 'flow' : id === 'EXPRESS' || id === 'EXPRESS_BAG' || id === 'COND' ? 'express' : id === 'WRIST' ? 'wrist' : id === 'HANDS' ? 'hands' : id === 'FEET' ? 'feet' : id === 'ZONE2' ? 'zone2' : 'mission';
 
 // Missionen, die als volle Mission zählen (Rotation, Arc-Woche, Pausen). FORGE und 4x4 belegen einen Rotationsplatz.
 export const FULL_MISSIONS = ['BC_A', 'BC_B', 'BC_C', 'A', 'B', 'C', 'D', 'FORGE', 'NOR4X4', 'HOTEL', 'BENCH'];

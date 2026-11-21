@@ -46,18 +46,21 @@ export const TODAY_ANSWERS = { gym: 'Gym', mt: 'Muay Thai', both: 'Beides', none
 /**
  * Vorschlag für heute.
  * @param {'gym'|'mt'|'both'|'none'} answer
- * @param {{next:string, partner?:boolean}} o next = nächste Einheit, partner = false, wenn der Partner abgesagt hat
- * @returns {{items:{kind:'unit'|'arena'|'bag', missionId?:string, compact?:boolean, optional?:boolean, minutes?:number}[], text:string}}
+ * @param {{next:string, partner?:boolean, cave?:boolean}} o next = nächste Einheit, partner = false, wenn der Partner abgesagt hat,
+ *   cave = true, wenn die Fighting Cave die Einheit tragen kann (caveStatus(...).ok in engine/conditioning.js)
+ * @returns {{items:{kind:'unit'|'arena'|'bag'|'cond', missionId?:string, compact?:boolean, cave?:boolean, optional?:boolean, minutes?:number, choices?:number[]}[], text:string}}
  */
-export function todaySuggestion(answer, { next, partner = true } = {}) {
+export function todaySuggestion(answer, { next, partner = true, cave = false } = {}) {
   if (answer === 'gym') return { items: [{ kind: 'unit', missionId: next }], text: 'Heute die nächste Einheit.' };
   if (answer === 'both') {
     return { items: [{ kind: 'unit', missionId: next }, { kind: 'arena' }], text: 'Nächste Einheit und Muay Thai, die Reihenfolge ist egal.' };
   }
   if (answer === 'mt') {
     return partner ? { items: [{ kind: 'arena' }], text: 'Heute Muay Thai.' }
-      : { items: [{ kind: 'bag', minutes: 30 }, { kind: 'unit', missionId: next, compact: true, optional: true }],
-        text: 'Partner sagt ab: ca. 30 min am Sack, nach Lust dazu die nächste Einheit als Kurzversion.' };
+      : { items: [{ kind: 'bag', minutes: 30 }, { kind: 'cond', minutes: 15, choices: [15, 30], optional: true },
+          ...(cave ? [{ kind: 'unit', missionId: next, compact: true, cave: true, optional: true }] : [])],
+        text: cave ? 'Partner sagt ab: ca. 30 min Technik am Sack, danach nach Lust 15–30 min Conditioning oder die nächste Einheit als Cave-Zirkel.'
+          : 'Partner sagt ab: ca. 30 min Technik am Sack, danach nach Lust 15–30 min Conditioning. Die nächste Einheit wartet.' };
   }
   return { items: [], text: 'Heute nichts. Die nächste Einheit wartet, es verfällt nichts.' };
 }

@@ -6,6 +6,7 @@ import { startTimer, advanceTo, totalMinutes, WARN_SEC } from '../engine/roundti
 import { ringBell, clack, keepAwake } from './sound.js';
 import { footworkView, footworkActions, isRunning as footworkRunning } from './footwork.js';
 import { bagView, bagActions, isRunning as bagRunning } from './bagdrill.js';
+import { condPicker, condActions } from './cond.js';
 import { bmtView, bmtActions, bmtInput } from './bmt.js';
 import { BMT_NAME } from '../engine/bmt.js';
 import { ARENA_CONTENT } from '../engine/arenastats.js';
@@ -66,12 +67,12 @@ function stopTicker() {
   keepAwake(false);
 }
 
-// Drills: Footwork (unverändert) und Runden am Sack. Läuft ein Drill, steht seine Ansicht vorn.
+// Drills: Footwork (unverändert), Runden am Sack und Conditioning (startet als Session im Training). Läuft ein Drill, steht seine Ansicht vorn.
 function drillsView(c) {
   const sub = footworkRunning() ? 'footwork' : bagRunning() ? 'bag' : (c.ui.dtab || 'footwork');
-  const tabs = [['footwork', 'Footwork', footworkRunning()], ['bag', 'Runden am Sack', bagRunning()]];
+  const tabs = [['footwork', 'Footwork', footworkRunning()], ['bag', 'Sack', bagRunning()], ['cond', 'Conditioning', false]];
   const seg = `<div class="seg sub">${tabs.map(([k, l, run]) => `<button class="${sub === k ? 'on' : ''}" data-act="dtab" data-v="${k}">${l}${run ? ' ●' : ''}</button>`).join('')}</div>`;
-  return `${seg}${sub === 'bag' ? bagView(c) : footworkView(c)}`;
+  return `${seg}${sub === 'bag' ? bagView(c) : sub === 'cond' ? condPicker(c) : footworkView(c)}`;
 }
 
 function timerView() {
@@ -163,6 +164,7 @@ const screen = {
   actions: {
     ...footworkActions,
     ...bagActions,
+    ...condActions,
     dtab: (c, d) => c.setUi({ dtab: d.v }),
     ...bmtActions,
     ...arenaStatusActions,

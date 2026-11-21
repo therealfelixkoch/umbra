@@ -507,7 +507,7 @@ function itemList(p) {
 
 // Vorher (Zirkel, SHADOWSTEP, 4x4): allgemeines Aufwärmen und der freie Mobility-Block. Wird nicht getrackt.
 function prepBlock(a) {
-  if (!['mission', 'express'].includes(a.plan.kind) || a.roundsDone > 0 || a.clockEnd || a.iv?.startAt) return '';
+  if (!['mission', 'express'].includes(a.plan.kind) || a.plan.stations || a.roundsDone > 0 || a.clockEnd || a.iv?.startAt) return '';
   const cues = (id) => `<ul class="cues">${getDef(id).cues.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>`;
   return `<details class="ramp prep" open><summary>Vorher · Aufwärmen und Mobility-Block</summary>
     <div class="label">General Warm-Up · 5–10 min</div>${cues('warmup_general')}
@@ -546,6 +546,16 @@ function amrapView(c, a) {
     <footer class="t-nav"><button class="btn gold grow" data-act="t-finish">Mission abgeschlossen</button></footer>`;
 }
 
+// Conditioning: Station der laufenden Arbeitsrunde groß, in Aufwärmen und Pause die nächste
+function stationLine(p, st, done) {
+  if (done) return '';
+  const work = st?.phase === 'work';
+  const round = !st ? 1 : work ? st.round : st.phase === 'warmup' ? 1 : st.round + 1;
+  const s = p.stations[round - 1];
+  if (!s) return '';
+  return `<div class="iv-station${work ? ' now' : ''}"><small>${work ? `Runde ${round}` : `Gleich · Runde ${round}`}</small><b>${esc(s.text)}</b></div>`;
+}
+
 function intervalView(c, a) {
   const p = a.plan;
   const phases = intervalPhases(p);
@@ -553,11 +563,13 @@ function intervalView(c, a) {
   const now = Date.now();
   const st = iv?.startAt ? phaseAt(phases, iv.startAt, now, iv) : null;
   const done = st?.phase === 'done' || iv?.ended;
-  const exName = esc(getDef(p.exId).name);
-  const plan = `${p.warmup ? `${p.warmup / 60} min Aufwärmen · ` : ''}${p.rounds} × ${p.work / 60} min, ${p.rest / 60} min ${p.warmup ? 'aktive ' : ''}Pause${p.cooldown ? ` · ${p.cooldown / 60} min Auslaufen` : ''}`;
+  const exName = p.stations ? esc(p.name) : esc(getDef(p.exId).name);
+  const dur = (sec) => (sec % 60 ? `${sec} s` : `${sec / 60} min`);
+  const plan = `${p.warmup ? `${dur(p.warmup)} Aufwärmen · ` : ''}${p.rounds} × ${dur(p.work)}, ${dur(p.rest)} ${p.warmup && !p.stations ? 'aktive ' : ''}Pause${p.cooldown ? ` · ${dur(p.cooldown)} Auslaufen` : ''}`;
   if (done && p.rpeLog) return ivLogView(c, a);
   const label = !st ? 'Bereit' : done ? 'Fertig'
-    : st.phase === 'work' ? (p.calm ? 'Locker · Zone 2' : `Intervall ${st.round}/${p.rounds} · ${PHASE_LABEL.work}`) : PHASE_LABEL[st.phase];
+    : st.phase === 'work' ? (p.calm ? 'Locker · Zone 2' : `Intervall ${st.round}/${p.rounds} · ${PHASE_LABEL.work}`)
+      : p.stations && st.phase === 'rest' ? 'Pause' : PHASE_LABEL[st.phase];
   const next = st && !done ? phases[st.index + 1] : null;
   const running = st && !done && !iv.pausedAt;
   return `${head(c, a, `${a.roundsDone}/${p.rounds}`, completionOf(a))}
@@ -565,7 +577,8 @@ function intervalView(c, a) {
       <p class="t-target">${esc(label)}</p>
       <b class="clock num ${st && st.phase !== 'work' ? 'calm' : ''}" ${running ? `data-clock="${now + st.left * 1000}"` : ''}>${st ? fmt(done ? 0 : st.left) : fmt(phases[0].sec)}</b>
       <div class="rounds">${Array.from({ length: p.rounds }, (_, k) => `<i class="${k < a.roundsDone ? 'on' : ''}"></i>`).join('')}</div>
-      ${next ? `<p class="muted">Danach: ${PHASE_LABEL[next.phase]} · ${fmt(next.sec)}</p>` : ''}
+      ${p.stations ? stationLine(p, st, done) : ''}
+      ${next ? `<p class="muted">Danach: ${p.stations && next.phase === 'rest' ? 'Pause' : PHASE_LABEL[next.phase]} · ${fmt(next.sec)}</p>` : ''}
       ${!iv ? `${prepBlock(a)}<button class="btn primary wide" data-act="t-iv-start">Start</button>` : !done ? `<div class="row gap center">
         <button class="btn" data-act="t-iv-pause">${iv.pausedAt ? 'Weiter' : 'Pause'}</button>
         <button class="btn ghost" data-act="t-iv-skip">Phase überspringen</button></div>` : ''}
@@ -580,6 +593,18 @@ function ivLogView(c, a) {
   const p = a.plan;
   const log = a.ivLog || { rpe: [] };
   const n = Math.max(1, a.roundsDone);
+  if (p.stations) {
+    // Conditioning: eine Einschätzung für alles (gilt für jede Runde), statt bis zu 28 Zeilen
+    const v = log.rpe[0];
+    return `${head(c, a, `${a.roundsDone}/${p.rounds}`, 1)}
+    <section class="t-card">
+      <p class="t-target">Wie hart war es insgesamt? (RPE 1–10)</p>
+      <div class="rpe-row"><div class="rpe-chips">${Array.from({ length: 10 }, (_, k) => `<button class="${v === k + 1 ? 'on' : ''}" data-act="t-iv-rpe-all" data-n="${n}" data-v="${k + 1}">${k + 1}</button>`).join('')}</div></div>
+      <div class="field"><span>Notiz (optional)</span>
+        <input class="search" data-input="t-iv-note" inputmode="text" value="${esc(String(log.note || ''))}" autocomplete="off"></div>
+    </section>
+    <footer class="t-nav"><button class="btn gold grow" data-act="t-finish">Abschließen</button></footer>`;
+  }
   const rows = Array.from({ length: n }, (_, k) => `<div class="rpe-row"><small>Intervall ${k + 1}</small>
     <div class="rpe-chips">${Array.from({ length: 10 }, (_, v) => `<button class="${log.rpe[k] === v + 1 ? 'on' : ''}" data-act="t-iv-rpe" data-k="${k}" data-v="${v + 1}">${v + 1}</button>`).join('')}</div></div>`).join('');
   const rower = p.exId.startsWith('rower');
@@ -1156,6 +1181,11 @@ const training = {
       a.iv.startAt -= Math.ceil(st.left * 1000);
       if (a.iv.pausedAt) { a.iv.pausedMs += Date.now() - a.iv.pausedAt; a.iv.pausedAt = null; }
       tick(c);
+    },
+    't-iv-rpe-all': (c, d) => {
+      const a = c.data.active;
+      a.ivLog = { ...(a.ivLog || {}), rpe: Array.from({ length: Number(d.n) || 1 }, () => Number(d.v)) };
+      save(c);
     },
     't-iv-rpe': (c, d) => {
       const a = c.data.active;

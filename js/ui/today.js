@@ -26,6 +26,8 @@ import { wristCards, afterCheckin } from './wrist.js';
 import { handsCard } from './hands.js';
 import { feetCard } from './feet.js';
 import { benchmarkCard } from './benchmark.js';
+import { condPicker, caveOffer, condActions } from './cond.js';
+import { caveStatus } from '../engine/conditioning.js';
 import { eventToday, weightLoggedThisWeek } from '../engine/events.js';
 import { W } from '../engine/wrist.js';
 import { bladeTier } from '../engine/temper.js';
@@ -505,7 +507,8 @@ export default {
     if (!ci) return out + checkinForm(c) + benchmarkCard(c) + seasonExtras(c) + temperCard(c) + wristCards(c, null) + handsCard(c) + feetCard(c) + notes;
 
     const doneToday = data.sessions.filter((s) => s.day === today);
-    const trained = doneToday.filter((s) => s.kind === 'mission' || s.kind === 'express').length;
+    // Conditioning zählt für die Woche, ist aber keine Einheit: Die nächste Einheit bleibt stehen
+    const trained = doneToday.filter((s) => (s.kind === 'mission' || s.kind === 'express') && s.missionId !== 'COND').length;
     const arenaToday = doneToday.some((s) => s.kind === 'arena');
     const answer = ci.today || 'gym'; // Check-ins von vor BANG COMBAT: wie „Gym“
     const u = nextUnit(data.engine, today);
@@ -515,19 +518,23 @@ export default {
         <p class="muted">${u ? `Als Nächstes: ${esc(u.programName)} · ${esc(u.letter)}, wann es passt. ` : ''}Ein FLOW geht immer, wenn du magst.</p>
         <div class="row gap"><button class="btn" data-act="redo-ci">Doch etwas machen</button></div>`, { tone: 'calm' });
     } else if (answer === 'mt' && !ci.choice && !trained) {
-      if (arenaToday) {
+      if (arenaToday && ci.partner !== false) {
         out += sys('Tagesziel erreicht', '<p class="reason">Muay Thai ist eingetragen.</p><p class="muted">Der Rest des Tages gehört der Erholung.</p>', { tone: 'calm' });
       } else if (ci.partner !== false) {
         out += sys('Muay Thai', `<p class="reason">${esc(todaySuggestion('mt').text)}</p><p class="muted">Danach in der ARENA eintragen. Die nächste Einheit wartet, es verfällt nichts.</p>
           <button class="btn primary wide" data-act="go" data-to="arena">ARENA eintragen</button>`, { tone: 'calm' });
       } else {
+        // Partner sagt ab: erst Sack, danach nach Lust Conditioning, mit passender Cave der Cave-Zirkel
         rec = recommendation(c);
         c.ui.lastRec = { ...rec, plyoCap: false };
-        const unit = rec.kind === 'mission' && PROGRAM_MISSIONS.includes(rec.missionId);
-        out += sys('Partner sagt ab', `<p class="reason">Ca. 30 min am Sack. Nach Lust dazu die nächste Einheit als Kurzversion.</p>
-          <button class="btn primary wide" data-act="bag-timer">Rundentimer für den Sack</button>
-          ${unit ? `<button class="btn wide kurz-btn" data-act="start-rec" data-compact="1"><b>Kurzversion · ${esc(u.letter)}</b><small>ca. 30 min · zählt voll</small></button>
-          <p class="muted small center">Aufwärmen, Hauptübung (Top-Satz + 1 Backdown), CMPND Block 2 Runden. Ganz freiwillig.</p>` : ''}`, { tone: 'calm' });
+        const condToday = doneToday.some((s) => s.missionId === 'COND');
+        const sug = todaySuggestion('mt', { next: u?.missionId, partner: false, cave: !!u && caveStatus(data, u.missionId).ok });
+        const step = (done, title, sub, body) => `<div class="pa-step${done ? ' done' : ''}"><div class="pa-head"><b>${done ? '✓ ' : ''}${title}</b><small>${sub}</small></div>${body}</div>`;
+        out += sys(arenaToday && condToday ? 'Tagesziel erreicht' : 'Partner sagt ab', `<p class="reason">${esc(sug.text)}</p>
+          ${step(arenaToday, 'Sack', 'ca. 30 min Technik', arenaToday ? '<p class="muted small">Als ARENA eingetragen.</p>'
+            : '<div class="row gap"><button class="btn primary grow" data-act="bag-timer">Rundentimer</button><button class="btn grow" data-act="bag-drill">Runden am Sack</button></div>')}
+          ${step(condToday, 'Conditioning', 'nach Lust · 15 oder 30 min', condToday ? `<p class="muted small">Erledigt.${arenaToday ? ' Der Rest des Tages gehört der Erholung.' : ''}</p>` : condPicker(c, { compact: true }))}
+          ${condToday ? '' : caveOffer(c, u?.missionId)}`, { tone: 'calm' });
       }
     } else {
       rec = recommendation(c);
@@ -634,6 +641,8 @@ export default {
       submitCheckin(c);
     },
     'bag-timer': (c) => { c.ui.atab = 'timer'; c.go('arena'); },
+    'bag-drill': (c) => { c.ui.atab = 'footwork'; c.ui.dtab = 'bag'; c.go('arena'); },
+    ...condActions,
     'comeback-dismiss': (c) => {
       const today = c.today();
       c.update((data) => logDecision({ ...data, engine: dismissComeback(data.engine, today) },

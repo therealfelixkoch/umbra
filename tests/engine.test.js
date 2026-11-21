@@ -41,7 +41,12 @@ const runFromArc = (data) => {
 const buildPlan = (o) => buildPlanRaw({ ...o, data: runFromArc(o.data) });
 
 // Neutrale Ausgangslage für Tests: Winter (n = 0), Prüfwoche ohne Saison-Regler. Unabhängig vom echten Datum.
-const defaultData = () => { const d = freshData(); d.engine.arc = { ...d.engine.arc, n: 0, week: 13 }; return d; };
+// Fighting Cave wie vor dem 21.11.2026 (voll ausgestattet), damit die alten Tests ihren Stand behalten.
+const OLD_ROOM = ['bag', 'bar', 'dipbars', 'box', 'kb', 'hammer', 'medball'];
+const defaultData = () => {
+  const d = freshData(); d.engine.arc = { ...d.engine.arc, n: 0, week: 13 };
+  d.settings.equipment.room = [...OLD_ROOM]; d.settings.inventory = { room: {}, gym: {} }; return d;
+};
 const initialArc = (day) => ({ ...arcFor(day), n: 0 });
 const T = '2026-10-16'; // Freitag
 const ci = (o = {}) => ({ yesterdayMT: 'none', feeling: 'normal', tonightMT: 'no', where: 'room', ...o });
@@ -3182,11 +3187,13 @@ describe('BANG COMBAT · Reihenfolge statt Wochentage', () => {
     expect(weekTally([mission(W, 'BC_A')], W).good).toBe(false);
     expect(weekTally([mission(W, 'BC_A'), mission(addDays(W, 1), 'BC_B'), mission(addDays(W, 2), 'BC_C'), arena(addDays(W, 3))], addDays(W, 3)).bonus).toBe(1);
   });
-  it('„Was geht heute?“: Gym, Muay Thai (Partner sagt ab: Sack + Kurzversion), beides, nichts', () => {
+  it('„Was geht heute?“: Gym, Muay Thai (Partner sagt ab: Sack + Conditioning), beides, nichts', () => {
     expect(todaySuggestion('gym', { next: 'BC_B' }).items).toEqual([{ kind: 'unit', missionId: 'BC_B' }]);
     const alone = todaySuggestion('mt', { next: 'BC_B', partner: false });
     expect(alone.items[0]).toEqual({ kind: 'bag', minutes: 30 });
-    expect(alone.items[1]).toEqual({ kind: 'unit', missionId: 'BC_B', compact: true, optional: true });
+    expect(alone.items[1]).toEqual({ kind: 'cond', minutes: 15, choices: [15, 30], optional: true });
+    expect(alone.items.length).toBe(2); // Cave trägt die Einheit noch nicht: kein Cave-Zirkel
+    expect(todaySuggestion('mt', { next: 'BC_B', partner: false, cave: true }).items[2]).toEqual({ kind: 'unit', missionId: 'BC_B', compact: true, cave: true, optional: true });
     expect(todaySuggestion('both', { next: 'BC_C' }).items.map((x) => x.kind)).toEqual(['unit', 'arena']);
     expect(todaySuggestion('none', { next: 'BC_C' }).items).toEqual([]);
   });
@@ -3579,5 +3586,89 @@ describe('ARENA · Runden am Sack', () => {
   it('ohne Kategorie oder Dauer keine Ansagen', () => {
     expect(bagSchedule({ duration: 180, cats: {} })).toEqual([]);
     expect(bagSchedule({ duration: 0, cats: { kick: 'order' } })).toEqual([]);
+  });
+});
+
+import { condOptions, condPlan, condStations, caveStatus, CAVE_KB } from '../js/engine/conditioning.js';
+import { countsForWeek } from '../js/engine/game.js';
+
+describe('Fighting Cave · Conditioning und Cave-Zirkel', () => {
+  const CAVE = ['bag', 'kb'];
+  it('Formate nur mit vorhandener Ausstattung: heute Sack + 6 kg, ohne Sack keins', () => {
+    expect(condOptions(CAVE, [6]).map((o) => o.id)).toEqual(['power', 'mix']);
+    const st = condStations(CAVE, [6]).map((x) => x.ex);
+    expect(st.includes('kb_halo') && st.includes('kb_press_sa')).toBe(true);
+    expect(st.includes('kb_swing') || st.includes('ball_slam') || st.includes('jump_rope')).toBe(false);
+    expect(condOptions([], [])).toEqual([]);
+    expect(condStations([...CAVE, 'medball'], [16]).some((x) => x.ex === 'ball_slam' || x.ex === 'kb_swing')).toBe(true);
+  });
+  it('15 und 30 min ergeben die passende Dauer, Stationen wechseln', () => {
+    for (const format of ['power', 'mix']) {
+      for (const minutes of [15, 30]) {
+        const p = condPlan({ format, minutes, equipment: CAVE, kbWeights: [6], seed: 3 });
+        const sec = p.warmup + p.rounds * p.work + (p.rounds - 1) * p.rest;
+        expect(Math.abs(sec - minutes * 60) <= 60).toBe(true);
+        expect(p.stations.length).toBe(p.rounds);
+        expect(p.stations.some((x, i) => i > 0 && x.ex === p.stations[i - 1].ex)).toBe(false);
+      }
+    }
+    const power = condPlan({ format: 'power', equipment: CAVE, kbWeights: [6], seed: 1 });
+    expect(power.stations.every((x) => x.group === 'bag')).toBe(true);
+    const mix = condPlan({ format: 'mix', equipment: CAVE, kbWeights: [6], seed: 1 });
+    expect(mix.stations.map((x) => x.group === 'bag')).toEqual(mix.stations.map((_, i) => i % 2 === 0));
+    expect(condPlan({ format: 'power', equipment: ['kb'], kbWeights: [6] })).toBe(null);
+  });
+  it('COND über buildPlan: zählt für die Woche, nicht als Einheit, hohe Belastung', () => {
+    const d = defaultData();
+    d.settings.equipment.room = [...CAVE];
+    d.settings.inventory = { room: { kb: { 6: 1 } }, gym: {} };
+    const before = JSON.stringify(d.engine.programs);
+    const plan = buildPlanRaw({ missionId: 'COND', profile: 'room', data: d, today: T, cond: { format: 'mix', minutes: 30, seed: 2 } });
+    expect([plan.kind, plan.format, plan.minutes, plan.cond]).toEqual(['express', 'intervals', 30, 'mix']);
+    const a = createActive(plan, T, 0);
+    a.roundsDone = plan.rounds;
+    const r = finishSession(d, a, { now: 30 * 60000 });
+    const s = r.data.sessions.at(-1);
+    expect([s.kind, s.missionId, s.cond]).toEqual(['express', 'COND', 'mix']);
+    expect(countsForWeek(s)).toBe(true);
+    expect(JSON.stringify(r.data.engine.programs)).toBe(before);
+    expect(loadClass(s)).toBe('high');
+  });
+  it('caveStatus: heute nicht genug, mit Stange, Dip-Barren und schwerer KB schon', () => {
+    const d = defaultData();
+    d.settings.equipment.room = [...CAVE];
+    d.settings.inventory = { room: { kb: { 6: 1 } }, gym: {} };
+    const now = caveStatus(d, 'BC_A');
+    expect(now.ok).toBe(false);
+    expect(now.missing.includes('dipbars')).toBe(true);
+    for (const m of ['BC_A', 'BC_B', 'BC_C']) expect(caveStatus(d, m).ok).toBe(false);
+    d.settings.equipment.room = [...CAVE, 'bar', 'dipbars', 'box'];
+    expect(caveStatus(d, 'BC_A').missing).toEqual([CAVE_KB]);
+    d.settings.inventory.room.kb = { 6: 1, 16: 2, 24: 1 };
+    for (const m of ['BC_A', 'BC_B', 'BC_C']) expect(caveStatus(d, m).ok).toBe(true);
+  });
+  it('Cave-Zirkel: Kurzversion in der Cave mit Power-Finisher, zählt als Einheit', () => {
+    const d = runFromArc(defaultData());
+    d.settings.equipment.room = [...CAVE, 'bar', 'dipbars', 'box'];
+    d.settings.inventory = { room: { kb: { 6: 1, 16: 2, 24: 1 } }, gym: {} };
+    const next = nextUnit(d.engine, T).missionId;
+    const plan = buildPlanRaw({ missionId: next, profile: 'gym', data: d, today: T, cave: true });
+    expect([plan.profile, plan.compact, plan.cave, plan.minutes]).toEqual(['room', true, true, 30]);
+    expect(plan.name.startsWith('Cave-Zirkel')).toBe(true);
+    expect(plan.items.at(-1).block).toBe('finisher');
+    expect(plan.items.some((it) => it.block === 'main')).toBe(true);
+    const done0 = d.engine.programs.runs.bang_combat.done;
+    const a = createActive(plan, T, 0);
+    a.log.forEach((e) => e.sets.forEach((x) => { x.done = true; x.reps = x.reps ?? 5; }));
+    const r = finishSession(d, a, { now: 30 * 60000 });
+    expect(r.data.engine.programs.runs.bang_combat.done).toBe(done0 + 1);
+    const s = r.data.sessions.at(-1);
+    expect([s.cave, s.compact]).toEqual([true, true]);
+    expect(loadClass(s)).toBe('normal');
+  });
+  it('Standard der Fighting Cave für neue Daten: Sack und 6-kg-Kettlebell', () => {
+    const f = freshData();
+    expect(f.settings.equipment.room).toEqual(['bag', 'kb']);
+    expect(f.settings.inventory.room).toEqual({ kb: { 6: 1 } });
   });
 });
