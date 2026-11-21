@@ -72,6 +72,15 @@ Grundlage: `docs/tfcc-protokoll.md`. Keine Diagnosen, nur Ampel, Stufe und Empfe
 - **HANDS** (5 min, unabhängig vom Modul): Sehnengleiten, Finger spreizen, Handgelenkskreise, Dart-Thrower, Unterarm-Rotation, Beuger-/Strecker-Dehnung, Vierfüßler (auf den Knöcheln, bis Test 2 grün), Daumen. Karte morgens, unterwegs und bei „Nur 5 Minuten“, optional Handgelenk-Gefühl 1–5.
 - **XP:** Handgelenk-Session/Aktivierung/Minimal-Dosis 10, Status-Check 10, HANDS 5 (alle im Tagesdeckel), Protokoll beendet 150. Kraftblock in einer Mission: keine Extra-XP.
 
+### Update 23.11.2026 (v47): HIIT-Timer, Pendlay Row statt Langhantel-Rudern
+
+- **HIIT-Timer** unter ARENA → Timer → HIIT:
+  - Vorlagen Tabata (20/10 × 8), 30/30, 40/20, 45/15
+  - Arbeit, Pause und Anzahl der Intervalle frei wählbar
+  - Hoher Ton = los, zwei tiefe Töne = Pause, 3-2-1 vor jedem Wechsel, Gong am Ende
+  - Die Einstellung wird gespeichert. Der Rundentimer für Muay Thai bleibt unter „Runden“.
+- **Pendlay Row statt Langhantel-Rudern:** Barbell Row (IRON Kapitel 1, RESET Kapitel 2) und Yates Row (FIGHT Kapitel 1) sind im CMPND Block durch Pendlay Rows ersetzt, jede Wiederholung vom Boden. In der Fighting Cave läuft weiter Kettlebell-Rudern. Das Startgewicht der Pendlay Row ist 50 kg und lässt sich in der Einheit frei anpassen.
+
 ### Update 23.11.2026 (v46): Conditioning in der Fighting Cave
 
 - **Conditioning** unter ARENA → Drills → Conditioning und auf „Heute“, wenn beim Muay Thai der Partner absagt (Sack-Runden, danach Conditioning). Es gibt zwei Formate, je 15 oder 30 min mit 2 min Aufwärmen:

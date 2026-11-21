@@ -145,7 +145,7 @@ export const FLAT_HAND = ['pushup', 'pushup_max', 'pushup_deficit', 'pushup_feet
   'plyo_pushup', 'archer_pushup', 'pseudo_planche_pushup', 'hspu_negative', 'hspu_wall', 'chair_dip', 'bear_crawl', 'lizard_crawl'];
 export const DIP_BARS = ['dip', 'dip_negative'];
 export const NEUTRAL_GRIP = { pullup_tactical: 'pullup_neutral', pullup: 'pullup_neutral' };
-export const ROW_GRIP = ['bw_row', 'bw_row_bent', 'bw_row_elevated', 'bw_row_weighted', 'bw_row_table', 'towel_row', 'archer_row', 'barbell_row'];
+export const ROW_GRIP = ['bw_row', 'bw_row_bent', 'bw_row_elevated', 'bw_row_weighted', 'bw_row_table', 'towel_row', 'archer_row', 'barbell_row', 'pendlay_row'];
 // Isolierte Pronations-/Armwrestling-Übungen: bis Stufe 4 durch das Modul ersetzt
 export const ARMWRESTLING = ['forearm_rotation'];
 

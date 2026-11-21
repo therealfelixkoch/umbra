@@ -1,4 +1,4 @@
-:root { --app-version: "v46"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
+:root { --app-version: "v47"; } /* Versionsstempel, erzeugt von tools/build_sw.py */
 @font-face {
   font-family: 'Oxanium';
   src: url('../fonts/oxanium.woff2') format('woff2');
@@ -242,6 +242,9 @@ em { font-style: normal; color: var(--muted); font-size: 0.8em; }
 }
 .t-nav .btn { min-height: 60px; font-size: 17px; }
 .rounds { display: flex; gap: 10px; justify-content: center; margin: 6px 0; }
+.rounds.many { gap: 7px; flex-wrap: wrap; }
+.rounds.many i { width: 12px; height: 12px; }
+.rounds { flex-wrap: wrap; }
 .rounds i { width: 22px; height: 22px; transform: rotate(45deg); border: 2px solid var(--sys); }
 .rounds i.on { background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 12px var(--cyan); }
 .clock { display: block; font-size: 84px; line-height: 1; margin: 10px 0; text-shadow: 0 0 30px var(--sys-glow); }

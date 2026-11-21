@@ -75,7 +75,7 @@ const C_X = [co('calf_raise_sl', 2, [15, 20])];
 export const PROGRAM = {
   WINTER: [
     { // Kapitel 1 · Fundament
-      BC_A: [pw('plyo_pushup_incline', 3, 4), mn('pause_squat', 'goblet_squat_pause'), DIP, pa('barbell_row', 3, [8, 10], { room: 'kb_row_sa' }),
+      BC_A: [pw('plyo_pushup_incline', 3, 4), mn('pause_squat', 'goblet_squat_pause'), DIP, pa('pendlay_row', 3, [6, 8], { room: 'kb_row_sa' }),
         co('pallof_press', 3, [10, 10]), arm('bw_skull_crusher', 2, [8, 15]), ...A_X],
       BC_B: [pw('ball_slam', 3, 5), mn('rdl_bb', 'sl_rdl'), PULL, pa('strict_press', 3, [8, 10], { room: 'kb_press_sa' }),
         co('fl_tuck_hold', 3, [10, 20]), arm('db_hammer_curl', 2, [10, 15], { room: 'hammer_curl_kb' }), ...B_X],
@@ -112,7 +112,7 @@ export const PROGRAM = {
   ],
   SUMMER: [
     { // Kapitel 1 · Athletik
-      BC_A: [pw('plyo_pushup_switch', 3, 4), mn('zercher_squat', 'dkb_front_squat'), DIP, pa('yates_row', 2, [6, 8], { room: 'kb_row_sa' }),
+      BC_A: [pw('plyo_pushup_switch', 3, 4), mn('zercher_squat', 'dkb_front_squat'), DIP, pa('pendlay_row', 2, [6, 8], { room: 'kb_row_sa' }),
         co('kb_woodchop', 3, [8, 8]), arm('bw_skull_crusher', 2, [8, 15]), ...A_X],
       BC_B: [pw('pullup_explosive', 3, 3), mn('sumo_deadlift', 'dkb_sumo'), PULL, pa('bench_press', 2, [6, 8], { room: 'kb_floor_press' }),
         co('fl_tuck_raise', 3, [5, 8]), arm('db_hammer_curl', 2, [10, 15], { room: 'hammer_curl_kb' }), ...B_X],
@@ -138,7 +138,7 @@ export const PROGRAM = {
         co('cossack_squat', 2, [6, 6], { note: 'langsam' }), ...C_X, mo('ninety_ninety_loaded', 2, [6, 6]), fin('fin_circuit_easy')],
     },
     { // Kapitel 2 · Basis
-      BC_A: [pw('plyo_pushup', 3, 4), mn('front_squat', 'dkb_front_squat'), DIP, pa('barbell_row', 3, [8, 10], { room: 'kb_row_sa' }),
+      BC_A: [pw('plyo_pushup', 3, 4), mn('front_squat', 'dkb_front_squat'), DIP, pa('pendlay_row', 3, [6, 8], { room: 'kb_row_sa' }),
         co('band_punch_rotation', 3, [8, 8]), arm('floor_skull_crusher', 2, [10, 12], { room: 'kb_floor_skull_crusher' }), ...A_X],
       BC_B: [pw('pullup_explosive', 3, 3), mn('rdl_bb', 'sl_rdl', { note: '3 s ablassen' }), PULL,
         pa('strict_press', 3, [8, 10], { room: 'kb_press_sa', note: '3 s ablassen' }),

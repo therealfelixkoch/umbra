@@ -514,6 +514,21 @@ describe('Arena-Rundentimer', () => {
   it('Dauer fürs Log', () => {
     expect(totalMinutes(cfg, 3)).toBe(11);
   });
+  it('HIIT in Sekunden: Tabata 20/10 × 8 endet nach 10 s Vorlauf + 230 s', () => {
+    const h = { work: 20, rest: 10, rounds: 8, hiit: true };
+    const before = advanceTo(startTimer(h, 0), h, 10000 + 8 * 20000 + 7 * 10000 - 1);
+    expect(before.st.phase).toBe('work');
+    expect(before.st.round).toBe(8);
+    const end = advanceTo(startTimer(h, 0), h, 10000 + 8 * 20000 + 7 * 10000);
+    expect(end.st.phase).toBe('done');
+    expect(end.st.round).toBe(8);
+  });
+  it('Pendlay Row ersetzt das klassische Langhantel-Rudern in BANG COMBAT', () => {
+    const ids = JSON.stringify(PROGRAM);
+    expect(ids.includes("barbell_row")).toBe(false);
+    expect(ids.includes("yates_row")).toBe(false);
+    expect(ids.includes("pendlay_row")).toBe(true);
+  });
 });
 
 describe('Mobility-Check', () => {
@@ -2889,9 +2904,9 @@ describe('Säule 2 · Fortschritts-Index', () => {
     const d = defaultData();
     d.engine.arc = { n: 0, week: 13, startedDay: MON };
     d.sessions = [
-      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 6), ex('barbell_row', 8, 60)] }, 2),
+      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 6), ex('pendlay_row', 8, 60)] }, 2),
       at({ day: MON, kind: 'mission', missionId: 'C', exercises: [ex('dip', 7)] }, 2),
-      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 8), ex('barbell_row', 10, 60)] }, 10),
+      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 8), ex('pendlay_row', 10, 60)] }, 10),
       at({ day: MON, kind: 'mission', missionId: 'C', exercises: [ex('dip', 10)] }, 10),
     ];
     const ix = progressIndex(d, 0, getDef);
@@ -2903,8 +2918,8 @@ describe('Säule 2 · Fortschritts-Index', () => {
     const d = defaultData();
     d.engine.arc = { n: 0, week: 13, startedDay: MON };
     d.sessions = [
-      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 6), ex('barbell_row', 10, 60), ex('dip', 8)] }, 2),
-      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 8), ex('barbell_row', 4, 60), ex('dip', 10)] }, 10),
+      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 6), ex('pendlay_row', 10, 60), ex('dip', 8)] }, 2),
+      at({ day: MON, kind: 'mission', missionId: 'A', exercises: [ex('pullup_tactical', 8), ex('pendlay_row', 4, 60), ex('dip', 10)] }, 10),
     ];
     const ix = progressIndex(d, 0, getDef);
     expect(ix.worse.length).toBe(1);

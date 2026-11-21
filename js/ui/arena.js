@@ -3,7 +3,7 @@ import { esc, stepper } from './kit.js';
 import { logArena, HARD_RPE, ROUND_TYPES } from '../engine/plan.js';
 import { addDays, formatDay } from '../engine/dates.js';
 import { startTimer, advanceTo, totalMinutes, WARN_SEC } from '../engine/roundtimer.js';
-import { ringBell, clack, keepAwake } from './sound.js';
+import { ringBell, clack, beep, keepAwake } from './sound.js';
 import { footworkView, footworkActions, isRunning as footworkRunning } from './footwork.js';
 import { bagView, bagActions, isRunning as bagRunning } from './bagdrill.js';
 import { condPicker, condActions } from './cond.js';
@@ -18,6 +18,12 @@ const hours = (min) => `${(min / 60).toLocaleString('de-DE', { minimumFractionDi
 const WORK = [[60, '1 min'], [120, '2 min'], [180, '3 min'], [300, '5 min']];
 const REST = [[0, 'keine'], [30, '30 s'], [60, '1 min'], [90, '1:30']];
 const DEFAULT_RT = { work: 180, rest: 60, rounds: 5 };
+// HIIT: kurze Intervalle in Sekunden, eigene Einstellung, 3-2-1-Töne vor jedem Wechsel.
+const H_WORK = [[20, '20 s'], [30, '30 s'], [40, '40 s'], [45, '45 s'], [60, '60 s']];
+const H_REST = [[10, '10 s'], [15, '15 s'], [20, '20 s'], [30, '30 s'], [60, '60 s']];
+const H_PRESETS = [['Tabata', 20, 10, 8], ['30 / 30', 30, 30, 10], ['40 / 20', 40, 20, 10], ['45 / 15', 45, 15, 8]];
+const DEFAULT_HIIT = { work: 40, rest: 20, rounds: 10 };
+const hiitTotal = (h) => fmt((h.work * h.rounds + h.rest * Math.max(0, h.rounds - 1)) * 1000);
 
 const fmt = (ms) => {
   const s = Math.max(0, Math.ceil(ms / 1000));
@@ -29,7 +35,13 @@ let timer = null; // { cfg, st, paused, left, warned }
 let ticker = null;
 let ctxRef = null;
 
-function play(event) {
+function play(event, st) {
+  if (timer?.cfg.hiit) {
+    if (st?.phase === 'done') ringBell(3);
+    else if (event === 'bell') beep(1, 1175);
+    else if (event === 'gong') beep(2, 660);
+    return;
+  }
   if (event === 'gong') ringBell(3);
   if (event === 'bell') ringBell(1);
 }
@@ -41,13 +53,18 @@ function tick() {
   if (event) {
     timer.st = st;
     timer.warned = false;
-    play(event);
+    timer.cd = null;
+    play(event, st);
     if (st.phase === 'done') stopTicker();
     if (location.hash.startsWith('#arena')) ctxRef?.render();
     return;
   }
   const left = st.endAt - now;
-  if (st.phase === 'work' && !timer.warned && left <= WARN_SEC * 1000 && timer.cfg.work > 30) {
+  if (timer.cfg.hiit) {
+    // 3-2-1 vor jedem Wechsel
+    const sec = Math.ceil(left / 1000);
+    if (sec <= 3 && sec >= 1 && timer.cd !== sec) { timer.cd = sec; beep(1, 880); }
+  } else if (st.phase === 'work' && !timer.warned && left <= WARN_SEC * 1000 && timer.cfg.work > 30) {
     timer.warned = true;
     clack();
   }
@@ -77,19 +94,25 @@ function drillsView(c) {
 
 function timerView() {
   const { cfg, st } = timer;
+  if (st.phase === 'done' && cfg.hiit) {
+    return `<section class="rt done"><small>HIIT</small><b class="rt-phase">Fertig</b>
+      <p class="muted">${st.round} × ${cfg.work} s Arbeit / ${cfg.rest} s Pause</p></section>
+      <button class="btn primary wide big" data-act="rt-close">Schließen</button>`;
+  }
   if (st.phase === 'done') {
     return `<section class="rt done"><small>ARENA-Timer</small><b class="rt-phase">Fertig</b>
       <p class="muted">${st.round} ${st.round === 1 ? 'Runde' : 'Runden'} à ${fmt(cfg.work * 1000)}</p></section>
       <button class="btn primary wide big" data-act="rt-log">Einheit eintragen</button>
       <button class="btn ghost wide" data-act="rt-close">Ohne Eintrag schließen</button>`;
   }
-  const label = st.phase === 'prep' ? 'Bereit' : st.phase === 'rest' ? 'Pause' : `Runde ${st.round}`;
+  const label = st.phase === 'prep' ? 'Bereit' : st.phase === 'rest' ? 'Pause' : cfg.hiit ? 'Arbeit' : `Runde ${st.round}`;
   const left = timer.paused ? timer.left : st.endAt - Date.now();
   return `<section class="rt ${st.phase}">
-      <small>${st.phase === 'rest' ? `gleich Runde ${st.round + 1} von ${cfg.rounds}` : `von ${cfg.rounds} Runden`}</small>
+      <small>${cfg.hiit ? `HIIT · ${st.phase === 'rest' ? `gleich Intervall ${st.round + 1}` : `Intervall ${Math.max(1, st.round)}`} von ${cfg.rounds}`
+        : st.phase === 'rest' ? `gleich Runde ${st.round + 1} von ${cfg.rounds}` : `von ${cfg.rounds} Runden`}</small>
       <b class="rt-phase">${label}</b>
       <b class="rt-clock num" data-rt-clock>${fmt(left)}</b>
-      <div class="rounds">${Array.from({ length: cfg.rounds }, (_, k) =>
+      <div class="rounds${cfg.rounds > 12 ? ' many' : ''}">${Array.from({ length: cfg.rounds }, (_, k) =>
         `<i class="${k < st.round - (st.phase === 'work' ? 1 : 0) ? 'on' : ''}"></i>`).join('')}</div>
     </section>
     <div class="row gap">
@@ -101,8 +124,32 @@ function timerView() {
 }
 
 function setupView(c) {
+  const mode = c.ui.tmode || 'rounds';
+  const seg = `<div class="seg sub"><button class="${mode === 'rounds' ? 'on' : ''}" data-act="tmode" data-v="rounds">Runden</button><button class="${mode === 'hiit' ? 'on' : ''}" data-act="tmode" data-v="hiit">HIIT</button></div>`;
+  return `${seg}${mode === 'hiit' ? hiitSetup(c) : roundsSetup(c)}`;
+}
+
+const chip = (act, v, label, on) => `<button class="chip${on ? ' on' : ''}" data-act="${act}" data-v="${v}">${label}</button>`;
+
+function hiitSetup(c) {
+  const h = c.ui.hiit || (c.ui.hiit = { ...DEFAULT_HIIT, ...(c.data.settings.hiitTimer || {}) });
+  return `<section class="card">
+      <div class="label">HIIT-Timer</div>
+      <div class="muted small">Vorlage</div>
+      <div class="chips">${H_PRESETS.map(([l, w, r, n], i) => chip('h-preset', i, l, h.work === w && h.rest === r && h.rounds === n)).join('')}</div>
+      <div class="muted small">Arbeit</div>
+      <div class="chips">${H_WORK.map(([v, l]) => chip('h-work', v, l, h.work === v)).join('')}</div>
+      <div class="muted small">Pause</div>
+      <div class="chips">${H_REST.map(([v, l]) => chip('h-rest', v, l, h.rest === v)).join('')}</div>
+      <div class="field"><span>Intervalle</span>${stepper('h-rounds', h.rounds, '')}</div>
+      <p class="muted small">Gesamt ${hiitTotal(h)} min, plus 10 s Vorlauf.</p>
+      <button class="btn primary wide big" data-act="h-start">HIIT starten</button>
+      <p class="muted small">Hoher Ton = los, zwei tiefe Töne = Pause, 3-2-1 vor jedem Wechsel, Gong am Ende. Stummschalter am iPhone aus.</p>
+    </section>`;
+}
+
+function roundsSetup(c) {
   const rt = c.ui.rt || (c.ui.rt = { ...DEFAULT_RT, ...(c.data.settings.roundTimer || {}) });
-  const chip = (act, v, label, on) => `<button class="chip${on ? ' on' : ''}" data-act="${act}" data-v="${v}">${label}</button>`;
   return `<section class="card">
       <div class="label">Rundentimer</div>
       <div class="muted small">Runde</div>
@@ -210,6 +257,18 @@ const screen = {
     'a-unlink': (c) => { c.ui.arena.bmt = null; c.render(); },
     'a-del': (c, d) => c.update((data) => ({ ...data, sessions: data.sessions.filter((s) => s.id !== d.id) })),
 
+    tmode: (c, d) => c.setUi({ tmode: d.v }),
+    'h-preset': (c, d) => { const [, work, rest, rounds] = H_PRESETS[Number(d.v)]; Object.assign(c.ui.hiit, { work, rest, rounds }); c.render(); },
+    'h-work': (c, d) => { c.ui.hiit.work = Number(d.v); c.render(); },
+    'h-rest': (c, d) => { c.ui.hiit.rest = Number(d.v); c.render(); },
+    'h-rounds': (c, d) => { c.ui.hiit.rounds = Math.max(1, Math.min(40, c.ui.hiit.rounds + Number(d.dir))); c.render(); },
+    'h-start': (c) => {
+      const { work, rest, rounds } = c.ui.hiit;
+      const cfg = { work, rest, rounds, hiit: true };
+      timer = { cfg, st: startTimer(cfg, Date.now()), paused: false, warned: false };
+      startTicker();
+      c.update((data) => ({ ...data, settings: { ...data.settings, hiitTimer: { work, rest, rounds } } }));
+    },
     'rt-work': (c, d) => { c.ui.rt.work = Number(d.v); c.render(); },
     'rt-rest': (c, d) => { c.ui.rt.rest = Number(d.v); c.render(); },
     'rt-rounds': (c, d) => { c.ui.rt.rounds = Math.max(1, Math.min(30, c.ui.rt.rounds + Number(d.dir))); c.render(); },

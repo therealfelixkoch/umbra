@@ -8,11 +8,11 @@
 // Lore-Bilder und TEMPER-Clips: eigener Cache, fehlende brechen die Installation nicht ab.
 // App-Dateien werden gegen ihren Hash geprüft: Liegt auf GitHub noch ein alter Stand (z. B. Datei im falschen Ordner
 // hochgeladen), bricht die Installation ab und die bisherige Version läuft weiter, statt alte und neue Dateien zu mischen.
-const VERSION = 'v46';
+const VERSION = 'v47';
 const LORE_CACHE = 'umbra-lore';
 const ASSETS = [
   ['./', '4c866ea0de'],
-  ['./css/app.css', '24a16bd74e'],
+  ['./css/app.css', '0f5aa4fd07'],
   ['./fonts/oxanium.woff2', 'd2992b4edf'],
   ['./icons/apple-touch-icon.png', '70e8120199'],
   ['./icons/favicon-64.png', '8dfed88676'],
@@ -36,11 +36,11 @@ const ASSETS = [
   ['./js/data/lore.js', 'c838045358'],
   ['./js/data/missions.js', '16465b5640'],
   ['./js/data/mobility.js', 'cf431a5bb4'],
-  ['./js/data/program.js', '2e9e61bf22'],
+  ['./js/data/program.js', 'fd6e8e418d'],
   ['./js/data/story.js', 'ec2dd6f92b'],
   ['./js/data/temper-book1.js', 'c94d5fd925'],
   ['./js/data/temper.js', '3e873c29b3'],
-  ['./js/data/wrist.js', '471bcb6756'],
+  ['./js/data/wrist.js', '7e845b9a84'],
   ['./js/data/xp-config.js', '56a28c5f37'],
   ['./js/engine/arc.js', 'a1ce40ef4a'],
   ['./js/engine/arcsync.js', '80fc0fb5f4'],
@@ -81,7 +81,7 @@ const ASSETS = [
   ['./js/engine/wrist.js', '2bc7635e13'],
   ['./js/state.js', '368e9f6c22'],
   ['./js/store.js', 'ecede7b481'],
-  ['./js/ui/arena.js', 'c58841ed1c'],
+  ['./js/ui/arena.js', '13ce6b0039'],
   ['./js/ui/arenastatus.js', '95421e4a0a'],
   ['./js/ui/atmosphere.js', '2ff6653ec2'],
   ['./js/ui/bagdrill.js', '3590240ada'],
@@ -116,7 +116,7 @@ const ASSETS = [
   ['./js/ui/voice.js', '16e6fe1d34'],
   ['./js/ui/week.js', '827de955c7'],
   ['./js/ui/wrist.js', '0e9158e5e8'],
-  ['./js/version.js', '3d4e30b59d'],
+  ['./js/version.js', '8efcd7ef58'],
   ['./manifest.webmanifest', '1b61b51494'],
 ];
 const LORE = [
